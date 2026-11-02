@@ -1,0 +1,9 @@
+.env
+.env.*
+bin/
+tmp/
+.data/
+*.test
+coverage.out
+Makefile
+docker-compose.yml
