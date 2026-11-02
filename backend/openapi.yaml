@@ -1,0 +1,79 @@
+openapi: 3.1.0
+info:
+  title: MezAI API
+  version: 0.1.0
+  description: |
+    Contract for the MezAI API. The browser calls `/api/*` on the frontend
+    origin; Next.js rewrites those requests to this API with the `/api`
+    prefix removed. Frontend types are generated from this file.
+servers:
+  - url: /api
+    description: Through the Next.js rewrite
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness. The process is up; dependencies are not checked.
+      tags: [system]
+      responses:
+        "200":
+          description: Up
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness. Database and object storage are reachable.
+      tags: [system]
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+        "503":
+          description: At least one dependency is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Readiness"
+components:
+  headers:
+    RequestID:
+      description: Request ID. A well-formed incoming value (8 to 64 of A-Z a-z 0-9 . _ -) is reused; otherwise one is generated.
+      schema:
+        type: string
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        checks:
+          type: object
+          description: One entry per dependency, for example `database` and `storage`.
+          additionalProperties:
+            type: string
+            enum: [ok, unavailable]
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Stable machine-readable code, for example `not_found`.

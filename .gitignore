@@ -1,1 +1,35 @@
+# OS and editors
 .DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Secrets and local env (only .env.example is committed)
+.env
+.env.*
+!.env.example
+
+# Go
+backend/bin/
+backend/tmp/
+*.test
+coverage.out
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/coverage/
+*.tsbuildinfo
+
+# Data and dumps (never commit)
+*.dump
+*.sql.gz
+backend/.data/
+
+# Claude Code local settings
+.claude/settings.local.json

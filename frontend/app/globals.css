@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* Stage 1 minimum. Stage 2 replaces this with the full token set from
+   docs/design/concepts/tokens.css and self-hosted fontsource fonts. */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+body {
+  background: #0e100e;
+  color: #f4f0e6;
+  font-family: var(--font-sans);
+}
