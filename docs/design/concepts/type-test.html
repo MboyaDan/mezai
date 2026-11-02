@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Display type test</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { background: var(--charcoal-950); color: var(--ivory); padding: 48px 0; }
+  .row { display: grid; grid-template-columns: 200px 1fr 260px; gap: 32px; padding: 32px 0; border-top: 1px solid var(--line-dark); align-items: end; }
+  .name { color: var(--muted-dark); font-size: 13px; align-self: start; }
+  .h { font-size: 64px; line-height: 1.02; letter-spacing: -0.02em; font-weight: 500; margin: 0; }
+  .h .serif { font-size: 1.08em; }
+  .num { font-size: 64px; line-height: 1; font-weight: 500; letter-spacing: -0.02em; }
+  .num small { display: block; font: 12px var(--font-body); color: var(--muted-dark); letter-spacing: 0; margin-top: 8px; }
+  .ui { grid-column: 2 / -1; font-family: var(--font-body); color: var(--muted-dark); }
+  @media (max-width: 767px) { .row { grid-template-columns: 1fr; } .h, .num { font-size: 40px; } .ui { grid-column: auto; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="concept-flag" style="color:var(--muted-dark)">Stage 0 · display face test · Inter body, Instrument Serif accent, same size and tracking</p>
+  <section class="row" style="font-family:'Space Grotesk'">
+    <span class="name mono">Space Grotesk 500</span>
+    <p class="h">Human judgment, <span class="serif">verified.</span><br>Data for AI, built in Africa.</p>
+    <span class="num">0.87 · 1,240<small>Big numbers (display, not mono)</small></span>
+  </section>
+  <section class="row" style="font-family:'Manrope'">
+    <span class="name mono">Manrope 600</span>
+    <p class="h" style="font-weight:600">Human judgment, <span class="serif">verified.</span><br>Data for AI, built in Africa.</p>
+    <span class="num" style="font-weight:600">0.87 · 1,240<small>Big numbers (display, not mono)</small></span>
+  </section>
+  <section class="row" style="font-family:'Sora'">
+    <span class="name mono">Sora 500</span>
+    <p class="h">Human judgment, <span class="serif">verified.</span><br>Data for AI, built in Africa.</p>
+    <span class="num">0.87 · 1,240<small>Big numbers (display, not mono)</small></span>
+  </section>
+  <p class="ui" style="border-top:1px solid var(--line-dark);padding-top:24px">Body stays Inter 16/1.55 in every row: “Gold items have a known correct answer and are mixed into a contributor’s queue.”</p>
+</main>
+</body>
+</html>

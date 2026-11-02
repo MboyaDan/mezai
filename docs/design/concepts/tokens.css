@@ -1,0 +1,88 @@
+/* MezAI concept tokens (Stage 0). Values from docs/design/DESIGN.md section 8.
+   Stage 2 turns these into the Tailwind v4 theme; keep names identical. */
+
+@font-face { font-family: "Space Grotesk"; src: url(fonts/space-grotesk-latin-wght-normal.woff2) format("woff2"); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: "Inter"; src: url(fonts/inter-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url(fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: "Instrument Serif"; src: url(fonts/instrument-serif-latin-400-italic.woff2) format("woff2"); font-style: italic; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url(fonts/manrope-latin-wght-normal.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Sora"; src: url(fonts/sora-latin-wght-normal.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
+
+:root {
+  --charcoal-950: #0E100E;
+  --charcoal-900: #171A16;
+  --charcoal-800: #22261F;
+  --line-dark: #2E332B;
+  --ivory: #F4F0E6;
+  --paper: #FBF9F4;
+  --ink: #151714;
+  --muted: #5A5F55;
+  --muted-dark: #A3A99C;
+  --line: #DDD7C9;
+  --lime: #C8F031;
+  --lime-ink: #4A5A00;
+  --laterite: #C2522D;
+  --laterite-ink: #9E3F1F;
+  --ochre: #D9A441;
+  --teal: #2F8F83;
+  /* Stage 0 proposal: darkened so text passes 4.5:1 on ivory (D-006). */
+  --success: #2D7A4D;
+  --warning: #976000;
+  --danger: #B3261E;
+
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-control: 2px;
+  --radius-card: 6px;
+
+  --dur-instant: 100ms;
+  --dur-quick: 180ms;
+  --dur-base: 280ms;
+  --dur-slow: 600ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --shadow-float: 0 12px 32px -12px rgb(14 16 14 / 0.28);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: var(--font-body); font-size: 16px; line-height: 1.55; color: var(--ink); background: var(--ivory); }
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.serif { font-family: var(--font-serif); font-style: italic; font-weight: 400; letter-spacing: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+:focus-visible { outline: 2px solid var(--lime-ink); outline-offset: 2px; }
+.on-dark :focus-visible { outline-color: var(--lime); }
+
+.wrap { max-width: 1312px; margin: 0 auto; padding: 0 64px; }
+@media (max-width: 767px) { .wrap { padding: 0 16px; } }
+
+/* Primary button: lime fill, charcoal text. 1 px charcoal border so it holds on light. */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 20px;
+  font: 600 16px/1 var(--font-body); text-decoration: none; border-radius: var(--radius-control); border: 1px solid var(--charcoal-950);
+  transition: background-color var(--dur-quick) var(--ease-out), transform var(--dur-instant) var(--ease-out); }
+.btn-primary { background: var(--lime); color: var(--charcoal-950); }
+.btn-primary:hover { background: #D6F65E; }
+.btn-dark { background: var(--charcoal-950); color: var(--ivory); }
+.btn:active { transform: scale(0.98); }
+.btn .arrow { transition: transform var(--dur-quick) var(--ease-out); }
+.btn:hover .arrow { transform: translateX(4px); }
+
+/* Annotation bracket: two corner marks, like a bounding box. */
+.bracket { position: relative; }
+.bracket::before, .bracket::after { content: ""; position: absolute; width: 14px; height: 14px; border: 0 solid currentColor; pointer-events: none; }
+.bracket::before { top: -8px; left: -8px; border-top-width: 1px; border-left-width: 1px; }
+.bracket::after { bottom: -8px; right: -8px; border-bottom-width: 1px; border-right-width: 1px; }
+
+.concept-flag { font: 500 12px/1 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
