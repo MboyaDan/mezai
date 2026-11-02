@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>MezAI home concept</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .on-dark { background: var(--charcoal-950); color: var(--ivory); }
+
+  /* Header */
+  .top { border-bottom: 1px solid var(--line-dark); }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .top img { height: 28px; width: auto; }
+  .top nav { display: flex; gap: 32px; align-items: center; font-size: 15px; }
+  .top nav a { text-decoration: none; color: var(--muted-dark); transition: color var(--dur-quick) var(--ease-out); }
+  .top nav a:hover { color: var(--ivory); }
+  .top nav a.talk { color: var(--ivory); border: 1px solid var(--line-dark); padding: 10px 14px; border-radius: var(--radius-control); }
+  .menu { display: none; background: none; border: 1px solid var(--line-dark); color: var(--ivory); height: 40px; padding: 0 12px; font: 500 14px var(--font-body); border-radius: var(--radius-control); }
+
+  /* Hero */
+  .hero { position: relative; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; right: -10%; top: 10%; width: 60%; aspect-ratio: 1; background: radial-gradient(closest-side, rgb(200 240 49 / 0.07), transparent); pointer-events: none; }
+  .hero .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; padding-top: 128px; padding-bottom: 112px; align-items: center; }
+  .hero .copy { grid-column: 1 / span 8; position: relative; z-index: 1; }
+  .eyebrow { color: var(--muted-dark); margin: 0 0 32px; display: flex; gap: 12px; align-items: center; }
+  .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
+  h1 { font: 500 72px/1.02 var(--font-display); letter-spacing: -0.02em; margin: 0; }
+  h1 .line { display: block; overflow: hidden; }
+  h1 .line > span { display: block; animation: rise var(--dur-slow) var(--ease-out) both; }
+  h1 .line:nth-child(2) > span { animation-delay: 80ms; color: var(--muted-dark); }
+  h1 .serif { font-size: 1.08em; color: var(--ivory); }
+  .sub { font-size: 20px; line-height: 1.5; color: var(--muted-dark); max-width: 34em; margin: 32px 0 40px; }
+  .actions { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; animation: fade var(--dur-slow) var(--ease-out) 200ms both; }
+  .textlink { color: var(--ivory); font-weight: 500; text-underline-offset: 6px; text-decoration-color: var(--line-dark); }
+  .textlink:hover { text-decoration-color: var(--lime); }
+  .lattice-wrap { grid-column: 9 / span 4; position: relative; color: var(--line-dark); }
+  .lattice-wrap figcaption { margin-top: 24px; color: var(--muted-dark); font-size: 12px; display: flex; justify-content: space-between; }
+  #lattice line { stroke: #3B4237; stroke-width: 3; stroke-linecap: square; transition: transform 1600ms var(--ease-in-out); transform-box: fill-box; transform-origin: center; }
+  #lattice line.near { stroke: #5A6352; }
+  #lattice circle { opacity: 0; transition: opacity var(--dur-slow) var(--ease-out) 1500ms; }
+  .aligned #lattice circle { opacity: 1; }
+  .strip { border-top: 1px solid var(--line-dark); }
+  .strip .wrap { display: flex; gap: 40px; height: 64px; align-items: center; color: var(--muted-dark); font-size: 13px; }
+  .strip .wrap span:first-child { color: var(--ivory); }
+  @keyframes rise { from { transform: translateY(105%); } }
+  @keyframes fade { from { opacity: 0; transform: translateY(12px); } }
+
+  /* Services */
+  .services { padding: 144px 0 128px; }
+  .services header { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; margin-bottom: 72px; }
+  .services header .kicker { grid-column: 1 / span 3; color: var(--muted); padding-top: 14px; }
+  .services h2 { grid-column: 4 / span 7; font: 500 56px/1.05 var(--font-display); letter-spacing: -0.02em; margin: 0; }
+  .services h2 .serif { color: var(--laterite-ink); }
+  .rows { border-top: 1px solid var(--ink); }
+  details { border-bottom: 1px solid var(--line); }
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; padding: 36px 0; align-items: start; }
+  .row .num { grid-column: 1 / span 1; color: var(--muted); font-size: 14px; padding-top: 10px; }
+  .row h3 { grid-column: 2 / span 4; font: 500 28px/1.2 var(--font-display); letter-spacing: -0.01em; margin: 0; }
+  .row .desc { grid-column: 6 / span 3; margin: 4px 0 0; color: var(--muted); }
+  .row .illo { grid-column: 9 / span 4; display: block; }
+  details.active .row { background: var(--paper); margin: 0 -24px; padding-left: 24px; padding-right: 24px; }
+  details.active .illo { color: var(--ink); }
+  .row .chev { display: none; }
+
+  .illo-box { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px; font-size: 13px; line-height: 1.45; }
+  details.active .illo-box { background: var(--ivory); }
+  .illo-head { display: flex; justify-content: space-between; color: var(--muted); font: 500 11px/1 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pair > span { display:block;  border: 1px solid var(--line); padding: 8px 10px; border-radius: var(--radius-control); background: var(--paper); }
+  .pair .chosen { border-color: var(--ink); }
+  .pair b { font: 600 11px var(--font-mono); display: block; margin-bottom: 4px; }
+  .pick { margin-top: 10px; display: flex; gap: 6px; align-items: center; color: var(--lime-ink); font-weight: 600; }
+  .sw { display: grid; gap: 6px; }
+  .sw .lang { font: 600 11px var(--font-mono); color: var(--muted); margin-right: 8px; }
+  .sw .fix { background: rgb(194 82 45 / 0.12); border-bottom: 1px solid var(--laterite-ink); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { border: 1px solid var(--line); padding: 3px 8px; border-radius: 999px; font-size: 12px; background: var(--paper); }
+  .chip.on { background: var(--charcoal-950); color: var(--ivory); border-color: var(--charcoal-950); }
+  .chip kbd { font: 500 10px var(--font-mono); opacity: 0.7; margin-right: 4px; }
+  .verdict { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; }
+  .tick { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--success); color: var(--success); display: grid; place-items: center; grid-row: span 2; }
+  .verdict small { color: var(--muted); }
+
+  .industries { margin-top: 56px; display: flex; gap: 12px 28px; flex-wrap: wrap; align-items: baseline; color: var(--muted); font-size: 15px; }
+  .industries .label { color: var(--ink); font-weight: 600; margin-right: 8px; }
+  .industries a { color: var(--lime-ink); font-weight: 600; text-underline-offset: 5px; margin-left: auto; }
+
+  .note { background: var(--charcoal-900); color: var(--muted-dark); text-align: center; padding: 14px; font-size: 12px; }
+
+  @media (max-width: 1100px) {
+    h1 { font-size: 56px; }
+    .services h2 { font-size: 40px; }
+  }
+  @media (max-width: 767px) {
+    .top .wrap { height: 60px; }
+    .top img { height: 22px; }
+    .top nav { display: none; }
+    .menu { display: block; }
+    .hero .grid { display: block; padding-top: 56px; padding-bottom: 48px; }
+    .eyebrow { margin-bottom: 20px; }
+    h1 { font-size: 44px; line-height: 1.04; }
+    .sub { font-size: 18px; margin: 20px 0 0; }
+    .lattice-wrap { margin: 40px 0 36px; }
+    .lattice-wrap svg { max-height: 220px; width: 100%; }
+    .actions { flex-direction: column; align-items: stretch; gap: 12px; }
+    .actions .btn, .actions .textlink { width: 100%; text-align: center; }
+    .actions .textlink { display: flex; justify-content: center; align-items: center; min-height: 48px; border: 1px solid var(--line-dark); border-radius: var(--radius-control); text-decoration: none; }
+    .strip .wrap { gap: 20px; height: auto; padding-top: 16px; padding-bottom: 16px; flex-wrap: wrap; }
+    .services { padding: 72px 0 72px; }
+    .services header { display: block; margin-bottom: 32px; }
+    .services header .kicker { padding: 0 0 12px; }
+    .services h2 { font-size: 36px; }
+    summary { cursor: pointer; }
+    .row { display: block; padding: 20px 0; }
+    details.active .row { margin: 0; padding: 20px 0; background: none; }
+    .row .head { display: flex; gap: 14px; align-items: baseline; }
+    .row .num { padding: 0; }
+    .row h3 { font-size: 22px; flex: 1; }
+    .row .chev { display: block; color: var(--muted); }
+    details[open] .chev { transform: rotate(45deg); }
+    .row .body { padding-top: 14px; }
+    .row .desc { margin: 0 0 16px; }
+    .industries { margin-top: 32px; font-size: 14px; }
+    .industries a { margin-left: 0; }
+  }
+  @media (min-width: 768px) {
+    .row .head, .row .body { display: contents; }
+  }
+</style>
+</head>
+<body>
+<div class="note concept-flag">Stage 0 concept · African Intelligence Infrastructure · not production code</div>
+
+<div class="on-dark">
+  <header class="top">
+    <div class="wrap">
+      <a href="#" aria-label="MezAI home"><img src="../../brand/mezai-logo/mezai-logo-horizontal-reversed-transparent.svg" alt="MezAI"></a>
+      <nav aria-label="Main">
+        <a href="#">Services</a><a href="#">Quality</a><a href="#">Contributors</a><a href="#">About</a>
+        <a class="talk" href="#">Talk to us</a>
+      </nav>
+      <button class="menu" type="button" aria-expanded="false">Menu</button>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap grid">
+      <div class="copy">
+        <p class="eyebrow mono" style="font-size:13px">AI data operations · Nairobi</p>
+        <h1 id="hero-title">
+          <span class="line"><span>Human judgment, <span class="serif">verified.</span></span></span>
+          <span class="line"><span>Data for AI, built in Africa.</span></span>
+        </h1>
+        <p class="sub">We run evaluation, African-language and annotation projects with vetted contributors, and show you the quality checks behind every item we deliver.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#">Start a pilot project <span class="arrow" aria-hidden="true">→</span></a>
+          <a class="textlink" href="#">Join as a contributor</a>
+        </div>
+      </div>
+      <figure class="lattice-wrap" aria-hidden="true" style="margin:0">
+        <svg id="lattice" viewBox="0 0 440 440"></svg>
+        <figcaption class="mono"><span>Many judgments.</span><span>One verified answer.</span></figcaption>
+      </figure>
+    </div>
+    <div class="strip mono">
+      <div class="wrap"><span>01 AI evaluation and RLHF</span><span>02 African language data</span><span>03 Data annotation</span><span>04 Expert review</span></div>
+    </div>
+  </section>
+</div>
+
+<section class="services" aria-labelledby="svc-title">
+  <div class="wrap">
+    <header>
+      <p class="kicker mono" style="font-size:13px">What we do</p>
+      <h2 id="svc-title">Four kinds of work. One <span class="serif">quality engine</span> behind all of them.</h2>
+    </header>
+
+    <div class="rows">
+      <details class="active" open>
+        <summary class="row">
+          <span class="head"><span class="num mono">01</span><h3>AI evaluation and RLHF</h3><span class="chev" aria-hidden="true">+</span></span>
+          <span class="body">
+            <span class="desc">Side-by-side comparisons of model responses, scored against your rubric, with a written reason for every preference.</span>
+            <span class="illo bracket"><span class="illo-box" style="display:block">
+              <span class="illo-head"><span>Pairwise</span><span>Demonstration</span></span>
+              <span class="pair">
+                <span class="chosen"><b>A</b>Panda mahindi mvua za masika zinapoanza…</span>
+                <span><b>B</b>Plant maize at any time of year if…</span>
+              </span>
+              <span class="pick">● A preferred · accuracy 5 · language 4</span>
+            </span></span>
+          </span>
+        </summary>
+      </details>
+      <details>
+        <summary class="row">
+          <span class="head"><span class="num mono">02</span><h3>African language data</h3><span class="chev" aria-hidden="true">+</span></span>
+          <span class="body">
+            <span class="desc">Kiswahili and code-switched text written, translated and reviewed by fluent speakers, with adequacy and fluency scored per item.</span>
+            <span class="illo"><span class="illo-box sw" style="display:grid">
+              <span class="illo-head"><span>Translation review</span><span>Demonstration</span></span>
+              <span><span class="lang">SW</span>Mvua imenyesha usiku kucha.</span>
+              <span><span class="lang">EN</span>It rained <span class="fix">all night</span>.</span>
+            </span></span>
+          </span>
+        </summary>
+      </details>
+      <details>
+        <summary class="row">
+          <span class="head"><span class="num mono">03</span><h3>Data annotation</h3><span class="chev" aria-hidden="true">+</span></span>
+          <span class="body">
+            <span class="desc">Text classification, single or multi-label, with gold checks mixed in and every item answered by more than one person.</span>
+            <span class="illo"><span class="illo-box" style="display:block">
+              <span class="illo-head"><span>Classification</span><span>Demonstration</span></span>
+              “Salio langu limepungua bila sababu.”
+              <span class="chips"><span class="chip on"><kbd>1</kbd>Billing</span><span class="chip"><kbd>2</kbd>Complaint</span><span class="chip"><kbd>3</kbd>Other</span></span>
+            </span></span>
+          </span>
+        </summary>
+      </details>
+      <details>
+        <summary class="row">
+          <span class="head"><span class="num mono">04</span><h3>Expert review</h3><span class="chev" aria-hidden="true">+</span></span>
+          <span class="body">
+            <span class="desc">Senior reviewers resolve disagreements, write the final answer and send feedback, so every delivered item has a decision on record.</span>
+            <span class="illo"><span class="illo-box verdict" style="display:grid">
+              <span class="tick" aria-hidden="true">✓</span>
+              <span class="mono" style="font-size:12px">ITEM 0412 · 3 of 3 agree</span>
+              <small>Accepted by reviewer R-07 · Demonstration</small>
+            </span></span>
+          </span>
+        </summary>
+      </details>
+    </div>
+
+    <p class="industries"><span class="label">Built for</span><span>AI labs and model builders</span><span>Telcos and banks</span><span>Health</span><span>Education and research</span><span>Public sector and NGOs</span><a href="#">Industries →</a></p>
+  </div>
+</section>
+
+<script>
+  // Signal Lattice: strokes start at random angles (±25°) and rotate into alignment on load.
+  (function () {
+    const svg = document.getElementById('lattice');
+    const ns = 'http://www.w3.org/2000/svg';
+    const n = 9, step = 440 / n, len = 18, angle = -60;
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const lines = [];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      const cx = step * (c + 0.5), cy = step * (r + 0.5);
+      if (r === 5 && c === 4) {
+        const dot = document.createElementNS(ns, 'circle');
+        Object.entries({ cx, cy, r: 9, fill: '#C8F031' }).forEach(([k, v]) => dot.setAttribute(k, v));
+        svg.appendChild(dot); continue;
+      }
+      const l = document.createElementNS(ns, 'line');
+      const rad = angle * Math.PI / 180, dx = Math.cos(rad) * len / 2, dy = Math.sin(rad) * len / 2;
+      Object.entries({ x1: cx - dx, y1: cy - dy, x2: cx + dx, y2: cy + dy }).forEach(([k, v]) => l.setAttribute(k, v));
+      if (Math.abs(r - 5) + Math.abs(c - 4) <= 2) l.classList.add('near');
+      l.style.transform = reduce ? 'none' : `rotate(${(rnd() * 50 - 25).toFixed(1)}deg)`;
+      svg.appendChild(l); lines.push(l);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      lines.forEach(l => l.style.transform = 'rotate(0deg)');
+      document.querySelector('.hero').classList.add('aligned');
+    }));
+  })();
+
+  // Desktop shows every service row open; mobile is an accordion.
+  const wide = matchMedia('(min-width: 768px)');
+  const rows = [...document.querySelectorAll('.rows details')];
+  function sync() { rows.forEach((d, i) => d.open = wide.matches || i === 0); }
+  rows.forEach(d => d.querySelector('summary').addEventListener('click', e => { if (wide.matches) e.preventDefault(); }));
+  wide.addEventListener('change', sync); sync();
+</script>
+</body>
+</html>
