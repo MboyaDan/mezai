@@ -25,7 +25,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mezai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mezai_dev_only}
