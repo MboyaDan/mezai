@@ -1,27 +1,33 @@
-import { ApiStatusBadge } from "@/components/api-status-badge";
-import { SignalLattice } from "@/components/brand/signal-lattice";
+import type { Metadata } from "next";
+import { Hero } from "@/components/home/hero";
+import { Network } from "@/components/home/network";
+import { Services } from "@/components/home/services";
+import { People } from "@/components/home/people";
+import { Demo } from "@/components/home/demo";
+import { Quality } from "@/components/home/quality";
+import { FinalCta, Practices } from "@/components/home/closing";
+import { hero } from "@/content/home";
 import { brand } from "@/lib/brand";
 
-// Placeholder until the storyboard home page (Stage 5).
+export const metadata: Metadata = {
+  title: { absolute: `${brand.name}: Human judgment, verified. Data for AI, built in Africa.` },
+  description: hero.subline,
+  alternates: { canonical: "/" },
+};
+
+// The storyboard home page (DESIGN.md section 10), frames 1 to 8. The footer
+// is in the public shell.
 export default function Home() {
   return (
-    <section data-theme="dark" className="bg-bg">
-      <div className="mx-auto grid max-w-[82rem] gap-12 px-4 py-16 sm:px-8 md:grid-cols-12 md:items-center md:py-28 lg:px-16">
-        <div className="md:col-span-7">
-          <h1 className="font-display text-[2.75rem] leading-[1.04] font-medium tracking-[-0.02em] md:text-display-2">
-            {brand.name}
-          </h1>
-          <p className="mt-5 max-w-xl text-lg text-fg-muted">
-            {brand.name} is {brand.descriptor}, {brand.city}. The pilot platform is under construction.
-          </p>
-          <div className="mt-8">
-            <ApiStatusBadge />
-          </div>
-        </div>
-        <div className="max-w-xs md:col-span-4 md:col-start-9 md:max-w-none">
-          <SignalLattice state="align-on-load" />
-        </div>
-      </div>
-    </section>
+    <>
+      <Hero />
+      <Network />
+      <Services />
+      <People />
+      <Demo />
+      <Quality />
+      <Practices />
+      <FinalCta />
+    </>
   );
 }
