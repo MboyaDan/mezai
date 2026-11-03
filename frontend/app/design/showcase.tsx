@@ -26,6 +26,16 @@ import { Tabs } from "@/components/ui/tabs";
 import { TextLink } from "@/components/ui/text-link";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
+import { Agreement, ProgressBar, Stat, StatGroup } from "@/components/ui/data";
+import { Pagination } from "@/components/ui/pagination";
+import { Table, type Column } from "@/components/ui/table";
+import { AgreementMatrix } from "@/components/charts/agreement-matrix";
+import { BarChart } from "@/components/charts/bar-chart";
+import { LineChart } from "@/components/charts/line-chart";
+import { Sparkline } from "@/components/charts/sparkline";
+import { m } from "motion/react";
+import { Reveal, RevealGroup, RevealItem } from "@/motion/reveal";
+import { press } from "@/motion/variants";
 
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
@@ -55,6 +65,72 @@ function Both({ children }: { children: (theme: "light" | "dark") => ReactNode }
           {children(t)}
         </div>
       ))}
+    </div>
+  );
+}
+
+// Fictional specimen data for the gallery only (honesty rule 3).
+type SampleRow = { id: string; contributor: string; label: string; gold: number | null; seconds: number };
+const sampleRows: SampleRow[] = [
+  { id: "ITM-0107", contributor: "Sample Contributor 014", label: "Billing", gold: 0.92, seconds: 41 },
+  { id: "ITM-0023", contributor: "Sample Contributor 003", label: "Network", gold: 0.78, seconds: 65 },
+  { id: "ITM-0310", contributor: "Sample Contributor 021", label: "Other", gold: null, seconds: 38 },
+  { id: "ITM-0042", contributor: "Sample Contributor 009", label: "Account", gold: 0.85, seconds: 52 },
+];
+const sampleColumns: Column<SampleRow>[] = [
+  {
+    key: "id",
+    header: "Item",
+    cell: (r) => <span className="font-mono whitespace-nowrap">{r.id}</span>,
+    sortValue: (r) => r.id,
+  },
+  { key: "contributor", header: "Contributor", cell: (r) => r.contributor, sortValue: (r) => r.contributor },
+  { key: "label", header: "Label", cell: (r) => <Tag>{r.label}</Tag> },
+  {
+    key: "gold",
+    header: "Gold acc.",
+    numeric: true,
+    cell: (r) => (r.gold === null ? "—" : r.gold.toFixed(2)),
+    sortValue: (r) => r.gold,
+  },
+  {
+    key: "seconds",
+    header: "Time",
+    numeric: true,
+    cell: (r) => `${r.seconds}s`,
+    sortValue: (r) => r.seconds,
+  },
+];
+const accuracyTrend = [0.81, 0.84, 0.8, 0.86, 0.88, 0.85, 0.9, 0.89, 0.91, 0.9];
+const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+function MotionDemo() {
+  const [run, setRun] = useState(0);
+  return (
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" variant="secondary" onClick={() => setRun((r) => r + 1)}>
+          Replay
+        </Button>
+        <m.button
+          type="button"
+          {...press}
+          className="min-h-9 rounded-control border border-border px-3 text-sm text-fg"
+        >
+          Press me (m.button + press)
+        </m.button>
+      </div>
+      <Reveal key={`r-${run}`} className="rounded-card border border-border bg-surface p-5">
+        <p className="font-display text-lg font-semibold">Reveal</p>
+        <p className="text-sm text-fg-muted">Fades in with a 16 px rise, once, when it scrolls into view.</p>
+      </Reveal>
+      <RevealGroup key={`g-${run}`} as="ul" className="grid gap-2 sm:grid-cols-4">
+        {["Qualify", "Gold", "Overlap", "Review"].map((step) => (
+          <RevealItem key={step} as="li" className="rounded-card border border-border bg-surface p-4 text-sm">
+            {step}
+          </RevealItem>
+        ))}
+      </RevealGroup>
     </div>
   );
 }
@@ -100,17 +176,28 @@ export function Showcase() {
           surface.
         </p>
         <nav aria-label="Sections" className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-          {["Colour", "Type", "Brand", "Actions", "Forms", "Display", "Disclosure", "Overlays", "Shells"].map(
-            (s) => (
-              <a
-                key={s}
-                href={`#${s.toLowerCase()}`}
-                className="text-fg-muted underline-offset-4 hover:text-fg hover:underline"
-              >
-                {s}
-              </a>
-            ),
-          )}
+          {[
+            "Colour",
+            "Type",
+            "Brand",
+            "Actions",
+            "Forms",
+            "Display",
+            "Data",
+            "Charts",
+            "Motion",
+            "Disclosure",
+            "Overlays",
+            "Shells",
+          ].map((s) => (
+            <a
+              key={s}
+              href={`#${s.toLowerCase()}`}
+              className="text-fg-muted underline-offset-4 hover:text-fg hover:underline"
+            >
+              {s}
+            </a>
+          ))}
         </nav>
       </header>
 
@@ -317,6 +404,117 @@ export function Showcase() {
             </div>
           )}
         </Both>
+      </Section>
+
+      <Section id="data" title="Data">
+        <Both>
+          {(t) => (
+            <div className="grid gap-6">
+              <StatGroup>
+                <Stat label="Completed" value="1,240" unit="/ 2,000" caption="Sample" />
+                <Stat label="Gold accuracy" value="0.91" caption="Last 30 days" />
+                <Stat label="Agreement" value={<Agreement value={0.72} statistic="" />} caption="Fleiss’ κ" />
+                <Stat
+                  label="Trend"
+                  value={<Sparkline values={accuracyTrend} label="Gold accuracy rising from 0.81 to 0.90" />}
+                />
+              </StatGroup>
+              <ProgressBar
+                label="Items completed (Sample)"
+                value={1240}
+                max={2000}
+                valueText="1,240 of 2,000"
+              />
+              <Table
+                caption={`Submissions (Sample, ${t})`}
+                columns={sampleColumns}
+                rows={sampleRows}
+                rowKey={(r) => r.id}
+                initialSort={{ key: "id", dir: "asc" }}
+                empty={null}
+              />
+              <Table
+                caption={`Needs review (${t})`}
+                columns={sampleColumns}
+                rows={[]}
+                rowKey={(r) => r.id}
+                empty={
+                  <EmptyState title="Nothing to review">
+                    Items below the agreement threshold appear here.
+                  </EmptyState>
+                }
+              />
+              <Pagination
+                page={4}
+                pageCount={12}
+                hrefFor={(p) => `/design?page=${p}#data`}
+                label={`Pagination (${t})`}
+              />
+            </div>
+          )}
+        </Both>
+      </Section>
+
+      <Section id="charts" title="Charts">
+        <Both>
+          {() => (
+            <div className="grid gap-10">
+              <BarChart
+                title="Agreement by label"
+                note="Demonstration data"
+                data={[
+                  { label: "Billing", value: 0.84 },
+                  { label: "Network", value: 0.71 },
+                  { label: "Account", value: 0.58 },
+                  { label: "Other", value: 0.39 },
+                ]}
+                max={1}
+                format={(v) => v.toFixed(2)}
+                reference={{ value: 0.6, label: "Review threshold" }}
+              />
+              <LineChart
+                title="Gold accuracy, last 10 days"
+                note="Demonstration data"
+                lines={[
+                  { name: "You", points: accuracyTrend.map((y, i) => ({ x: i + 1, y })) },
+                  {
+                    name: "Project median",
+                    series: 2,
+                    points: [0.83, 0.82, 0.84, 0.83, 0.85, 0.84, 0.85, 0.86, 0.85, 0.86].map((y, i) => ({
+                      x: i + 1,
+                      y,
+                    })),
+                  },
+                ]}
+                yDomain={[0.6, 1]}
+                formatX={(x) => `Day ${x}`}
+                formatY={percent}
+              />
+              <AgreementMatrix
+                title="Rater agreement"
+                note="Demonstration data"
+                labels={["Billing", "Network", "Account", "Other"]}
+                counts={[
+                  [42, 3, 2, 1],
+                  [4, 35, 1, 2],
+                  [2, 1, 28, 3],
+                  [1, 3, 2, 10],
+                ]}
+                rowRater="Sample Contributor 003"
+                columnRater="Sample Contributor 014"
+                kappa={{ value: 0.79, name: "Cohen’s κ" }}
+              />
+            </div>
+          )}
+        </Both>
+      </Section>
+
+      <Section id="motion" title="Motion">
+        <p className="max-w-2xl text-fg-muted">
+          Shared variants from <code className="font-mono text-sm">motion/variants.ts</code>. With reduced
+          motion everything renders in its final state.
+        </p>
+        <MotionDemo />
       </Section>
 
       <Section id="disclosure" title="Disclosure">

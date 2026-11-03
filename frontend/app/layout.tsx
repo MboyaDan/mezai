@@ -5,6 +5,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/instrument-serif/400-italic.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { brand } from "@/lib/brand";
+import { MotionProvider } from "@/motion/provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
-        <ToastProvider>{children}</ToastProvider>
+        <MotionProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </MotionProvider>
       </body>
     </html>
   );

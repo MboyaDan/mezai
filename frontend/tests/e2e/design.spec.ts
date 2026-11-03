@@ -14,9 +14,9 @@ for (const path of pages) {
   });
 }
 
-test.describe("shells at 360 px", () => {
+test.describe("360 px", () => {
   test.use({ viewport: { width: 360, height: 780 } });
-  for (const path of pages.slice(1)) {
+  for (const path of pages) {
     test(`${path} has no horizontal scroll`, async ({ page }) => {
       await page.goto(path);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -63,8 +63,42 @@ test("tabs move with arrow keys", async ({ page }) => {
   );
 });
 
+test("table sorts by column and announces the order", async ({ page }) => {
+  await page.goto("/design#data");
+  const table = page.getByRole("table", { name: "Submissions (Sample, light)" });
+  const firstItem = () => table.locator("tbody tr").first().locator("td").first();
+  await expect(firstItem()).toHaveText("ITM-0023");
+  const header = table.getByRole("columnheader", { name: /Gold acc/ });
+  await header.getByRole("button").click();
+  await expect(header).toHaveAttribute("aria-sort", "ascending");
+  await expect(firstItem()).toHaveText("ITM-0023");
+  await header.getByRole("button").click();
+  await expect(header).toHaveAttribute("aria-sort", "descending");
+  await expect(firstItem()).toHaveText("ITM-0107");
+  // Rows without a gold score stay last in both directions.
+  await expect(table.locator("tbody tr").last().locator("td").first()).toHaveText("ITM-0310");
+});
+
+test("pagination marks the current page", async ({ page }) => {
+  await page.goto("/design#data");
+  const nav = page.getByRole("navigation", { name: "Pagination (light)" });
+  // A "Page 4" link on desktop, a compact "4 / 12" under 640 px.
+  await expect(nav.locator('[aria-current="page"]:visible')).toContainText("4");
+});
+
 test.describe("reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
+
+  test("reveals render in their final state and charts do not animate", async ({ page }) => {
+    await page.goto("/design#motion");
+    const item = page.getByRole("listitem").filter({ hasText: /^Overlap$/ });
+    await expect(item).toHaveCSS("opacity", "1");
+    await expect(page.getByText("Fades in with a 16 px rise")).toBeVisible();
+    const bar = page.locator(".chart-bar").first();
+    const duration = await bar.evaluate((el) => parseFloat(getComputedStyle(el).animationDuration));
+    expect(duration).toBeLessThan(0.001);
+  });
+
   test("lattice renders aligned immediately", async ({ page }) => {
     await page.goto("/");
     const angle = await page

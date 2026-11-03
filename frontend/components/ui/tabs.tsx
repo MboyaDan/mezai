@@ -39,7 +39,7 @@ export function Tabs({
   }
 
   return (
-    <div className={className}>
+    <div className={cn("min-w-0", className)}>
       <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto border-b border-border">
         {tabs.map((t, i) => {
           const selected = t.id === active;

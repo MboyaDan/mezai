@@ -81,6 +81,15 @@
   --inverse-fg: var(--color-ivory);
   --lattice-stroke: #c9c2b2;
   --lattice-stroke-near: #8f9585;
+  /* Data series in DESIGN.md order; never colour alone (labels or legend always). */
+  --series-1: var(--color-lime-ink);
+  --series-2: var(--color-laterite);
+  --series-3: var(--color-ochre);
+  --series-4: var(--color-teal);
+  --series-5: var(--color-muted);
+  /* Agreement matrix cell tints: diagonal (agreed) and off-diagonal. */
+  --cell-agree: var(--color-lime-ink);
+  --cell-disagree: var(--color-laterite);
 
   --dur-instant: 100ms;
   --dur-quick: 180ms;
@@ -106,6 +115,13 @@
   --inverse-fg: var(--color-charcoal-950);
   --lattice-stroke: #3b4237;
   --lattice-stroke-near: #5a6352;
+  --series-1: var(--color-lime);
+  --series-2: var(--color-laterite);
+  --series-3: var(--color-ochre);
+  --series-4: var(--color-teal);
+  --series-5: var(--color-muted-dark);
+  --cell-agree: var(--color-lime);
+  --cell-disagree: var(--color-laterite);
 }
 
 @theme inline {
@@ -123,6 +139,11 @@
   --color-focus: var(--focus);
   --color-inverse-bg: var(--inverse-bg);
   --color-inverse-fg: var(--inverse-fg);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
 }
 
 @layer base {
@@ -223,5 +244,26 @@
 @keyframes layer-from-left {
   from {
     transform: translateX(-100%);
+  }
+}
+
+/* Data motion (DESIGN.md section 9, pattern 8): bars grow from the baseline,
+   lines draw left to right. The reduced-motion rule above makes both instant. */
+.chart-bar {
+  transform-origin: left center;
+  animation: bar-grow var(--dur-slow) var(--ease-out) both;
+}
+.chart-line {
+  animation: line-draw 900ms var(--ease-in-out) both;
+}
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+/* A wipe, not a dash offset: dashes break on non-scaling strokes. */
+@keyframes line-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
   }
 }
