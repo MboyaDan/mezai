@@ -27,3 +27,6 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-021 | 2026-11-03 | Link lifetimes | Verification 24 hours, password reset 1 hour, invitation 7 days; a new invitation to the same address replaces the pending one | Open |
 | A-022 | 2026-11-03 | Inviting someone who already has an account | Refused (409 `email_in_use`); grant them a role instead | Open |
 | A-023 | 2026-11-03 | Pages behind the email links (`/reset-password`, `/verify-email`, `/accept-invitation`) and the user administration screens | Built with the first UI stage that needs them (Stage 7 for contributors, Stage 8 for the workspace); the API is ready now | Open |
+| A-024 | 2026-11-03 | Photos for frame 4 (the people) | None until credited photos are in `docs/content/` with `image-credits.md`; the frame is typographic and describes who we look for, not who our contributors are | Open |
+| A-025 | 2026-11-03 | Cities on the network map | Nairobi, Lagos, Kigali, Johannesburg, London, Berlin, New York, San Francisco, Bengaluru, all labelled illustrative | Open |
+| A-026 | 2026-11-03 | Links on the home page to pages not built yet (Services, Quality, Contributors, Industries, Contact, legal) | Kept; they 404 until Stage 6 builds them, and the sitemap lists only built pages | Open |
