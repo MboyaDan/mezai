@@ -20,6 +20,11 @@ type Scope struct {
 // Staff sees every organisation. Endpoints still check permission keys.
 func Staff() Scope { return Scope{kind: "staff"} }
 
+// System is the scope for auth bookkeeping and background jobs. It is staff
+// scope by another name: it switches to mezai_app, and the tables it touches
+// either have no row-level security or need every organisation.
+func System() Scope { return Staff() }
+
 // Org sees one client organisation's rows.
 func Org(orgID uuid.UUID) Scope { return Scope{kind: "org", orgID: orgID} }
 
