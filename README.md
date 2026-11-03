@@ -50,7 +50,7 @@ From the repo root (forwarded to `backend/Makefile`):
 | `make test` | Go tests, including PostgreSQL tests against the compose database |
 | `make lint` | gofmt and go vet |
 | `make migrate` | Apply goose migrations to the local database |
-| `make setup` | Create the first Super Admin from `SETUP_ADMIN_*` (any environment; no-op once one exists) |
+| `make setup` | Create the first Super Admin from `SETUP_ADMIN_*` (any environment; no-op once one exists). `make setup ARGS=-additional` adds the backup |
 | `make seed` | Load sample data (development and test only; a second run changes nothing) |
 | `make sqlc` | Generate Go code from SQL queries (CI fails if it is out of date) |
 | `make logs` | Follow API logs |

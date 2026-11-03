@@ -24,3 +24,6 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-018 | 2026-11-03 | Lockout rule | 5 wrong passwords lock the account for 15 minutes; a correct sign-in resets the count | Open |
 | A-019 | 2026-11-03 | Rate limits | In memory, per API instance: login 20 a minute per IP and 10 per 15 minutes per email. Fine for one instance; move to Postgres if we run more than one | Open |
 | A-020 | 2026-11-03 | Session lifetime | 7 days absolute, signed out after 48 hours without a request (`SESSION_TTL`, `SESSION_IDLE`) | Open |
+| A-021 | 2026-11-03 | Link lifetimes | Verification 24 hours, password reset 1 hour, invitation 7 days; a new invitation to the same address replaces the pending one | Open |
+| A-022 | 2026-11-03 | Inviting someone who already has an account | Refused (409 `email_in_use`); grant them a role instead | Open |
+| A-023 | 2026-11-03 | Pages behind the email links (`/reset-password`, `/verify-email`, `/accept-invitation`) and the user administration screens | Built with the first UI stage that needs them (Stage 7 for contributors, Stage 8 for the workspace); the API is ready now | Open |
