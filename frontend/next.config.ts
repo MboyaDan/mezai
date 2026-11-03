@@ -7,6 +7,7 @@ const apiOrigin = (process.env.API_ORIGIN ?? "http://localhost:8080").replace(/\
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  images: { formats: ["image/avif", "image/webp"] },
   partialPrefetching: true,
   poweredByHeader: false,
   turbopack: {

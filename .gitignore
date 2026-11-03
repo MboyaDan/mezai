@@ -33,3 +33,6 @@ backend/.data/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Photo originals (large; re-download from the links in docs/content/image-credits.md)
+docs/content/images/
