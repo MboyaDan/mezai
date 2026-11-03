@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 5a (Storyboard home in its reduced-motion form, stats API, SEO). Branch `stage-05a-home-structure`, PR open.
-- **Next stage:** 5b: motion for the home page (GSAP on public marketing routes only, Motion reveals, demo autoplay), design quality gate at 1440 and 390, Lighthouse mobile with real scores.
+- **Last stage:** 5b (Home motion, Lighthouse, design gate). Branch `stage-05b-home-motion`, PR open.
+- **Next stage:** 6: Public website part 2. Planned split (D-011), confirm with Dan: 6a content pages (Services, Quality, Industries, Contributors, About, case studies index) and 6b Contact and enquiry form, legal pages, 404 and 500, AC-03 honesty test.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -34,6 +34,9 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Home page sections and copy | `frontend/components/home/`, `frontend/content/home.ts` |
 | Stats (API, fallback, filter) | `backend/internal/httpapi/stats.go`, `frontend/lib/stats.ts`, `frontend/content/stats.ts` |
 | SEO files | `frontend/app/{robots,sitemap,opengraph-image}.ts(x)`, `frontend/lib/site.ts` |
+| Home motion | CSS in `frontend/app/globals.css` (hero, services, swaps), GSAP in `frontend/components/home/home-motion.tsx` |
+| Photo brief for Dan | `docs/content/PHOTO-BRIEF.md`, credits in `docs/content/image-credits.md` |
+| Lighthouse record | `docs/screenshots/stage-05b/lighthouse.md` |
 | API contract | `backend/openapi.yaml` |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -49,7 +52,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 3 | Merged | #15 | 7 migrations, 51 tables, RLS on 22, `mezai_app` role, sqlc store, Argon2id package, seed (2 sample orgs, 4 projects, 12 contributors), RLS and migration tests. |
 | 4a | Merged | #16 | Login, logout, me; sessions (hashed tokens, idle and absolute expiry); CSRF; lockout; rate limits; route registry with access rules; audit writer; `make setup`. |
 | 4b | Merged | #17 | Password reset, email verification, invitations (staff and client admin), user and role administration with Super Admin protections, email outbox worker, AC-01 matrix test, AC-02 complete. |
-| 5a | PR open | (see PR list) | Home frames 1 to 8 (static, reduced-motion form), public stats endpoint, cached stats with fallback, metadata, OG image, sitemap, robots. Fixed animation-delay under reduced motion. |
+| 5a | Merged | #18 | Home frames 1 to 8 (static, reduced-motion form), public stats endpoint, cached stats with fallback, metadata, OG image, sitemap, robots. Fixed animation-delay under reduced motion. |
+| 5b | PR open | (see PR list) | CSS hero and hover motion, lazy GSAP scroll stories, demo autoplay with pause, Motion moved off public pages (JS 186 → 156 KB first load), Lighthouse mobile 93/100/96, photo brief. |
 
 ## Notes for the next session
 
@@ -66,5 +70,6 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key", ...)` (any of), and must be added to `expectedAccess` in `authz_matrix_test.go`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.
 - Emails: `mail.Enqueue(ctx, q, to, template, data)` inside the transaction; add templates in `internal/mail/templates.go`.
 - Public pages: add the route to `publicRoutes` in `frontend/lib/site.ts` (sitemap). Copy goes in `frontend/content/`, never inline claims.
+- Public page motion: mark elements with `data-reveal`, `data-reveal-group`, `data-rule` or `data-connector`; `home-motion.tsx` does the rest. The test in `tests/e2e/home-motion.spec.ts` fails if anything stays hidden.
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.
