@@ -1,12 +1,14 @@
 // Command setup prepares a new environment after migrations: it creates the
 // first Super Admin from SETUP_ADMIN_EMAIL, SETUP_ADMIN_NAME and
 // SETUP_ADMIN_PASSWORD. It runs in every environment, production included,
-// and does nothing once an active Super Admin exists. It never runs migrations.
+// and does nothing once an active Super Admin exists. With -additional it
+// adds another Super Admin (the backup). It never runs migrations.
 package main
 
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -16,13 +18,15 @@ import (
 )
 
 func main() {
-	if err := run(os.Getenv); err != nil {
+	additional := flag.Bool("additional", false, "add another Super Admin (the backup) instead of the first")
+	flag.Parse()
+	if err := run(os.Getenv, *additional); err != nil {
 		fmt.Fprintln(os.Stderr, "setup:", err)
 		os.Exit(1)
 	}
 }
 
-func run(getenv func(string) string) error {
+func run(getenv func(string) string, additional bool) error {
 	url := getenv("DATABASE_URL")
 	email, name, pw := getenv("SETUP_ADMIN_EMAIL"), getenv("SETUP_ADMIN_NAME"), getenv("SETUP_ADMIN_PASSWORD")
 	if url == "" || email == "" || name == "" || pw == "" {
@@ -36,7 +40,7 @@ func run(getenv func(string) string) error {
 	}
 	defer pool.Close()
 
-	err = auth.EnsureSuperAdmin(ctx, pool, email, name, pw)
+	err = auth.EnsureSuperAdmin(ctx, pool, email, name, pw, additional)
 	if errors.Is(err, auth.ErrAlreadyInitialised) {
 		fmt.Println("setup: a Super Admin already exists; nothing changed")
 		return nil

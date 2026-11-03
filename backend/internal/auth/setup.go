@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/password"
@@ -16,9 +17,15 @@ import (
 // ErrAlreadyInitialised means an active Super Admin exists; setup did nothing.
 var ErrAlreadyInitialised = errors.New("auth: a Super Admin already exists")
 
-// EnsureSuperAdmin creates the first Super Admin. It is the only way to make
-// one outside the UI, and it refuses once any active Super Admin exists.
-func EnsureSuperAdmin(ctx context.Context, pool *db.Pool, email, name, plain string) error {
+// ErrNotInitialised means an additional Super Admin was requested before the first.
+var ErrNotInitialised = errors.New("auth: no Super Admin exists yet; run setup without -additional first")
+
+// EnsureSuperAdmin creates the first Super Admin and refuses once any active
+// Super Admin exists. With additional set it instead adds another one (the
+// brief's backup), and refuses when there is none yet. Super Admins are only
+// ever made here, from a shell with database access, never through the API
+// (system.admin is not grantable, D-041).
+func EnsureSuperAdmin(ctx context.Context, pool *db.Pool, email, name, plain string, additional bool) error {
 	email = strings.ToLower(strings.TrimSpace(email))
 	name = strings.TrimSpace(name)
 	if !strings.Contains(email, "@") || name == "" {
@@ -41,11 +48,18 @@ func EnsureSuperAdmin(ctx context.Context, pool *db.Pool, email, name, plain str
 		if err != nil {
 			return err
 		}
-		if n > 0 {
+		if !additional && n > 0 {
 			return ErrAlreadyInitialised
+		}
+		if additional && n == 0 {
+			return ErrNotInitialised
 		}
 		now := time.Now()
 		u, err := q.CreateUser(ctx, store.CreateUserParams{Email: email, DisplayName: name, PasswordHash: &hash, EmailVerifiedAt: &now})
+		var pg *pgconn.PgError
+		if errors.As(err, &pg) && pg.Code == "23505" {
+			return ErrEmailInUse
+		}
 		if err != nil {
 			return err
 		}
