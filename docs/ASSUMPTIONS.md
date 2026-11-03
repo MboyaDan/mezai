@@ -20,3 +20,7 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-014 | 2026-11-03 | Reserved Kenyan test phone numbers | No officially reserved range found; the seed uses `+2547000000NN` placeholders, never sends SMS or payments, and masks numbers wherever shown | Open |
 | A-015 | 2026-11-03 | Client Viewer permissions (the brief's table row is cut off) | `org.project.read` and `org.deliverable.download` only | Open |
 | A-016 | 2026-11-03 | Contributors see project metadata for every live project | Yes, at the database; eligibility by skill is filtered in the API (Stage 9). Client organisation names stay hidden (no access to `organisations`) | Open |
+| A-017 | 2026-11-03 | Can one person be both staff and client, or client in two organisations? | No. Each user has one kind (staff, client or contributor) and a client user belongs to one organisation; mixed grants refuse sign-in with `account_not_ready` | Open |
+| A-018 | 2026-11-03 | Lockout rule | 5 wrong passwords lock the account for 15 minutes; a correct sign-in resets the count | Open |
+| A-019 | 2026-11-03 | Rate limits | In memory, per API instance: login 20 a minute per IP and 10 per 15 minutes per email. Fine for one instance; move to Postgres if we run more than one | Open |
+| A-020 | 2026-11-03 | Session lifetime | 7 days absolute, signed out after 48 hours without a request (`SESSION_TTL`, `SESSION_IDLE`) | Open |

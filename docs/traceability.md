@@ -4,8 +4,8 @@ Test names are planned; each stage replaces "planned" with the real test path an
 
 | AC | Criterion (short) | Stage | Test (planned) | Status |
 |---|---|---|---|---|
-| AC-01 | Every endpoint checks a permission key; role × endpoint matrix | 4 (re-run 17) | `backend/internal/http/authz_matrix_test.go` | Planned |
-| AC-02 | Lockout, reset, CSRF, audit; last Super Admin protected | 4 | `backend/internal/auth/*_test.go` | Planned |
+| AC-01 | Every endpoint checks a permission key; role × endpoint matrix | 4 (re-run 17) | 4a: route registry, `TestEveryV1RouteDeclaresAccess` in `backend/internal/httpapi/auth_test.go` (done). 4b: role × endpoint matrix test | Partly done |
+| AC-02 | Lockout, reset, CSRF, audit; last Super Admin protected | 4 | 4a: lockout, CSRF, audit in `backend/internal/httpapi/auth_test.go` (done). 4b: password reset, last Super Admin | Partly done |
 | AC-03 | No stat without a source; no logos, testimonials, certifications; demos labelled | 6 (started 5) | `frontend/tests/honesty.test.ts` (fails build on a sourceless stat) | Planned |
 | AC-04 | Sign-up, consent (version and time), profile, qualification, approval | 7 | `backend/internal/contributor/onboarding_test.go`, Playwright `join.spec.ts` | Planned |
 | AC-05 | Project creation; CSV/JSONL import with row errors; invalid file imports nothing | 8 | `backend/internal/importer/importer_test.go` | Planned |
