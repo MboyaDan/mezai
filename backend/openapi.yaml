@@ -6,6 +6,8 @@ info:
     Contract for the MezAI API. The browser calls `/api/*` on the frontend
     origin; Next.js rewrites those requests to this API with the `/api`
     prefix removed. Frontend types are generated from this file.
+security:
+  - session: []
 servers:
   - url: /api
     description: Through the Next.js rewrite
@@ -13,6 +15,7 @@ paths:
   /healthz:
     get:
       operationId: getHealth
+      security: []
       summary: Liveness. The process is up; dependencies are not checked.
       tags: [system]
       responses:
@@ -28,6 +31,7 @@ paths:
   /readyz:
     get:
       operationId: getReadiness
+      security: []
       summary: Readiness. Database and object storage are reachable.
       tags: [system]
       responses:
@@ -43,7 +47,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Readiness"
+  /v1/auth/login:
+    post:
+      operationId: login
+      summary: Sign in with email and password. Sets the session cookie.
+      description: |
+        Wrong password, unknown email, locked and disabled accounts all return
+        the same 401, so the response never reveals whether an email is
+        registered. Five wrong passwords lock the account for 15 minutes.
+        Limited to 20 requests a minute per IP and 10 per 15 minutes per email.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            Set-Cookie:
+              description: "`mezai_session`: HttpOnly, Secure, SameSite=Lax, Path=/"
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403":
+          description: "`email_not_verified`, `account_not_ready` or `csrf_failed`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Sign out. Revokes the session and clears the cookie.
+      tags: [auth]
+      parameters:
+        - $ref: "#/components/parameters/CSRF"
+      responses:
+        "204": { description: Signed out }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/auth/me:
+    get:
+      operationId: getMe
+      summary: The signed-in user, their permission keys and the CSRF token.
+      tags: [auth]
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Error" }
 components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: mezai_session
+  parameters:
+    CSRF:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in.
+      schema: { type: string }
+  responses:
+    Error:
+      description: Error with a stable code
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooMany:
+      description: Rate limited (`too_many_requests`)
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
   headers:
     RequestID:
       description: Request ID. A well-formed incoming value (8 to 64 of A-Z a-z 0-9 . _ -) is reused; otherwise one is generated.
@@ -77,3 +169,32 @@ components:
         error:
           type: string
           description: Stable machine-readable code, for example `not_found`.
+    Me:
+      type: object
+      required: [user, csrf_token]
+      properties:
+        csrf_token:
+          type: string
+          description: Send as `X-CSRF-Token` on state-changing requests.
+        user:
+          type: object
+          required: [id, email, display_name, kind, permissions]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string, format: email }
+            display_name: { type: string }
+            kind:
+              type: string
+              enum: [staff, client, contributor]
+            org_id:
+              type: string
+              format: uuid
+              description: Client users only.
+            contributor_id:
+              type: string
+              format: uuid
+              description: Contributors only.
+            permissions:
+              type: array
+              items: { type: string }
+              description: Permission keys. The UI may hide what a user cannot do; the API always checks.

@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 3 (Database and migrations). Branch `stage-03-database`, PR open.
-- **Next stage:** 4: Auth, roles and audit.
+- **Last stage:** 4a (Sessions, sign-in, CSRF, lockout, audit, first-run Super Admin). Branch `stage-04a-auth-sessions`, PR open.
+- **Next stage:** 4b: email verification, password reset, invitations, role administration (last Super Admin protected, `system.admin` not grantable), email via outbox, AC-01 matrix test.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -27,6 +27,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Queries and generated code | `backend/queries/*.sql` → `backend/internal/store/` (`make sqlc`) |
 | Scoped transactions | `backend/internal/db/scope.go` (`db.InScope`, `db.Staff/Org/Contributor`) |
 | Sample data | `backend/seed/` (run via `make seed`) |
+| Auth (sessions, principal, audit, setup) | `backend/internal/auth/` |
+| HTTP security (session, CSRF, access rules, rate limits) | `backend/internal/httpapi/security.go`, routes in `router.go` |
 | API contract | `backend/openapi.yaml` |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -39,7 +41,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 1 | Merged | #2 | Go API (/healthz, /readyz), Compose (api, postgres 17, SeaweedFS, mailpit), Next.js 16 with /api rewrite and status page, CI, Dependabot. |
 | 2a | Merged | #10 | Tokens, fontsource fonts, Logo, SignalLattice, 25 components, three shells, `/design` with axe tests. |
 | 2b | Merged | #14 | Table, Pagination, Stat, ProgressBar, Agreement, four charts, Motion variants and reduced-motion gate. Fixed a 2a overflow in Tabs at 360 px. |
-| 3 | PR open | (see PR list) | 7 migrations, 51 tables, RLS on 22, `mezai_app` role, sqlc store, Argon2id package, seed (2 sample orgs, 4 projects, 12 contributors), RLS and migration tests. |
+| 3 | Merged | #15 | 7 migrations, 51 tables, RLS on 22, `mezai_app` role, sqlc store, Argon2id package, seed (2 sample orgs, 4 projects, 12 contributors), RLS and migration tests. |
+| 4a | PR open | (see PR list) | Login, logout, me; sessions (hashed tokens, idle and absolute expiry); CSRF; lockout; rate limits; route registry with access rules; audit writer; `make setup`. |
 
 ## Notes for the next session
 
@@ -53,5 +56,6 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
 - New tables: grant `mezai_app` privileges in the same migration (no default privileges), add RLS if the table has `org_id` (a test enforces it), and revoke UPDATE/DELETE if append-only.
 - Wrap SQL functions and DO blocks in `-- +goose StatementBegin/End`.
+- New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key")`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.

@@ -34,6 +34,20 @@ type Config struct {
 	S3AccessKeyID     string
 	S3SecretAccessKey string
 	S3UsePathStyle    bool
+
+	// AppOrigin is the browser-facing origin (the Next.js site). State-changing
+	// requests from any other origin are refused.
+	AppOrigin string
+	// CookieSecure sets the Secure flag on the session cookie. Keep true;
+	// browsers accept Secure cookies on http://localhost.
+	CookieSecure bool
+	// TrustedProxies are the proxy addresses whose X-Forwarded-For is believed
+	// when finding the client IP (rate limits, audit).
+	TrustedProxies []string
+	// SessionTTL is the absolute session lifetime; SessionIdle signs a session
+	// out after this long without a request.
+	SessionTTL  time.Duration
+	SessionIdle time.Duration
 }
 
 // IsDevLike reports whether the environment allows development-only tools such as the seed command.
@@ -66,6 +80,12 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		S3Bucket:          get("S3_BUCKET", ""),
 		S3AccessKeyID:     get("S3_ACCESS_KEY_ID", ""),
 		S3SecretAccessKey: get("S3_SECRET_ACCESS_KEY", ""),
+		AppOrigin:         strings.TrimRight(get("APP_ORIGIN", "http://localhost:3000"), "/"),
+	}
+	for _, p := range strings.Split(get("TRUSTED_PROXIES", "127.0.0.1,::1"), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			c.TrustedProxies = append(c.TrustedProxies, p)
+		}
 	}
 
 	switch c.Env {
@@ -90,6 +110,22 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 	c.S3UsePathStyle, err = strconv.ParseBool(get("S3_USE_PATH_STYLE", "true"))
 	if err != nil {
 		errs = append(errs, fmt.Errorf("S3_USE_PATH_STYLE: %w", err))
+	}
+	c.CookieSecure, err = strconv.ParseBool(get("COOKIE_SECURE", "true"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("COOKIE_SECURE: %w", err))
+	}
+	if !c.IsDevLike() && !c.CookieSecure {
+		errs = append(errs, errors.New("COOKIE_SECURE must be true outside development and test"))
+	}
+	if c.SessionTTL, err = time.ParseDuration(get("SESSION_TTL", "168h")); err != nil || c.SessionTTL <= 0 {
+		errs = append(errs, fmt.Errorf("SESSION_TTL must be a positive duration"))
+	}
+	if c.SessionIdle, err = time.ParseDuration(get("SESSION_IDLE", "48h")); err != nil || c.SessionIdle <= 0 || c.SessionIdle > c.SessionTTL {
+		errs = append(errs, fmt.Errorf("SESSION_IDLE must be a positive duration no longer than SESSION_TTL"))
+	}
+	if !strings.HasPrefix(c.AppOrigin, "http://") && !strings.HasPrefix(c.AppOrigin, "https://") {
+		errs = append(errs, fmt.Errorf("APP_ORIGIN must start with http:// or https://, got %q", c.AppOrigin))
 	}
 
 	if c.DatabaseURL == "" {

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/config"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
@@ -57,11 +58,19 @@ func run() error {
 		UsePathStyle:    cfg.S3UsePathStyle,
 	})
 
+	authSvc, err := auth.NewService(pool, auth.DefaultOptions(cfg.SessionTTL, cfg.SessionIdle))
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Log:    log,
 			Checks: map[string]httpapi.Checker{"database": pool, "storage": store},
+			Auth: &httpapi.AuthDeps{
+				Service: authSvc, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
+			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
