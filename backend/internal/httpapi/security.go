@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,16 +24,21 @@ const (
 	ctxPrincipal = "principal"
 )
 
-// Access is the rule a route declares: public, any signed-in user, or a permission key.
+// Access is the rule a route declares: public, any signed-in user, or at
+// least one of the listed permission keys.
 type Access struct {
-	Public     bool
-	SignedIn   bool
-	Permission string
+	Public      bool
+	SignedIn    bool
+	Permissions []string
 }
 
-func Public() Access         { return Access{Public: true} }
-func SignedIn() Access       { return Access{SignedIn: true} }
-func Perm(key string) Access { return Access{Permission: key} }
+func Public() Access   { return Access{Public: true} }
+func SignedIn() Access { return Access{SignedIn: true} }
+
+// Perm allows callers holding any of keys. Handlers may narrow further (for
+// example a Client Admin acting only in their own organisation).
+func Perm(keys ...string) Access { return Access{Permissions: keys} }
+
 func (a Access) String() string {
 	switch {
 	case a.Public:
@@ -40,7 +46,26 @@ func (a Access) String() string {
 	case a.SignedIn:
 		return "signed-in"
 	}
-	return a.Permission
+	return strings.Join(a.Permissions, "|")
+}
+
+// Allows reports whether p passes the rule (nil p is anonymous).
+func (a Access) Allows(p *auth.Principal) bool {
+	if a.Public {
+		return true
+	}
+	if p == nil {
+		return false
+	}
+	if a.SignedIn {
+		return true
+	}
+	for _, k := range a.Permissions {
+		if p.Has(k) {
+			return true
+		}
+	}
+	return false
 }
 
 // PrincipalFrom returns the signed-in user for the request, or nil.
@@ -115,7 +140,7 @@ func enforce(a Access) gin.HandlerFunc {
 			abort(c, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
-		if a.Permission != "" && !p.Has(a.Permission) {
+		if !a.Allows(p) {
 			abort(c, http.StatusForbidden, "forbidden")
 			return
 		}
