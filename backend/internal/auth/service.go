@@ -29,6 +29,7 @@ var (
 
 // Options are the lockout and session rules.
 type Options struct {
+	AppOrigin   string // base for links in emails
 	SessionTTL  time.Duration
 	SessionIdle time.Duration
 	MaxFailures int           // failed passwords before lockout
