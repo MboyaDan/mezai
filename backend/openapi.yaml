@@ -109,6 +109,284 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Error" }
+  /v1/auth/password-reset/request:
+    post:
+      operationId: requestPasswordReset
+      summary: Email a reset link (1 hour) if the address has an active account. Always 202.
+      tags: [auth]
+      security: []
+      requestBody: { $ref: "#/components/requestBodies/Email" }
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /v1/auth/password-reset/confirm:
+    post:
+      operationId: confirmPasswordReset
+      summary: Set a new password from a reset link. Signs out every session and clears lockout.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        "204": { description: Password changed }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/WeakPassword" }
+  /v1/auth/verify-email:
+    post:
+      operationId: verifyEmail
+      summary: Confirm an email address from a verification link (24 hours).
+      tags: [auth]
+      security: []
+      requestBody: { $ref: "#/components/requestBodies/Token" }
+      responses:
+        "204": { description: Verified }
+        "400": { $ref: "#/components/responses/Error" }
+  /v1/auth/verify-email/resend:
+    post:
+      operationId: resendVerification
+      summary: Send a new verification link to an unverified account. Always 202.
+      tags: [auth]
+      security: []
+      requestBody: { $ref: "#/components/requestBodies/Email" }
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /v1/invitations/accept:
+    post:
+      operationId: acceptInvitation
+      summary: Create the invited account (email verified) and set its password.
+      tags: [accounts]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, display_name, password]
+              properties:
+                token: { type: string }
+                display_name: { type: string, minLength: 1, maxLength: 120 }
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        "204": { description: Account created; sign in next }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/WeakPassword" }
+  /v1/invitations:
+    get:
+      operationId: listInvitations
+      summary: Pending invitations. Staff see all; a Client Admin sees their organisation's.
+      description: "Requires `user.manage` or `org.user.invite`."
+      tags: [accounts]
+      responses:
+        "200":
+          description: Pending invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitations]
+                properties:
+                  invitations:
+                    type: array
+                    items: { $ref: "#/components/schemas/Invitation" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createInvitation
+      summary: Invite a staff or client user (link valid 7 days).
+      description: |
+        Requires `user.manage` (any staff role, any organisation) or
+        `org.user.invite` (client roles in the caller's own organisation).
+        Roles holding `system.admin` and the contributor role are never
+        invitable (`not_grantable`).
+      tags: [accounts]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email }
+                role: { type: string, description: "Role key, for example `reviewer` or `client_viewer`" }
+                org_id: { type: string, format: uuid, description: "Required for client roles, forbidden for staff roles" }
+      responses:
+        "201":
+          description: Invited
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invitation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/invitations/{id}:
+    delete:
+      operationId: revokeInvitation
+      summary: Revoke a pending invitation.
+      tags: [accounts]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/users:
+    get:
+      operationId: listUsers
+      summary: Staff and client users with their roles (`user.manage`).
+      tags: [accounts]
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/UserSummary" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/users/{id}/roles:
+    post:
+      operationId: grantRole
+      summary: Grant a role (`user.manage`). Never a role holding `system.admin`; never mixes staff, client and contributor.
+      tags: [accounts]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string }
+                org_id: { type: string, format: uuid }
+      responses:
+        "204": { description: Granted }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/users/{id}/roles/{role}:
+    delete:
+      operationId: removeRole
+      summary: Remove a role (`user.manage`). Super Admin changes need `system.admin`; the last Super Admin cannot be demoted (409 `last_super_admin`).
+      tags: [accounts]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: role, in: path, required: true, schema: { type: string } }
+        - { name: org_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/users/{id}/status:
+    post:
+      operationId: setUserStatus
+      summary: Enable or disable a user (`user.manage`). Disabling signs them out. Not yourself; never the last Super Admin.
+      tags: [accounts]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, disabled] }
+      responses:
+        "204": { description: Changed }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/roles:
+    get:
+      operationId: listRoles
+      summary: Roles and their permission keys (`user.manage` or `role.manage`).
+      tags: [accounts]
+      responses:
+        "200":
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roles]
+                properties:
+                  roles:
+                    type: array
+                    items: { $ref: "#/components/schemas/Role" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/roles/{key}/permissions:
+    put:
+      operationId: setRolePermissions
+      summary: Replace a role's permission keys (`role.manage`). The Super Admin role is fixed; `system.admin` can never be added.
+      tags: [accounts]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: key, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions: { type: array, items: { type: string } }
+      responses:
+        "204": { description: Saved }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/permissions:
+    get:
+      operationId: listPermissions
+      summary: Every permission key and whether it can be granted (`role.manage`).
+      tags: [accounts]
+      responses:
+        "200":
+          description: Permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [permissions]
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: object
+                      required: [key, description, grantable]
+                      properties:
+                        key: { type: string }
+                        description: { type: string }
+                        grantable: { type: boolean }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     session:
@@ -122,7 +400,44 @@ components:
       required: true
       description: The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in.
       schema: { type: string }
+  requestBodies:
+    Email:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string, format: email }
+    Token:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token]
+            properties:
+              token: { type: string }
   responses:
+    Accepted:
+      description: Accepted. The same answer whether or not the email is registered.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status: { type: string, enum: [accepted] }
+    WeakPassword:
+      description: "`weak_password`, with a `message` safe to show"
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Error"
+              - type: object
+                properties:
+                  message: { type: string }
     Error:
       description: Error with a stable code
       content:
@@ -198,3 +513,36 @@ components:
               type: array
               items: { type: string }
               description: Permission keys. The UI may hide what a user cannot do; the API always checks.
+    Invitation:
+      type: object
+      required: [id, email, role, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string }
+        org_id: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    UserSummary:
+      type: object
+      required: [id, email, display_name, status, email_verified, roles]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        email_verified: { type: boolean }
+        last_login_at: { type: [string, "null"], format: date-time }
+        roles:
+          type: array
+          items: { type: string }
+          description: "`role_key`, or `role_key:org_id` for client roles"
+    Role:
+      type: object
+      required: [key, name, description, scope, permissions]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        scope: { type: string, enum: [platform, org] }
+        permissions: { type: array, items: { type: string } }

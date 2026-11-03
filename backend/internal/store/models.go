@@ -179,14 +179,25 @@ type EarningsLedger struct {
 }
 
 type EmailOutbox struct {
+	ID            uuid.UUID
+	ToAddress     string
+	Template      string
+	Data          []byte
+	Status        string
+	Attempts      int32
+	LastError     *string
+	SentAt        *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	NextAttemptAt time.Time
+}
+
+type EmailVerification struct {
 	ID        uuid.UUID
-	ToAddress string
-	Template  string
-	Data      []byte
-	Status    string
-	Attempts  int32
-	LastError *string
-	SentAt    *time.Time
+	UserID    uuid.UUID
+	TokenHash []byte
+	ExpiresAt time.Time
+	UsedAt    *time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

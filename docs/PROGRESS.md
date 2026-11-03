@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 4a (Sessions, sign-in, CSRF, lockout, audit, first-run Super Admin). Branch `stage-04a-auth-sessions`, PR open.
-- **Next stage:** 4b: email verification, password reset, invitations, role administration (last Super Admin protected, `system.admin` not grantable), email via outbox, AC-01 matrix test.
+- **Last stage:** 4b (Verification, reset, invitations, role administration, email outbox, AC-01 matrix). Branch `stage-04b-accounts`, PR open.
+- **Next stage:** 5: Public website part 1 (storyboard home). Confirm the 5a/5b split with Dan first (D-011).
 - **Blocking questions:** none.
 
 ## Where things are
@@ -29,6 +29,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Sample data | `backend/seed/` (run via `make seed`) |
 | Auth (sessions, principal, audit, setup) | `backend/internal/auth/` |
 | HTTP security (session, CSRF, access rules, rate limits) | `backend/internal/httpapi/security.go`, routes in `router.go` |
+| Account flows (reset, verification, invitations, roles) | `backend/internal/auth/accounts.go`, handlers in `backend/internal/httpapi/accounts.go` |
+| Email templates and outbox worker | `backend/internal/mail/` (mailpit UI at http://localhost:8025) |
 | API contract | `backend/openapi.yaml` |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -42,7 +44,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 2a | Merged | #10 | Tokens, fontsource fonts, Logo, SignalLattice, 25 components, three shells, `/design` with axe tests. |
 | 2b | Merged | #14 | Table, Pagination, Stat, ProgressBar, Agreement, four charts, Motion variants and reduced-motion gate. Fixed a 2a overflow in Tabs at 360 px. |
 | 3 | Merged | #15 | 7 migrations, 51 tables, RLS on 22, `mezai_app` role, sqlc store, Argon2id package, seed (2 sample orgs, 4 projects, 12 contributors), RLS and migration tests. |
-| 4a | PR open | (see PR list) | Login, logout, me; sessions (hashed tokens, idle and absolute expiry); CSRF; lockout; rate limits; route registry with access rules; audit writer; `make setup`. |
+| 4a | Merged | #16 | Login, logout, me; sessions (hashed tokens, idle and absolute expiry); CSRF; lockout; rate limits; route registry with access rules; audit writer; `make setup`. |
+| 4b | PR open | (see PR list) | Password reset, email verification, invitations (staff and client admin), user and role administration with Super Admin protections, email outbox worker, AC-01 matrix test, AC-02 complete. |
 
 ## Notes for the next session
 
@@ -56,6 +59,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
 - New tables: grant `mezai_app` privileges in the same migration (no default privileges), add RLS if the table has `org_id` (a test enforces it), and revoke UPDATE/DELETE if append-only.
 - Wrap SQL functions and DO blocks in `-- +goose StatementBegin/End`.
-- New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key")`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.
+- New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key", ...)` (any of), and must be added to `expectedAccess` in `authz_matrix_test.go`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.
+- Emails: `mail.Enqueue(ctx, q, to, template, data)` inside the transaction; add templates in `internal/mail/templates.go`.
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.

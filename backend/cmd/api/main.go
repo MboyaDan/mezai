@@ -17,6 +17,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/config"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 )
 
@@ -58,10 +59,18 @@ func run() error {
 		UsePathStyle:    cfg.S3UsePathStyle,
 	})
 
-	authSvc, err := auth.NewService(pool, auth.DefaultOptions(cfg.SessionTTL, cfg.SessionIdle))
+	opts := auth.DefaultOptions(cfg.SessionTTL, cfg.SessionIdle)
+	opts.AppOrigin = cfg.AppOrigin
+	authSvc, err := auth.NewService(pool, opts)
 	if err != nil {
 		return err
 	}
+
+	// Email outbox worker. Every API instance runs one; SKIP LOCKED keeps them apart.
+	mailer := &mail.Worker{Pool: pool, Log: log, Sender: mail.SMTP{
+		Addr: cfg.SMTPAddr, From: cfg.MailFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+	}}
+	go mailer.Run(ctx, 5*time.Second)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,

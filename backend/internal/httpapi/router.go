@@ -83,6 +83,29 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/auth/login", Public(), perIP, h.login)
 		a.handle(http.MethodPost, "/auth/logout", SignedIn(), h.logout)
 		a.handle(http.MethodGet, "/auth/me", SignedIn(), h.me)
+
+		// Public account links share one per-IP limit; email-keyed ones add a per-address limit.
+		ah := &accountHandlers{svc: d.Auth.Service, log: d.Log, perEmail: newLimiter(5, time.Hour)}
+		perIPLinks := rateLimit(newLimiter(20, time.Minute))
+		a.handle(http.MethodPost, "/auth/password-reset/request", Public(), perIPLinks, ah.requestReset)
+		a.handle(http.MethodPost, "/auth/password-reset/confirm", Public(), perIPLinks, ah.confirmReset)
+		a.handle(http.MethodPost, "/auth/verify-email", Public(), perIPLinks, ah.verifyEmail)
+		a.handle(http.MethodPost, "/auth/verify-email/resend", Public(), perIPLinks, ah.resendVerification)
+		a.handle(http.MethodPost, "/invitations/accept", Public(), perIPLinks, ah.acceptInvitation)
+
+		invite := Perm("user.manage", "org.user.invite")
+		a.handle(http.MethodGet, "/invitations", invite, ah.listInvitations)
+		a.handle(http.MethodPost, "/invitations", invite, ah.invite)
+		a.handle(http.MethodDelete, "/invitations/:id", invite, ah.revokeInvitation)
+
+		a.handle(http.MethodGet, "/users", Perm("user.manage"), ah.listUsers)
+		a.handle(http.MethodPost, "/users/:id/roles", Perm("user.manage"), ah.grantRole)
+		a.handle(http.MethodDelete, "/users/:id/roles/:role", Perm("user.manage"), ah.removeRole)
+		a.handle(http.MethodPost, "/users/:id/status", Perm("user.manage"), ah.setStatus)
+
+		a.handle(http.MethodGet, "/roles", Perm("user.manage", "role.manage"), ah.listRoles)
+		a.handle(http.MethodGet, "/permissions", Perm("role.manage"), ah.listPermissions)
+		a.handle(http.MethodPut, "/roles/:key/permissions", Perm("role.manage"), ah.setRolePermissions)
 		rules = a.rules
 	}
 

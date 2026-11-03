@@ -38,7 +38,9 @@ func newEnv(t *testing.T) *env {
 	if _, err := seed.Run(context.Background(), pool, seed.Options{Password: pw}); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := auth.NewService(pool, auth.DefaultOptions(time.Hour, 30*time.Minute))
+	opts := auth.DefaultOptions(time.Hour, 30*time.Minute)
+	opts.AppOrigin = origin
+	svc, err := auth.NewService(pool, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +331,7 @@ func TestEveryV1RouteDeclaresAccess(t *testing.T) {
 	declared := map[string]bool{}
 	for _, r := range e.rules {
 		declared[r.Method+" "+r.Path] = true
-		if !r.Access.Public && !r.Access.SignedIn && r.Access.Permission == "" {
+		if !r.Access.Public && !r.Access.SignedIn && len(r.Access.Permissions) == 0 {
 			t.Errorf("%s %s has an empty access rule", r.Method, r.Path)
 		}
 	}

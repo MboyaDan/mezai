@@ -60,7 +60,7 @@ func (h *authHandlers) login(c *gin.Context) {
 		abort(c, http.StatusBadRequest, "bad_request")
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(req.Email))
+	email := normEmail(req.Email)
 	if email == "" || req.Password == "" || len(req.Password) > 4*password.MaxLength {
 		abort(c, http.StatusUnauthorized, "invalid_credentials")
 		return
@@ -104,6 +104,8 @@ func (h *authHandlers) logout(c *gin.Context) {
 func (h *authHandlers) me(c *gin.Context) {
 	c.JSON(http.StatusOK, view(PrincipalFrom(c)))
 }
+
+func normEmail(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
 func (h *authHandlers) setCookie(c *gin.Context, value string, maxAge time.Duration) {
 	ck := &http.Cookie{

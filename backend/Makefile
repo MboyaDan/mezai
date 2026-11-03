@@ -48,8 +48,8 @@ migrate-create: ## Create a migration: make migrate-create name=add_users
 seed: ## Load sample data (refuses unless APP_ENV is development or test)
 	go run ./cmd/seed
 
-setup: ## Create the first Super Admin from SETUP_ADMIN_* (any environment; no-op once one exists)
-	go run ./cmd/setup
+setup: ## Create the first Super Admin from SETUP_ADMIN_* (any environment; no-op once one exists). Backup: make setup ARGS=-additional
+	go run ./cmd/setup $(ARGS)
 
 sqlc: ## Generate Go code from queries/ (config arrives in Stage 3)
 	@if [ -f sqlc.yaml ]; then $(SQLC) generate; else echo "sqlc.yaml not created yet (Stage 3)"; fi
