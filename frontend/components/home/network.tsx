@@ -39,7 +39,7 @@ function arc(a: { x: number; y: number }, b: { x: number; y: number }) {
   return `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
 }
 
-function Map({ view, className }: { view: View; className?: string }) {
+function Map({ view, className, ...rest }: { view: View; className?: string; "data-map": string }) {
   const hub = cities.find((c) => c.kind === "hub")!;
   const h = project(view, hub.lon, hub.lat);
   const step = 18;
@@ -49,12 +49,13 @@ function Map({ view, className }: { view: View; className?: string }) {
   const visible = cities.filter((c) => c.lon >= view.lon0 && c.lon <= view.lon1);
   return (
     <svg
+      {...rest}
       viewBox={`0 0 ${view.w} ${view.h}`}
       className={className}
       role="img"
-      aria-labelledby="network-map-title"
+      aria-labelledby={`network-map-title-${rest["data-map"]}`}
     >
-      <title id="network-map-title">
+      <title id={`network-map-title-${rest["data-map"]}`}>
         Illustrative map: African cities connect through Nairobi to cities where AI models are built.
       </title>
       <g className="fill-[var(--lattice-stroke)]">
@@ -62,7 +63,10 @@ function Map({ view, className }: { view: View; className?: string }) {
           <circle key={`${x}-${y}`} cx={x} cy={y} r={1.1} />
         ))}
       </g>
-      <g fill="none" strokeWidth={1.25} vectorEffect="non-scaling-stroke">
+      {/* Arcs and pulses are drawn by GSAP on scroll (home-motion.tsx); the static
+          render shows them complete. Arcs from African cities run into Nairobi,
+          arcs to buyer cities run out of it. */}
+      <g fill="none" strokeWidth={1.5}>
         {visible
           .filter((c) => c.kind !== "hub")
           .map((c) => {
@@ -71,11 +75,30 @@ function Map({ view, className }: { view: View; className?: string }) {
               <path
                 key={c.name}
                 d={c.kind === "africa" ? arc(p, h) : arc(h, p)}
-                className={c.kind === "africa" ? "stroke-[var(--lattice-stroke-near)]" : "stroke-muted-dark"}
-                strokeDasharray={c.kind === "buyer" ? "4 5" : undefined}
+                data-arc={c.kind}
+                data-city={c.name}
+                className={
+                  c.kind === "africa" ? "stroke-[var(--lattice-stroke-near)]" : "stroke-muted-dark/60"
+                }
               />
             );
           })}
+      </g>
+      {/* Pulses that travel along the arcs; invisible unless animated. */}
+      <g aria-hidden="true">
+        {visible
+          .filter((c) => c.kind !== "hub")
+          .map((c) => (
+            <circle
+              key={c.name}
+              r={3.5}
+              cx={0}
+              cy={0}
+              opacity={0}
+              className="fill-lime"
+              data-pulse={c.name}
+            />
+          ))}
       </g>
       {visible.map((c) => {
         const p = project(view, c.lon, c.lat);
@@ -85,7 +108,7 @@ function Map({ view, className }: { view: View; className?: string }) {
             {c.kind === "hub" ? (
               <>
                 <circle cx={p.x} cy={p.y} r={11} className="fill-none stroke-lime" strokeWidth={1} />
-                <circle cx={p.x} cy={p.y} r={5} className="fill-lime" />
+                <circle cx={p.x} cy={p.y} r={5} className="fill-lime" data-hub />
               </>
             ) : (
               <circle
@@ -116,7 +139,7 @@ export function Network() {
   return (
     <section data-theme="dark" aria-labelledby="network-title" className="bg-bg">
       <Container className="grid gap-10 py-20 md:py-28 lg:grid-cols-12 lg:gap-12">
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-4" data-reveal>
           <Eyebrow>{network.eyebrow}</Eyebrow>
           <SectionTitle id="network-title" className="mt-4 text-[2rem] md:text-[2.5rem] lg:text-[2.5rem]">
             {network.title}
@@ -131,8 +154,8 @@ export function Network() {
           </ol>
         </div>
         <figure className="lg:col-span-8">
-          <Map view={wide} className="hidden h-auto w-full md:block" />
-          <Map view={narrow} className="h-auto w-full md:hidden" />
+          <Map view={wide} className="hidden h-auto w-full md:block" data-map="wide" />
+          <Map view={narrow} className="h-auto w-full md:hidden" data-map="narrow" />
           <figcaption className="mt-3 font-mono text-[0.6875rem] text-fg-muted">{network.note}</figcaption>
         </figure>
       </Container>

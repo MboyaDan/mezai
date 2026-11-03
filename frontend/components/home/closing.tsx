@@ -12,7 +12,12 @@ export function Practices() {
         <h2 id="practices-title" className="font-mono text-xs tracking-wide text-fg-muted">
           {practices.title}
         </h2>
-        <ul className="mt-8 grid border-t border-border md:grid-cols-3 md:border-t-0">
+        {/* A rule that draws across before the statements enter (pattern 7). */}
+        <span aria-hidden="true" data-rule className="mt-8 block h-px origin-left bg-border max-md:hidden" />
+        <ul
+          className="mt-8 grid border-t border-border md:mt-6 md:grid-cols-3 md:border-t-0"
+          data-reveal-group
+        >
           {practices.items.map((p) => (
             <li
               key={p.text}
@@ -35,7 +40,7 @@ export function FinalCta() {
   return (
     <section data-theme="light" aria-labelledby="cta-title" className="bg-lime text-charcoal-950">
       <Container className="flex flex-col gap-10 py-20 md:flex-row md:items-end md:justify-between md:py-28">
-        <div>
+        <div data-reveal>
           <div className="w-20">
             <SignalLattice rows={3} cols={6} accent={null} />
           </div>
