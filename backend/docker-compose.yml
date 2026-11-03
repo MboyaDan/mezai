@@ -23,6 +23,8 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1,::1}
       SESSION_TTL: ${SESSION_TTL:-168h}
       SESSION_IDLE: ${SESSION_IDLE:-48h}
+      SMTP_ADDR: mailpit:1025
+      MAIL_FROM: ${MAIL_FROM:-MezAI <no-reply@mezai.invalid>}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

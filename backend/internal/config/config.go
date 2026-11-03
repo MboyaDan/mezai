@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/mail"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +49,12 @@ type Config struct {
 	// out after this long without a request.
 	SessionTTL  time.Duration
 	SessionIdle time.Duration
+
+	// Outgoing email: mailpit locally, a provider in staging (Stage 16/19).
+	SMTPAddr     string
+	SMTPUsername string
+	SMTPPassword string
+	MailFrom     string
 }
 
 // IsDevLike reports whether the environment allows development-only tools such as the seed command.
@@ -81,6 +88,13 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		S3AccessKeyID:     get("S3_ACCESS_KEY_ID", ""),
 		S3SecretAccessKey: get("S3_SECRET_ACCESS_KEY", ""),
 		AppOrigin:         strings.TrimRight(get("APP_ORIGIN", "http://localhost:3000"), "/"),
+		SMTPAddr:          get("SMTP_ADDR", "localhost:1025"),
+		SMTPUsername:      get("SMTP_USERNAME", ""),
+		SMTPPassword:      get("SMTP_PASSWORD", ""),
+		MailFrom:          get("MAIL_FROM", ""),
+	}
+	if c.MailFrom == "" && c.IsDevLike() {
+		c.MailFrom = "MezAI <no-reply@mezai.invalid>"
 	}
 	for _, p := range strings.Split(get("TRUSTED_PROXIES", "127.0.0.1,::1"), ",") {
 		if p = strings.TrimSpace(p); p != "" {
@@ -128,6 +142,9 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		errs = append(errs, fmt.Errorf("APP_ORIGIN must start with http:// or https://, got %q", c.AppOrigin))
 	}
 
+	if _, err := mail.ParseAddress(c.MailFrom); err != nil {
+		errs = append(errs, fmt.Errorf("MAIL_FROM must be an address such as \"MezAI <no-reply@example.com>\" (required outside development and test)"))
+	}
 	if c.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))
 	}
