@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import { ApiStatusBadge } from "@/components/api-status-badge";
 import { Logo } from "@/components/brand/logo";
 import { SignalLattice } from "@/components/brand/signal-lattice";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
@@ -165,9 +166,12 @@ export function Showcase() {
   return (
     <div className="mx-auto max-w-[82rem] px-4 pb-24 sm:px-8 lg:px-16">
       <header className="grid gap-3 py-12">
-        <p className="font-mono text-xs tracking-wide text-fg-muted uppercase">
-          Development only · not indexed
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="font-mono text-xs tracking-wide text-fg-muted uppercase">
+            Development only · not indexed
+          </p>
+          <ApiStatusBadge />
+        </div>
         <h1 className="font-display text-[2.75rem] leading-[1.04] font-medium tracking-[-0.02em] md:text-display-1">
           Design <span className="font-serif text-serif-accent">system</span>
         </h1>

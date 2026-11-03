@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const pages = ["/design", "/design/shells/public", "/design/shells/contributor", "/design/shells/workspace"];
+const pages = [
+  "/",
+  "/design",
+  "/design/shells/public",
+  "/design/shells/contributor",
+  "/design/shells/workspace",
+];
 
 for (const path of pages) {
   test(`axe: no critical or serious issues on ${path}`, async ({ page }) => {
@@ -106,5 +112,12 @@ test.describe("reduced motion", () => {
       .first()
       .evaluate((l) => getComputedStyle(l).transform);
     expect(["none", "matrix(1, 0, 0, 1, 0, 0)"]).toContain(angle);
+    // The lime dot is part of the content: visible at once, not after a delay.
+    // Read once, without retrying: an auto-retrying check would simply wait out the delay.
+    const opacity = await page
+      .locator(".signal-lattice:visible .lattice-dot")
+      .first()
+      .evaluate((el) => getComputedStyle(el).opacity);
+    expect(opacity).toBe("1");
   });
 });

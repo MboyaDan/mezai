@@ -6,7 +6,7 @@ Test names are planned; each stage replaces "planned" with the real test path an
 |---|---|---|---|---|
 | AC-01 | Every endpoint checks a permission key; role × endpoint matrix | 4 (re-run 17) | `TestAuthorisationMatrix` in `backend/internal/httpapi/authz_matrix_test.go` (every role × every guarded route, against tables from brief section 4) and `TestEveryV1RouteDeclaresAccess` | Done (re-run as routes are added) |
 | AC-02 | Lockout, reset, CSRF, audit; last Super Admin protected | 4 | `backend/internal/httpapi/auth_test.go` (lockout, CSRF, audit), `accounts_test.go` (`TestPasswordReset`, `TestSuperAdminProtections`) | Done |
-| AC-03 | No stat without a source; no logos, testimonials, certifications; demos labelled | 6 (started 5) | `frontend/tests/honesty.test.ts` (fails build on a sourceless stat) | Planned |
+| AC-03 | No stat without a source; no logos, testimonials, certifications; demos labelled | 6 (started 5) | 5a: `frontend/lib/stats.test.ts` (sourceless stats dropped), `backend/internal/httpapi/stats_test.go` (only published, sourced stats served), `smoke.spec.ts` (every rendered stat names its source; demo labelled). Stage 6: `honesty.test.ts` across pages | Started |
 | AC-04 | Sign-up, consent (version and time), profile, qualification, approval | 7 | `backend/internal/contributor/onboarding_test.go`, Playwright `join.spec.ts` | Planned |
 | AC-05 | Project creation; CSV/JSONL import with row errors; invalid file imports nothing | 8 | `backend/internal/importer/importer_test.go` | Planned |
 | AC-06 | Never the same item twice; exactly k contributors; gold rate within tolerance over 1,000; gold indistinguishable | 9 | `backend/internal/assign/assign_test.go` | Planned |

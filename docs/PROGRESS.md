@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 4b (Verification, reset, invitations, role administration, email outbox, AC-01 matrix). Branch `stage-04b-accounts`, PR open.
-- **Next stage:** 5: Public website part 1 (storyboard home). Confirm the 5a/5b split with Dan first (D-011).
+- **Last stage:** 5a (Storyboard home in its reduced-motion form, stats API, SEO). Branch `stage-05a-home-structure`, PR open.
+- **Next stage:** 5b: motion for the home page (GSAP on public marketing routes only, Motion reveals, demo autoplay), design quality gate at 1440 and 390, Lighthouse mobile with real scores.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -31,6 +31,9 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | HTTP security (session, CSRF, access rules, rate limits) | `backend/internal/httpapi/security.go`, routes in `router.go` |
 | Account flows (reset, verification, invitations, roles) | `backend/internal/auth/accounts.go`, handlers in `backend/internal/httpapi/accounts.go` |
 | Email templates and outbox worker | `backend/internal/mail/` (mailpit UI at http://localhost:8025) |
+| Home page sections and copy | `frontend/components/home/`, `frontend/content/home.ts` |
+| Stats (API, fallback, filter) | `backend/internal/httpapi/stats.go`, `frontend/lib/stats.ts`, `frontend/content/stats.ts` |
+| SEO files | `frontend/app/{robots,sitemap,opengraph-image}.ts(x)`, `frontend/lib/site.ts` |
 | API contract | `backend/openapi.yaml` |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -45,7 +48,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 2b | Merged | #14 | Table, Pagination, Stat, ProgressBar, Agreement, four charts, Motion variants and reduced-motion gate. Fixed a 2a overflow in Tabs at 360 px. |
 | 3 | Merged | #15 | 7 migrations, 51 tables, RLS on 22, `mezai_app` role, sqlc store, Argon2id package, seed (2 sample orgs, 4 projects, 12 contributors), RLS and migration tests. |
 | 4a | Merged | #16 | Login, logout, me; sessions (hashed tokens, idle and absolute expiry); CSRF; lockout; rate limits; route registry with access rules; audit writer; `make setup`. |
-| 4b | PR open | (see PR list) | Password reset, email verification, invitations (staff and client admin), user and role administration with Super Admin protections, email outbox worker, AC-01 matrix test, AC-02 complete. |
+| 4b | Merged | #17 | Password reset, email verification, invitations (staff and client admin), user and role administration with Super Admin protections, email outbox worker, AC-01 matrix test, AC-02 complete. |
+| 5a | PR open | (see PR list) | Home frames 1 to 8 (static, reduced-motion form), public stats endpoint, cached stats with fallback, metadata, OG image, sitemap, robots. Fixed animation-delay under reduced motion. |
 
 ## Notes for the next session
 
@@ -61,5 +65,6 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Wrap SQL functions and DO blocks in `-- +goose StatementBegin/End`.
 - New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key", ...)` (any of), and must be added to `expectedAccess` in `authz_matrix_test.go`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.
 - Emails: `mail.Enqueue(ctx, q, to, template, data)` inside the transaction; add templates in `internal/mail/templates.go`.
+- Public pages: add the route to `publicRoutes` in `frontend/lib/site.ts` (sitemap). Copy goes in `frontend/content/`, never inline claims.
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.

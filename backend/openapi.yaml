@@ -387,6 +387,26 @@ paths:
                         grantable: { type: boolean }
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+  /v1/stats:
+    get:
+      operationId: listStats
+      summary: Published statistics for the public site, each with its source and verification date.
+      description: No record, no number (honesty rule 2). Cached for 5 minutes.
+      tags: [public]
+      security: []
+      responses:
+        "200":
+          description: Published statistics (often empty)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stats]
+                properties:
+                  stats:
+                    type: array
+                    items: { $ref: "#/components/schemas/PublicStat" }
+        "500": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     session:
@@ -546,3 +566,14 @@ components:
         description: { type: string }
         scope: { type: string, enum: [platform, org] }
         permissions: { type: array, items: { type: string } }
+    PublicStat:
+      type: object
+      required: [key, label, value, unit, source, verified_at]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        value: { type: number }
+        unit: { type: string }
+        source: { type: string, minLength: 1 }
+        source_url: { type: [string, "null"] }
+        verified_at: { type: string, format: date-time }

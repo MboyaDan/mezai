@@ -45,7 +45,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	r, rules := httpapi.NewRouterWithRules(httpapi.Deps{Auth: &httpapi.AuthDeps{
-		Service: svc, AppOrigin: origin, CookieSecure: true,
+		Service: svc, Pool: pool, AppOrigin: origin, CookieSecure: true,
 	}})
 	return &env{t: t, pool: pool, router: r, rules: rules}
 }
