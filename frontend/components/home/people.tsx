@@ -7,31 +7,31 @@ import engineer from "@/content/images/people-engineer.jpg";
 import clinician from "@/content/images/people-clinician.jpg";
 import { Container, Eyebrow, SectionTitle } from "./layout";
 
-type Credit = (typeof people.photos)[keyof typeof people.photos];
+type PhotoInfo = (typeof people.photos)[keyof typeof people.photos];
 
 /**
- * One photo, captioned with the profiles it illustrates and its credit. Stock
+ * One photo, captioned with the profiles it illustrates. Stock
  * photos are labelled illustrative (DESIGN.md section 8). GSAP wipes
  * [data-photo] in from the top-left corner (home-motion.tsx); without it the
  * photo just shows.
  */
 function Photo({
   src,
-  credit,
+  info,
   sizes,
   className,
   bracket = false,
 }: {
   src: StaticImageData;
-  credit: Credit;
+  info: PhotoInfo;
   sizes: string;
   className?: string;
   bracket?: boolean;
 }) {
-  const profiles = people.profiles.filter((p) => credit.profiles.includes(p.name));
+  const profiles = people.profiles.filter((p) => info.profiles.includes(p.name));
   const image = (
     <div data-photo className="overflow-hidden rounded-[2px] bg-surface">
-      <Image src={src} alt={credit.alt} sizes={sizes} placeholder="blur" className="h-auto w-full" />
+      <Image src={src} alt={info.alt} sizes={sizes} placeholder="blur" className="h-auto w-full" />
     </div>
   );
   return (
@@ -44,10 +44,7 @@ function Photo({
             <span className="text-sm text-fg-muted">{p.line}</span>
           </span>
         ))}
-        <span className="font-mono text-[0.6875rem] text-fg-muted">
-          Illustrative · Photo:{" "}
-          {credit.photographer ? `${credit.photographer}, ${credit.source}` : credit.source}
-        </span>
+        <span className="font-mono text-[0.6875rem] text-fg-muted">Illustrative photo</span>
       </figcaption>
     </figure>
   );
@@ -69,7 +66,7 @@ export function People() {
 
         <Photo
           src={linguist}
-          credit={photos.main}
+          info={photos.main}
           sizes="(min-width: 1024px) 45vw, 100vw"
           className="lg:col-span-6 lg:col-start-7 lg:row-span-2 lg:row-start-1"
           bracket
@@ -94,13 +91,13 @@ export function People() {
         <div className="grid grid-cols-2 gap-4 sm:gap-8 lg:col-span-12 lg:grid-cols-12 lg:gap-12">
           <Photo
             src={engineer}
-            credit={photos.engineer}
+            info={photos.engineer}
             sizes="(min-width: 1024px) 38vw, 50vw"
             className="lg:col-span-5 lg:col-start-1"
           />
           <Photo
             src={clinician}
-            credit={photos.clinician}
+            info={photos.clinician}
             sizes="(min-width: 1024px) 30vw, 50vw"
             className="lg:col-span-4 lg:col-start-8 lg:mt-24"
           />

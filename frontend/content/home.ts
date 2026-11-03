@@ -63,9 +63,10 @@ export const services = {
   },
 };
 
-// Stock photos are illustrative and credited (docs/content/image-credits.md);
-// each captions the profiles it illustrates, never a person or "our contributors" (DESIGN.md
-// section 8). A null photographer means the source did not record one.
+// Stock photos are labelled illustrative; their source and licence are on
+// record in docs/content/image-credits.md (the licences do not require a
+// credit on the page). Each captions the profiles it illustrates, never a
+// person or "our contributors" (DESIGN.md section 8).
 export const people = {
   eyebrow: "The people",
   title: "Vetted by test, measured by results.",
@@ -90,20 +91,14 @@ export const people = {
     main: {
       profiles: ["Linguists and translators"],
       alt: "A person in a patterned headscarf reads a laptop screen closely, sitting in an armchair by a white wall.",
-      photographer: "Diva Plavalaguna",
-      source: "Pexels",
     },
     engineer: {
       profiles: ["Engineers"],
       alt: "Hands typing on a laptop with code on the screen, at a desk in a small wood-panelled room.",
-      photographer: null,
-      source: "Nappy",
     },
     clinician: {
       profiles: ["Clinicians", "Teachers"],
       alt: "A health worker in a white coat and stethoscope follows a printed chart with a pen.",
-      photographer: "cottonbro studio",
-      source: "Pexels",
     },
   },
 };
