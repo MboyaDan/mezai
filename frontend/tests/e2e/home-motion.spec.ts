@@ -57,6 +57,22 @@ test.describe("home motion", () => {
     });
     expect(hidden).toEqual([]);
 
+    // Photos end unclipped and at full scale, and every image loaded.
+    const photos = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>("[data-photo]")].map((frame) => {
+        const img = frame.querySelector("img")!;
+        const clip = getComputedStyle(frame).clipPath;
+        const t = getComputedStyle(img).transform;
+        return {
+          clipped: clip !== "none" && clip !== "inset(0%)" && clip !== "inset(0px)",
+          scaled: t !== "none" && t !== "matrix(1, 0, 0, 1, 0, 0)",
+          loaded: img.complete && img.naturalWidth > 0,
+        };
+      }),
+    );
+    expect(photos).toHaveLength(3);
+    expect(photos.filter((p) => p.clipped || p.scaled || !p.loaded)).toEqual([]);
+
     // Arcs end fully drawn (no dash offset left over) on the visible map.
     const undrawn = await page.evaluate(
       () =>
