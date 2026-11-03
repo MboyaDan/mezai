@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -23,6 +24,35 @@ const (
 )
 
 var ErrMalformed = errors.New("password: malformed hash")
+
+// Length limits. The upper bound stops very long inputs from making hashing
+// expensive; 128 characters fits any passphrase or password manager output.
+const (
+	MinLength = 12
+	MaxLength = 128
+)
+
+// Policy errors, safe to show to the person choosing the password.
+var (
+	ErrTooShort    = fmt.Errorf("password must be at least %d characters", MinLength)
+	ErrTooLong     = fmt.Errorf("password must be at most %d characters", MaxLength)
+	ErrSameAsEmail = errors.New("password must not be your email address")
+)
+
+// Validate checks a new password: length only, plus not the email address
+// (NIST SP 800-63B: no composition rules).
+func Validate(plain, email string) error {
+	n := utf8.RuneCountInString(plain)
+	switch {
+	case n < MinLength:
+		return ErrTooShort
+	case n > MaxLength:
+		return ErrTooLong
+	case strings.EqualFold(strings.TrimSpace(plain), strings.TrimSpace(email)):
+		return ErrSameAsEmail
+	}
+	return nil
+}
 
 var b64 = base64.RawStdEncoding
 

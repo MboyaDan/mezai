@@ -45,3 +45,19 @@ func TestVerifyHonoursStoredParams(t *testing.T) {
 		t.Fatalf("verify with stored params failed: %v %v", ok, err)
 	}
 }
+
+func TestValidate(t *testing.T) {
+	cases := map[string]error{
+		"short":                          ErrTooShort,
+		"twelve chars":                   nil,
+		"ndege-wa-angani-2026":           nil,
+		"person@example.invalid":         ErrSameAsEmail,
+		strings.Repeat("a", MaxLength+1): ErrTooLong,
+		"ñandú-ñandú":                    ErrTooShort, // 11 runes, more bytes
+	}
+	for pw, want := range cases {
+		if got := Validate(pw, "Person@example.invalid"); got != want {
+			t.Errorf("%q: want %v, got %v", pw, want, got)
+		}
+	}
+}
