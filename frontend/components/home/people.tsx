@@ -12,7 +12,7 @@ export function People() {
   return (
     <section aria-labelledby="people-title" className="border-t border-border bg-bg">
       <Container className="grid gap-12 py-20 md:py-32 lg:grid-cols-12">
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-5" data-reveal>
           <Eyebrow>{people.eyebrow}</Eyebrow>
           <SectionTitle id="people-title" className="mt-4">
             {people.title}
@@ -23,7 +23,10 @@ export function People() {
           </div>
         </div>
         <div className="grid gap-12 lg:col-span-6 lg:col-start-7">
-          <ul className="grid gap-px overflow-hidden rounded-card border border-border bg-border sm:grid-cols-2">
+          <ul
+            className="grid gap-px overflow-hidden rounded-card border border-border bg-border sm:grid-cols-2"
+            data-reveal-group
+          >
             {people.profiles.map((p) => (
               <li key={p.name} className="grid content-start gap-2 bg-surface p-6">
                 <h3 className="font-display text-xl font-medium">{p.name}</h3>
@@ -33,7 +36,7 @@ export function People() {
           </ul>
           <div>
             <h3 className="font-mono text-xs tracking-wide text-fg-muted">How vetting works</h3>
-            <ol className="mt-4 grid gap-4">
+            <ol className="mt-4 grid gap-4" data-reveal-group>
               {people.steps.map((step, i) => (
                 <li key={i} className="grid grid-cols-[2rem_1fr] items-baseline border-t border-border pt-4">
                   <span className="font-mono text-sm text-fg-muted">0{i + 1}</span>

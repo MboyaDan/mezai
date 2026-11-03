@@ -50,9 +50,10 @@ export function RoutingCalculator() {
         ))}
       </div>
       <p
+        key={picks.join("|")}
         aria-live="polite"
         className={cn(
-          "mt-6 border-t border-border pt-4 font-medium",
+          "swap-in mt-6 border-t border-border pt-4 font-medium",
           result.kind === "review" ? "text-fg" : "text-accent-fg",
         )}
       >

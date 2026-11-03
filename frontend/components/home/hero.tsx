@@ -23,13 +23,30 @@ export function Hero() {
             id="hero-title"
             className="mt-6 font-display text-[2.75rem] leading-[1.02] font-medium tracking-[-0.02em] sm:text-[3.5rem] lg:text-display-1"
           >
-            <span className="block">
-              {hero.headline.lead} <Accent>{hero.headline.accent}</Accent>
+            <span className="hero-line">
+              <span className="hero-line-inner">
+                {hero.headline.lead}{" "}
+                <span className="hero-accent">
+                  <Accent>{hero.headline.accent}</Accent>
+                </span>
+              </span>
             </span>
-            <span className="mt-1 block text-fg-muted">{hero.headline.second}</span>
+            <span className="hero-line mt-1">
+              <span
+                className="hero-line-inner text-fg-muted"
+                style={{ "--delay": "80ms" } as React.CSSProperties}
+              >
+                {hero.headline.second}
+              </span>
+            </span>
           </h1>
-          <p className="mt-6 max-w-[36rem] text-lg text-fg-muted md:text-xl">{hero.subline}</p>
-          <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <p
+            className="hero-after mt-6 max-w-[36rem] text-lg text-fg-muted md:text-xl"
+            style={{ "--delay": "300ms" } as React.CSSProperties}
+          >
+            {hero.subline}
+          </p>
+          <div className="hero-after mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
             <ButtonLink href={hero.primary.href} size="lg" arrow className="max-sm:w-full">
               {hero.primary.label}
             </ButtonLink>

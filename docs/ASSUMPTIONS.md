@@ -30,3 +30,4 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-024 | 2026-11-03 | Photos for frame 4 (the people) | None until credited photos are in `docs/content/` with `image-credits.md`; the frame is typographic and describes who we look for, not who our contributors are | Open |
 | A-025 | 2026-11-03 | Cities on the network map | Nairobi, Lagos, Kigali, Johannesburg, London, Berlin, New York, San Francisco, Bengaluru, all labelled illustrative | Open |
 | A-026 | 2026-11-03 | Links on the home page to pages not built yet (Services, Quality, Contributors, Industries, Contact, legal) | Kept; they 404 until Stage 6 builds them, and the sitemap lists only built pages | Open |
+| A-027 | 2026-11-03 | Headline reveal | Lines rise from clip masks in CSS (not GSAP SplitText), so the hero never waits for a script; the storyboard's lines are fixed, so splitting by line needs no measuring | Open |

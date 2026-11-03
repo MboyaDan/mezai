@@ -9,12 +9,14 @@ export function Quality() {
   return (
     <section id="quality" aria-labelledby="quality-title" className="bg-bg">
       <Container className="py-20 md:py-32">
-        <Eyebrow>{quality.eyebrow}</Eyebrow>
-        <SectionTitle id="quality-title" className="mt-4">
-          {quality.title.lead} <Accent>{quality.title.accent}</Accent>
-        </SectionTitle>
+        <div data-reveal>
+          <Eyebrow>{quality.eyebrow}</Eyebrow>
+          <SectionTitle id="quality-title" className="mt-4">
+            {quality.title.lead} <Accent>{quality.title.accent}</Accent>
+          </SectionTitle>
+        </div>
 
-        <ol className="mt-14 grid gap-0 lg:grid-cols-6">
+        <ol className="mt-14 grid gap-0 lg:grid-cols-6" data-steps>
           {quality.steps.map((s, i) => (
             <li
               key={s.name}
@@ -33,7 +35,10 @@ export function Quality() {
                   {i + 1}
                 </span>
                 {i < quality.steps.length - 1 && (
-                  <span className="absolute top-8 bottom-[-2rem] left-1/2 w-px bg-border-strong lg:top-4 lg:right-0 lg:bottom-auto lg:left-8 lg:h-px lg:w-auto" />
+                  <span
+                    data-connector
+                    className="absolute top-8 bottom-[-2rem] left-1/2 w-px bg-border-strong lg:top-4 lg:right-0 lg:bottom-auto lg:left-8 lg:h-px lg:w-auto"
+                  />
                 )}
               </span>
               <div className="lg:mt-5">
@@ -44,7 +49,7 @@ export function Quality() {
           ))}
         </ol>
 
-        <div className="mt-16 grid gap-10 lg:grid-cols-12">
+        <div className="mt-16 grid gap-10 lg:grid-cols-12" data-reveal>
           <div className="grid content-start gap-6 lg:col-span-5">
             <dl className="grid gap-6">
               {quality.definitions.map((d) => (

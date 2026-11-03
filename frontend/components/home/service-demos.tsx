@@ -29,7 +29,7 @@ function Pairwise() {
           <p className="mt-1 line-clamp-2">Flood the tray twice a day.</p>
         </div>
       </div>
-      <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-accent-fg">
+      <p className="demo-play mt-3 flex items-center gap-1.5 text-xs font-medium text-accent-fg">
         <span aria-hidden="true" className="size-2 rounded-full bg-accent-fg" />A preferred · accuracy 5 ·
         language 4
       </p>
@@ -51,7 +51,7 @@ function Translation() {
         </span>
         .
       </p>
-      <p className="mt-3 font-mono text-[0.6875rem] text-fg-muted">adequacy 5 · fluency 5</p>
+      <p className="demo-play mt-3 font-mono text-[0.6875rem] text-fg-muted">adequacy 5 · fluency 5</p>
     </Frame>
   );
 }
@@ -60,7 +60,7 @@ function Classification() {
   return (
     <Frame kind="Classification">
       <p>&ldquo;Nimeongeza salio lakini bado halijaonekana.&rdquo;</p>
-      <ul className="mt-3 flex flex-wrap gap-1.5 text-xs" aria-label="Labels">
+      <ul className="demo-play mt-3 flex flex-wrap gap-1.5 text-xs" aria-label="Labels">
         {["Billing", "Network", "Other"].map((l, i) => (
           <li
             key={l}
@@ -82,7 +82,7 @@ function Classification() {
 function Review() {
   return (
     <Frame kind="Review">
-      <div className="flex items-center gap-3">
+      <div className="demo-play flex items-center gap-3">
         <span className="grid size-8 shrink-0 place-items-center rounded-full border border-success text-success">
           <Check aria-hidden="true" className="size-4" />
         </span>

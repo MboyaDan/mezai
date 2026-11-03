@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar, Agreement } from "@/components/ui/data";
 import { StatusPill } from "@/components/ui/display";
 import { Bracket } from "@/components/brand/bracket";
 import { demo } from "@/content/home";
 import { cn } from "@/lib/cn";
+import { useMediaQuery } from "@/lib/use-media-query";
 
-// The static, step-by-step product demonstration: what reduced motion shows
-// (DESIGN.md section 9). Stage 5b adds autoplay when in view and motion
-// between steps. All data is fictional.
+// The product demonstration (DESIGN.md section 10, frame 5). On screens 768 px
+// and wider it plays by itself while in view and pauses when out of view;
+// any manual step change stops it. Reduced motion and phones get the manual
+// step-by-step version only. All data is fictional.
+
+const STEP_MS = 4500;
 
 const source = "Ofisi yetu imefungwa siku za sikukuu.";
 
@@ -143,11 +147,38 @@ function Panel({ step }: { step: number }) {
 
 export function DemoWindow() {
   const [step, setStep] = useState(0);
+  const canPlay = useMediaQuery("(min-width: 768px) and (prefers-reduced-motion: no-preference)");
+  const [stopped, setStopped] = useState(false);
+  const playing = canPlay && !stopped;
+  const [inView, setInView] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
   const last = demo.steps.length - 1;
+
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!playing || !inView) return;
+    const t = window.setTimeout(
+      () => setStep((s) => (s === last ? 0 : s + 1)),
+      step === last ? STEP_MS * 1.5 : STEP_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [playing, inView, step, last]);
+
+  const go = (next: number) => {
+    setStopped(true);
+    setStep(next);
+  };
   const view = step === last ? "Client view" : "Contributor and reviewer view";
   return (
     <Bracket tone="accent">
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-float">
+      <div ref={root} className="overflow-hidden rounded-card border border-border bg-surface shadow-float">
         <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
           <p className="font-mono text-xs text-fg-muted">{view}</p>
           <span className="rounded-full border border-border px-2.5 py-0.5 font-mono text-[0.625rem] tracking-wider text-fg uppercase">
@@ -155,7 +186,7 @@ export function DemoWindow() {
           </span>
         </div>
         <div className="grid gap-6 p-5 md:grid-cols-[1fr_16rem] md:p-6">
-          <div className="min-h-[15rem]">
+          <div key={step} className="swap-in min-h-[15rem]">
             <Panel step={step} />
           </div>
           <div className="grid content-between gap-6 border-border md:border-l md:pl-6">
@@ -172,7 +203,7 @@ export function DemoWindow() {
                   <li key={s.title}>
                     <button
                       type="button"
-                      onClick={() => setStep(i)}
+                      onClick={() => go(i)}
                       aria-label={`Step ${i + 1}: ${s.title}`}
                       aria-current={i === step ? "step" : undefined}
                       className="grid size-6 place-items-center"
@@ -192,19 +223,25 @@ export function DemoWindow() {
                   size="sm"
                   variant="secondary"
                   disabled={step === 0}
-                  onClick={() => setStep((s) => s - 1)}
+                  onClick={() => go(step - 1)}
                   icon={<ArrowLeft />}
                 >
                   Back
                 </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={step === last}
-                  onClick={() => setStep((s) => s + 1)}
-                >
+                <Button size="sm" variant="secondary" disabled={step === last} onClick={() => go(step + 1)}>
                   Next <ArrowRight aria-hidden="true" className="size-4" />
                 </Button>
+                {canPlay && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-pressed={playing}
+                    onClick={() => setStopped((v) => !v)}
+                    icon={playing ? <Pause /> : <Play />}
+                  >
+                    {playing ? "Pause" : "Play"}
+                  </Button>
+                )}
               </div>
             </div>
           </div>

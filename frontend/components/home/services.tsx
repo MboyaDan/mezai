@@ -1,6 +1,5 @@
 import { Plus } from "lucide-react";
 import { TextLink } from "@/components/ui/text-link";
-import { Bracket } from "@/components/brand/bracket";
 import { services } from "@/content/home";
 import { Accent, Container, Eyebrow, SectionTitle } from "./layout";
 import { serviceDemo } from "./service-demos";
@@ -10,7 +9,7 @@ export function Services() {
   return (
     <section id="services" aria-labelledby="services-title" className="bg-bg">
       <Container className="py-20 md:py-32">
-        <div className="grid gap-4 md:grid-cols-12">
+        <div className="grid gap-4 md:grid-cols-12" data-reveal>
           <Eyebrow className="md:col-span-3 md:pt-4">{services.eyebrow}</Eyebrow>
           <SectionTitle id="services-title" className="md:col-span-8 md:col-start-4">
             {services.title.lead} <Accent>{services.title.accent}</Accent> {services.title.tail}
@@ -18,22 +17,31 @@ export function Services() {
         </div>
 
         {/* Desktop: all rows open, the first framed by the bracket. */}
-        <ol className="mt-16 hidden border-t border-border-strong md:block">
+        <ol className="svc-list mt-16 hidden border-t border-border-strong md:block" data-reveal-group>
           {services.items.map((s, i) => {
             const Demo = serviceDemo[s.key];
-            const row = (
-              <div className="grid grid-cols-12 items-start gap-6 py-8">
-                <span className="col-span-1 font-mono text-xs text-fg-muted">0{i + 1}</span>
-                <h3 className="col-span-4 font-display text-2xl font-medium">{s.name}</h3>
-                <p className="col-span-3 text-fg-muted">{s.line}</p>
-                <div className="col-span-4">
-                  <Demo />
-                </div>
-              </div>
-            );
             return (
-              <li key={s.key} id={`service-${s.key}`} className="scroll-mt-24 border-b border-border">
-                {i === 0 ? <Bracket tone="fg">{row}</Bracket> : row}
+              <li
+                key={s.key}
+                id={`service-${s.key}`}
+                className="svc-row relative scroll-mt-24 border-b border-border"
+              >
+                <span
+                  aria-hidden="true"
+                  className="svc-bracket pointer-events-none absolute -top-px -left-3 size-3.5 border-t border-l border-fg"
+                />
+                <span
+                  aria-hidden="true"
+                  className="svc-bracket pointer-events-none absolute -right-3 -bottom-px size-3.5 border-r border-b border-fg"
+                />
+                <div className="grid grid-cols-12 items-start gap-6 py-8">
+                  <span className="col-span-1 font-mono text-xs text-fg-muted">0{i + 1}</span>
+                  <h3 className="col-span-4 font-display text-2xl font-medium">{s.name}</h3>
+                  <p className="col-span-3 text-fg-muted">{s.line}</p>
+                  <div className="col-span-4">
+                    <Demo />
+                  </div>
+                </div>
               </li>
             );
           })}
