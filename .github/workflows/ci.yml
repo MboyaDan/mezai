@@ -75,6 +75,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          ENABLE_DESIGN_PAGE: "1" # serve /design so axe can check it
       - run: npx playwright install --with-deps chromium
       - name: Playwright smoke (no API in CI, so the page must report a final status)
         run: npm run test:e2e

@@ -1,14 +1,227 @@
 @import "tailwindcss";
 
-/* Stage 1 minimum. Stage 2 replaces this with the full token set from
-   docs/design/concepts/tokens.css and self-hosted fontsource fonts. */
+/* MezAI design tokens. Source: docs/design/DESIGN.md section 8 and
+   docs/design/concepts/tokens.css. Status colours use D-006 values. */
+
 @theme {
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* Remove Tailwind's default palette so only brand colours exist. */
+  --color-*: initial;
+
+  --color-charcoal-950: #0e100e;
+  --color-charcoal-900: #171a16;
+  --color-charcoal-800: #22261f;
+  --color-line-dark: #2e332b;
+  --color-ivory: #f4f0e6;
+  --color-paper: #fbf9f4;
+  --color-ink: #151714;
+  --color-muted: #5a5f55;
+  --color-muted-dark: #a3a99c;
+  --color-line: #ddd7c9;
+  --color-lime: #c8f031;
+  --color-lime-hover: #d6f65e;
+  --color-lime-ink: #4a5a00;
+  --color-laterite: #c2522d;
+  --color-laterite-ink: #9e3f1f;
+  --color-ochre: #d9a441;
+  --color-teal: #2f8f83;
+  --color-success: #2d7a4d;
+  --color-warning: #976000;
+  --color-danger: #b3261e;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-display: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  /* Public type scale (desktop); mobile sizes are set per component. */
+  --text-display-1: 4.5rem;
+  --text-display-1--line-height: 1.02;
+  --text-display-2: 3.5rem;
+  --text-display-2--line-height: 1.05;
+  --text-display-3: 2.5rem;
+  --text-display-3--line-height: 1.1;
+
+  --radius-control: 2px;
+  --radius-card: 6px;
+
+  --shadow-float: 0 12px 32px -12px rgb(14 16 14 / 0.28);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --animate-skeleton: skeleton 1.6s var(--ease-in-out) infinite;
+  @keyframes skeleton {
+    50% {
+      opacity: 0.55;
+    }
+  }
 }
 
-body {
-  background: #0e100e;
-  color: #f4f0e6;
-  font-family: var(--font-sans);
+/* Semantic tokens. Light is the default; any element with data-theme="dark"
+   (public hero bands, sidebars, top bars) switches its subtree. */
+:root,
+[data-theme="light"] {
+  --bg: var(--color-ivory);
+  --surface: var(--color-paper);
+  --surface-raised: var(--color-paper);
+  --sunken: var(--color-ivory);
+  --fg: var(--color-ink);
+  --fg-muted: var(--color-muted);
+  --border: var(--color-line);
+  --border-strong: var(--color-ink);
+  --accent-fg: var(--color-lime-ink);
+  --serif-accent: var(--color-laterite-ink);
+  --danger-fg: var(--color-danger);
+  --focus: var(--color-lime-ink);
+  --inverse-bg: var(--color-charcoal-950);
+  --inverse-fg: var(--color-ivory);
+  --lattice-stroke: #c9c2b2;
+  --lattice-stroke-near: #8f9585;
+
+  --dur-instant: 100ms;
+  --dur-quick: 180ms;
+  --dur-base: 280ms;
+  --dur-slow: 600ms;
+}
+
+[data-theme="dark"] {
+  --bg: var(--color-charcoal-950);
+  --surface: var(--color-charcoal-900);
+  --surface-raised: var(--color-charcoal-800);
+  --sunken: var(--color-charcoal-950);
+  --fg: var(--color-ivory);
+  --fg-muted: var(--color-muted-dark);
+  --border: var(--color-line-dark);
+  --border-strong: var(--color-ivory);
+  --accent-fg: var(--color-lime);
+  --serif-accent: var(--color-ivory);
+  /* #B3261E is 2.9:1 on charcoal; this red is 5.1:1 or better on every dark surface. */
+  --danger-fg: #e5735f;
+  --focus: var(--color-lime);
+  --inverse-bg: var(--color-ivory);
+  --inverse-fg: var(--color-charcoal-950);
+  --lattice-stroke: #3b4237;
+  --lattice-stroke-near: #5a6352;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-sunken: var(--sunken);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent-fg: var(--accent-fg);
+  --color-serif-accent: var(--serif-accent);
+  --color-danger-fg: var(--danger-fg);
+  --color-focus: var(--focus);
+  --color-inverse-bg: var(--inverse-bg);
+  --color-inverse-fg: var(--inverse-fg);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+  [data-theme] {
+    color: var(--fg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-charcoal-950);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Signal Lattice states (components/brand/signal-lattice.tsx). */
+.signal-lattice line {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.signal-lattice[data-state="scattered"] line {
+  transform: rotate(var(--from));
+}
+.signal-lattice[data-state="align-on-load"] line {
+  animation: lattice-align 1600ms var(--ease-in-out) both;
+}
+.signal-lattice[data-state="align-on-load"] .lattice-dot {
+  animation: lattice-dot var(--dur-slow) var(--ease-out) 1500ms both;
+}
+@keyframes lattice-align {
+  from {
+    transform: rotate(var(--from));
+  }
+}
+@keyframes lattice-dot {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Enter motion for layers (DESIGN.md section 9: dur-base, ease-out). */
+.dialog-pop[open] {
+  animation: layer-pop var(--dur-base) var(--ease-out);
+}
+.drawer-slide[open][data-side="right"] {
+  animation: layer-from-right var(--dur-base) var(--ease-out);
+}
+.drawer-slide[open][data-side="left"] {
+  animation: layer-from-left var(--dur-base) var(--ease-out);
+}
+.toast-enter {
+  animation: layer-rise var(--dur-base) var(--ease-out);
+}
+@keyframes layer-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes layer-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+@keyframes layer-from-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes layer-from-left {
+  from {
+    transform: translateX(-100%);
+  }
 }
