@@ -4,7 +4,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 5b (Home motion, Lighthouse, design gate). Branch `stage-05b-home-motion`, PR open.
+- **Last stage:** 5c (people photo spread, follow-up to 5b). Branch `stage-05c-people-photos`, PR open. 5b merged as #19.
 - **Next stage:** 6: Public website part 2. Planned split (D-011), confirm with Dan: 6a content pages (Services, Quality, Industries, Contributors, About, case studies index) and 6b Contact and enquiry form, legal pages, 404 and 500, AC-03 honesty test.
 - **Blocking questions:** none.
 
@@ -53,7 +53,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 4a | Merged | #16 | Login, logout, me; sessions (hashed tokens, idle and absolute expiry); CSRF; lockout; rate limits; route registry with access rules; audit writer; `make setup`. |
 | 4b | Merged | #17 | Password reset, email verification, invitations (staff and client admin), user and role administration with Super Admin protections, email outbox worker, AC-01 matrix test, AC-02 complete. |
 | 5a | Merged | #18 | Home frames 1 to 8 (static, reduced-motion form), public stats endpoint, cached stats with fallback, metadata, OG image, sitemap, robots. Fixed animation-delay under reduced motion. |
-| 5b | PR open | (see PR list) | CSS hero and hover motion, lazy GSAP scroll stories, demo autoplay with pause, Motion moved off public pages (JS 186 → 156 KB first load), Lighthouse mobile 93/100/96, photo brief. |
+| 5b | Merged | #19 | CSS hero and hover motion, lazy GSAP scroll stories, demo autoplay with pause, Motion moved off public pages (JS 186 → 156 KB first load), Lighthouse mobile 93/100/96, photo brief. |
+| 5c | PR open | (see PR list) | Photo spread in frame 4 (D-053), photo pipeline with originals out of git (A-028), axe waits for animations. Commits pushed to the 5b branch after #19 merged, carried over unchanged. |
 
 ## Notes for the next session
 

@@ -63,8 +63,10 @@ export const services = {
   },
 };
 
-// No photos until docs/content holds credited images (DESIGN.md section 8):
-// this frame states who we look for, never who "our contributors" are.
+// Stock photos are labelled illustrative; their source and licence are on
+// record in docs/content/image-credits.md (the licences do not require a
+// credit on the page). Each captions the profiles it illustrates, never a
+// person or "our contributors" (DESIGN.md section 8).
 export const people = {
   eyebrow: "The people",
   title: "Vetted by test, measured by results.",
@@ -85,6 +87,20 @@ export const people = {
     "Work on projects that match your skills; your accuracy and agreement are measured on every task.",
   ],
   link: { label: "How contributing works", href: "/contributors" },
+  photos: {
+    main: {
+      profiles: ["Linguists and translators"],
+      alt: "A person in a patterned headscarf reads a laptop screen closely, sitting in an armchair by a white wall.",
+    },
+    engineer: {
+      profiles: ["Engineers"],
+      alt: "Hands typing on a laptop with code on the screen, at a desk in a small wood-panelled room.",
+    },
+    clinician: {
+      profiles: ["Clinicians", "Teachers"],
+      alt: "A health worker in a white coat and stethoscope follows a printed chart with a pen.",
+    },
+  },
 };
 
 export const demo = {
