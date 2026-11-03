@@ -1,11 +1,11 @@
 # Image credits
 
-Every photo or video on the site has a row here (DESIGN.md section 8). Stock images are labelled "Illustrative" on the site and never presented as our contributors or clients.
+Every photo or video on the site has a row here (DESIGN.md section 8): the proof of where it came from and under which licence. The site shows only "Illustrative photo", because the Pexels, Unsplash and Nappy licences do not require a credit on the page. **The page link is required**; the photographer's name is nice to have. Stock images are never presented as our contributors or clients.
 
 | File | Photographer | Source | Page link | Licence | Downloaded | Used on |
 |---|---|---|---|---|---|---|
 | home-people-main.jpg → `frontend/content/images/people-linguist.jpg` | Diva Plavalaguna* | Pexels | https://www.pexels.com/photo/5711687/ | Pexels License | 2026-11-03 | Home, The people (large) |
-| home-people-engineer.jpg → `frontend/content/images/people-engineer.jpg` | **Needed** | Nappy | **Needed** | Nappy licence (to confirm) | 2026-11-03 | Home, The people |
+| home-people-engineer.jpg → `frontend/content/images/people-engineer.jpg` | (optional) | Nappy | **Needed** | Nappy licence (to confirm) | 2026-11-03 | Home, The people |
 | industry-health.jpg → `frontend/content/images/people-clinician.jpg` | cottonbro studio* | Pexels | https://www.pexels.com/photo/7578814/ | Pexels License | 2026-11-03 | Home, The people (in place of H3) |
 | about-meza.jpg | MART PRODUCTION* | Pexels | https://www.pexels.com/photo/7255284/ | Pexels License | 2026-11-03 | About (Stage 6) |
 | contributors-detail.jpg | Plann* | Pexels | https://www.pexels.com/photo/4549413/ | Pexels License | 2026-11-03 | Contributors (Stage 6, crop out the laptop name) |
