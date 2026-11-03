@@ -12,6 +12,16 @@ const pages = [
 for (const path of pages) {
   test(`axe: no critical or serious issues on ${path}`, async ({ page }) => {
     await page.goto(path);
+    // Audit the settled page: mid-fade text (the hero entrance) would report
+    // a contrast failure that no reader ever sees once it lands.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+    );
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
       .analyze();
