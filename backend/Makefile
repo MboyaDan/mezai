@@ -5,7 +5,7 @@ export
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.29.0
 SQLC  := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
-.PHONY: help up down logs ps test lint run migrate migrate-status migrate-create seed sqlc
+.PHONY: help up down logs ps test lint run migrate migrate-status migrate-create seed setup sqlc
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -47,6 +47,9 @@ migrate-create: ## Create a migration: make migrate-create name=add_users
 
 seed: ## Load sample data (refuses unless APP_ENV is development or test)
 	go run ./cmd/seed
+
+setup: ## Create the first Super Admin from SETUP_ADMIN_* (any environment; no-op once one exists)
+	go run ./cmd/setup
 
 sqlc: ## Generate Go code from queries/ (config arrives in Stage 3)
 	@if [ -f sqlc.yaml ]; then $(SQLC) generate; else echo "sqlc.yaml not created yet (Stage 3)"; fi
