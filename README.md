@@ -50,8 +50,8 @@ From the repo root (forwarded to `backend/Makefile`):
 | `make test` | Go tests, including PostgreSQL tests against the compose database |
 | `make lint` | gofmt and go vet |
 | `make migrate` | Apply goose migrations to the local database |
-| `make seed` | Load sample data (development and test only) |
-| `make sqlc` | Generate Go code from SQL queries |
+| `make seed` | Load sample data (development and test only; a second run changes nothing) |
+| `make sqlc` | Generate Go code from SQL queries (CI fails if it is out of date) |
 | `make logs` | Follow API logs |
 
 Frontend, in `frontend/`:
@@ -69,3 +69,6 @@ Frontend, in `frontend/`:
 - The browser only calls `/api/*` on the site origin; the backend is the only database client.
 - `backend/openapi.yaml` is the API contract; change it in the same PR as the endpoint.
 - Migrations are never run automatically against production.
+- Sample users all end in `@sample.invalid` (for example `superadmin@sample.invalid`) and share `SEED_PASSWORD`, or `sample-password-only` when it is unset. Sign-in arrives in Stage 4.
+- Database tests create a throwaway database per test (`internal/dbtest`), so they never touch your local data.
+- API database work runs inside `db.InScope(ctx, scope, fn)`: the transaction switches to the non-owner role `mezai_app` with the caller's scope (staff, org or contributor), and row-level security does the rest.

@@ -17,3 +17,6 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-011 | 2026-11-02 | Q11 Repo is public | Stays public until before real client data | Open |
 | A-012 | 2026-11-02 | Research references | Notes written from prior familiarity, sites not browsed in Stage 0; re-check in Stage 5 | Open |
 | A-013 | 2026-11-03 | Brief 8.2 leaves 0.40 to 0.41 (and the other band edges) ambiguous | A boundary value falls in the lower band: 0.40 weak, 0.60 moderate, 0.80 substantial | Open |
+| A-014 | 2026-11-03 | Reserved Kenyan test phone numbers | No officially reserved range found; the seed uses `+2547000000NN` placeholders, never sends SMS or payments, and masks numbers wherever shown | Open |
+| A-015 | 2026-11-03 | Client Viewer permissions (the brief's table row is cut off) | `org.project.read` and `org.deliverable.download` only | Open |
+| A-016 | 2026-11-03 | Contributors see project metadata for every live project | Yes, at the database; eligibility by skill is filtered in the API (Stage 9). Client organisation names stay hidden (no access to `organisations`) | Open |

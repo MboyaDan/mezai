@@ -13,14 +13,18 @@ Test names are planned; each stage replaces "planned" with the real test path an
 | AC-07 | Same idempotency key twice → one submission, one earning | 9 | `backend/internal/task/submit_idempotency_test.go` | Planned |
 | AC-08 | Gold accuracy, Cohen's κ, Fleiss' κ, consensus, trust match worked examples; auto-pause below floor | 10 | `backend/internal/quality/*_test.go` | Planned |
 | AC-09 | Routing to review; adjudicated items final and immutable; correct manifest | 11 | `backend/internal/review/*_test.go`, `export/manifest_test.go` | Planned |
-| AC-10 | Client cannot read another org's data via UI, API or DB app role | 3 (RLS), 13 | `backend/internal/db/rls_test.go`, Playwright `client-isolation.spec.ts` | Planned |
+| AC-10 | Client cannot read another org's data via UI, API or DB app role | 3 (RLS), 13 | `backend/internal/db/rls_test.go` (DB layer: done in Stage 3), Playwright `client-isolation.spec.ts` | Partly done (DB) |
 | AC-11 | Creator cannot approve batch; export totals = approved earnings; balances = ledger | 14 | `backend/internal/payout/*_test.go` | Planned |
 
 Other "done when" checks without an AC ID:
 
 | Check | Stage | Test (planned) |
 |---|---|---|
-| Seed refuses in production | 3 | `backend/cmd/seed/seed_test.go` |
+| Seed refuses in production | 3 | `backend/cmd/seed/main_test.go` (done) |
+| Migrations apply from empty, roll back to empty, apply again | 3 | `backend/migrations/migrations_test.go` (done) |
+| Every table with `org_id` has RLS (allowlist for staff-only tables) | 3 | `backend/migrations/migrations_test.go` (done) |
+| Contributors see only items they currently hold; never gold rows | 3 (DB), 9 (API) | `backend/internal/db/rls_test.go` (DB done) |
+| Append-only tables reject update and delete from the app role | 3 | `backend/internal/db/rls_test.go` (done) |
 | Reconciliation: dashboard numbers equal ledger | 12 | `backend/internal/ledger/reconcile_test.go` |
 | axe: no critical issues on `/design` and key pages | 2, 6, 18 | Playwright plus axe |
 | Reduced motion removes non-essential animation | 2, 5 | Playwright with `reducedMotion: 'reduce'` |

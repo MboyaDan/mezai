@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 2b (Data components, charts, motion). Branch `stage-02b-data-motion`, PR open.
-- **Next stage:** 3: Database and migrations.
+- **Last stage:** 3 (Database and migrations). Branch `stage-03-database`, PR open.
+- **Next stage:** 4: Auth, roles and audit.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -23,6 +23,10 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Components and shells | `frontend/components/{ui,brand,shells}/`, gallery at `/design` (dev) |
 | Charts | `frontend/components/charts/`, scale helper in `frontend/lib/charts/` |
 | Motion variants, gate, Reveal | `frontend/motion/` (provider in the root layout) |
+| Schema and RLS | `backend/migrations/` (00007 has every policy and grant) |
+| Queries and generated code | `backend/queries/*.sql` → `backend/internal/store/` (`make sqlc`) |
+| Scoped transactions | `backend/internal/db/scope.go` (`db.InScope`, `db.Staff/Org/Contributor`) |
+| Sample data | `backend/seed/` (run via `make seed`) |
 | API contract | `backend/openapi.yaml` |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -34,7 +38,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 | 1 | Merged | #2 | Go API (/healthz, /readyz), Compose (api, postgres 17, SeaweedFS, mailpit), Next.js 16 with /api rewrite and status page, CI, Dependabot. |
 | 2a | Merged | #10 | Tokens, fontsource fonts, Logo, SignalLattice, 25 components, three shells, `/design` with axe tests. |
-| 2b | PR open | (see PR list) | Table, Pagination, Stat, ProgressBar, Agreement, four charts, Motion variants and reduced-motion gate. Fixed a 2a overflow in Tabs at 360 px. |
+| 2b | Merged | #14 | Table, Pagination, Stat, ProgressBar, Agreement, four charts, Motion variants and reduced-motion gate. Fixed a 2a overflow in Tabs at 360 px. |
+| 3 | PR open | (see PR list) | 7 migrations, 51 tables, RLS on 22, `mezai_app` role, sqlc store, Argon2id package, seed (2 sample orgs, 4 projects, 12 contributors), RLS and migration tests. |
 
 ## Notes for the next session
 
@@ -46,5 +51,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Components take semantic colours (`text-fg`, `bg-surface`, `border-border`...), never raw palette names, so they work on both themes. Put `data-theme="dark"` on dark bands.
 - SignalLattice fills its container width; size it with a wrapper div.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
+- New tables: grant `mezai_app` privileges in the same migration (no default privileges), add RLS if the table has `org_id` (a test enforces it), and revoke UPDATE/DELETE if append-only.
+- Wrap SQL functions and DO blocks in `-- +goose StatementBegin/End`.
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.
