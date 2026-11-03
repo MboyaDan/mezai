@@ -269,3 +269,61 @@
     clip-path: inset(0 100% 0 0);
   }
 }
+
+/* Home page motion (DESIGN.md section 9). CSS handles the hero and small
+   interactions so they never wait for JavaScript; GSAP (lazy, below the
+   fold) handles scroll stories. The reduced-motion rule above makes all of
+   these instant. */
+
+/* Hero headline: each line rises from a clip mask, the serif accent last. */
+.hero-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+.hero-line > .hero-line-inner {
+  display: block;
+  animation: line-rise 700ms var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+.hero-accent {
+  display: inline-block;
+  animation: line-rise 700ms var(--ease-out) 260ms both;
+}
+.hero-after {
+  animation: layer-rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--delay, 450ms);
+}
+@keyframes line-rise {
+  from {
+    transform: translateY(105%);
+  }
+}
+
+/* Services: hovering a row (or opening it on mobile) plays its illustration once. */
+.svc-row:hover .demo-play,
+.svc-row:focus-within .demo-play,
+details[open] .demo-play {
+  animation: demo-wipe 520ms var(--ease-in-out) both;
+}
+@keyframes demo-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+/* The bracket frames the active row: the hovered one, else the first. */
+.svc-bracket {
+  opacity: 0;
+  transition: opacity var(--dur-quick) var(--ease-out);
+}
+.svc-row:hover .svc-bracket,
+.svc-row:focus-within .svc-bracket,
+.svc-list:not(:hover, :focus-within) > .svc-row:first-child .svc-bracket {
+  opacity: 1;
+}
+
+/* Demonstration panels and calculator results swap in with a short rise. */
+.swap-in {
+  animation: layer-rise var(--dur-base) var(--ease-out) both;
+}
