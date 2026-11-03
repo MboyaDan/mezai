@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
+	"github.com/MboyaDan/mezai/backend/internal/db"
 )
 
 // Checker is a dependency that /readyz must reach, such as the database or object storage.
@@ -27,6 +28,7 @@ type Deps struct {
 // AuthDeps configures sign-in and the /v1 API.
 type AuthDeps struct {
 	Service        *auth.Service
+	Pool           *db.Pool // for public, read-only data such as stats
 	AppOrigin      string
 	CookieSecure   bool
 	TrustedProxies []string
@@ -106,6 +108,8 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/roles", Perm("user.manage", "role.manage"), ah.listRoles)
 		a.handle(http.MethodGet, "/permissions", Perm("role.manage"), ah.listPermissions)
 		a.handle(http.MethodPut, "/roles/:key/permissions", Perm("role.manage"), ah.setRolePermissions)
+
+		a.handle(http.MethodGet, "/stats", Public(), listStats(d.Auth.Pool, d.Log))
 		rules = a.rules
 	}
 

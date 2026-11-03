@@ -78,7 +78,7 @@ func run() error {
 			Log:    log,
 			Checks: map[string]httpapi.Checker{"database": pool, "storage": store},
 			Auth: &httpapi.AuthDeps{
-				Service: authSvc, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
+				Service: authSvc, Pool: pool, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
