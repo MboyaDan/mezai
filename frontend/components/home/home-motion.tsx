@@ -117,6 +117,27 @@ export function HomeMotion() {
           });
       };
 
+      // Frame 4: photos wipe in from the bracket corner while settling from
+      // 1.04 to 1. clearProps leaves no clip or transform once done.
+      const photos = () => {
+        gsap.utils
+          .toArray<HTMLElement>("[data-photo]")
+          .filter(below)
+          .forEach((frame) => {
+            const tl = gsap.timeline({
+              scrollTrigger: { trigger: frame, start: "top 85%", once: true },
+              defaults: { duration: 0.9, ease: "expo.out" },
+            });
+            tl.fromTo(
+              frame,
+              { clipPath: "inset(0% 100% 100% 0%)" },
+              { clipPath: "inset(0% 0% 0% 0%)", clearProps: "clipPath" },
+            );
+            const img = frame.querySelector("img");
+            if (img) tl.fromTo(img, { scale: 1.04 }, { scale: 1, clearProps: "transform" }, "<");
+          });
+      };
+
       mm.add("(min-width: 1024px)", () => {
         network("wide", true);
         steps("x");
@@ -134,6 +155,7 @@ export function HomeMotion() {
       const ctx = gsap.context(() => {
         reveal();
         rules();
+        photos();
       });
 
       cleanup = () => {
