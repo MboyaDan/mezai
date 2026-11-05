@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { TextLink } from "@/components/ui/text-link";
 import { services } from "@/content/home";
-import { Accent, Container, Eyebrow, SectionTitle } from "./layout";
+import { Accent, Container, Eyebrow, SectionTitle } from "@/components/public/layout";
 import { serviceDemo } from "./service-demos";
 
 /** Frame 3. Rows on desktop; an accordion on mobile (DESIGN.md section 10). */

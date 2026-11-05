@@ -1,5 +1,5 @@
 import { demo } from "@/content/home";
-import { Container, Eyebrow, SectionTitle } from "./layout";
+import { Container, Eyebrow, SectionTitle } from "@/components/public/layout";
 import { DemoWindow } from "./demo-window";
 
 /** Frame 5. */

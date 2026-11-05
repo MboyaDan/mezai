@@ -1,7 +1,7 @@
 import { TextLink } from "@/components/ui/text-link";
 import { cn } from "@/lib/cn";
 import { quality } from "@/content/home";
-import { Accent, Container, Eyebrow, SectionTitle } from "./layout";
+import { Accent, Container, Eyebrow, SectionTitle } from "@/components/public/layout";
 import { RoutingCalculator } from "./calculator";
 
 /** Frame 6. Static diagram; Stage 5b draws the connecting lines on scroll. */
