@@ -6,7 +6,7 @@ import { People } from "@/components/home/people";
 import { Demo } from "@/components/home/demo";
 import { Quality } from "@/components/home/quality";
 import { FinalCta, Practices } from "@/components/home/closing";
-import { HomeMotion } from "@/components/home/home-motion";
+import { PageMotion } from "@/components/public/page-motion";
 import { hero } from "@/content/home";
 import { brand } from "@/lib/brand";
 
@@ -29,7 +29,7 @@ export default function Home() {
       <Quality />
       <Practices />
       <FinalCta />
-      <HomeMotion />
+      <PageMotion />
     </>
   );
 }

@@ -2,7 +2,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { TextLink } from "@/components/ui/text-link";
 import { SignalLattice } from "@/components/brand/signal-lattice";
 import { finalCta, practices } from "@/content/home";
-import { Container } from "./layout";
+import { Container } from "@/components/public/layout";
 
 /** Frame 7. Three practices we implement, each linked to its page. */
 export function Practices() {

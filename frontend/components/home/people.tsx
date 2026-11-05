@@ -5,7 +5,7 @@ import { people } from "@/content/home";
 import linguist from "@/content/images/people-linguist.jpg";
 import engineer from "@/content/images/people-engineer.jpg";
 import clinician from "@/content/images/people-clinician.jpg";
-import { Container, Eyebrow, SectionTitle } from "./layout";
+import { Container, Eyebrow, SectionTitle } from "@/components/public/layout";
 
 type PhotoInfo = (typeof people.photos)[keyof typeof people.photos];
 

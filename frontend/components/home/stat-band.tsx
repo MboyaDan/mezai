@@ -1,4 +1,4 @@
-import { Container } from "./layout";
+import { Container } from "@/components/public/layout";
 import { getStats } from "@/lib/stats";
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", {

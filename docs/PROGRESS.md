@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 5c (people photo spread, follow-up to 5b). Branch `stage-05c-people-photos`, PR open. 5b merged as #19.
-- **Next stage:** 6: Public website part 2. Planned split (D-011), confirm with Dan: 6a content pages (Services, Quality, Industries, Contributors, About, case studies index) and 6b Contact and enquiry form, legal pages, 404 and 500, AC-03 honesty test.
+- **Last stage:** 6a (content pages). Branch `stage-06a-content-pages`, PR open. 5c merged as #20.
+- **Next stage:** 6b: Contact and enquiry form (DB, email to ops, honeypot, rate limit; Turnstile behind DG-07), legal pages, 404 and 500, site-wide AC-03 honesty test (D-054).
 - **Blocking questions:** none.
 
 ## Where things are
@@ -32,9 +32,12 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Account flows (reset, verification, invitations, roles) | `backend/internal/auth/accounts.go`, handlers in `backend/internal/httpapi/accounts.go` |
 | Email templates and outbox worker | `backend/internal/mail/` (mailpit UI at http://localhost:8025) |
 | Home page sections and copy | `frontend/components/home/`, `frontend/content/home.ts` |
+| Inner public pages | `frontend/app/(public)/{services,quality,industries,contributors,about,case-studies}/`, copy in `frontend/content/*.ts` |
+| Shared public pieces (Container, PageHeader, CtaBand, IllustrativePhoto, PageMotion) | `frontend/components/public/` |
+| Quality page live diagrams, kappa helper | `frontend/components/quality/diagrams.tsx`, `frontend/lib/kappa.ts` |
 | Stats (API, fallback, filter) | `backend/internal/httpapi/stats.go`, `frontend/lib/stats.ts`, `frontend/content/stats.ts` |
 | SEO files | `frontend/app/{robots,sitemap,opengraph-image}.ts(x)`, `frontend/lib/site.ts` |
-| Home motion | CSS in `frontend/app/globals.css` (hero, services, swaps), GSAP in `frontend/components/home/home-motion.tsx` |
+| Page motion | CSS in `frontend/app/globals.css` (hero, services, swaps), GSAP in `frontend/components/public/page-motion.tsx` (home, services, quality) |
 | Photo brief for Dan | `docs/content/PHOTO-BRIEF.md`, credits in `docs/content/image-credits.md` |
 | Lighthouse record | `docs/screenshots/stage-05b/lighthouse.md` |
 | API contract | `backend/openapi.yaml` |
@@ -54,7 +57,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 4b | Merged | #17 | Password reset, email verification, invitations (staff and client admin), user and role administration with Super Admin protections, email outbox worker, AC-01 matrix test, AC-02 complete. |
 | 5a | Merged | #18 | Home frames 1 to 8 (static, reduced-motion form), public stats endpoint, cached stats with fallback, metadata, OG image, sitemap, robots. Fixed animation-delay under reduced motion. |
 | 5b | Merged | #19 | CSS hero and hover motion, lazy GSAP scroll stories, demo autoplay with pause, Motion moved off public pages (JS 186 → 156 KB first load), Lighthouse mobile 93/100/96, photo brief. |
-| 5c | PR open | (see PR list) | Photo spread in frame 4 (D-053), photo pipeline with originals out of git (A-028), axe waits for animations. Commits pushed to the 5b branch after #19 merged, carried over unchanged. |
+| 5c | Merged | #20 | Photo spread in frame 4 (D-053), photo pipeline with originals out of git (A-028), axe waits for animations. Commits pushed to the 5b branch after #19 merged, carried over unchanged. |
+| 6a | PR open | (see PR list) | Services (sticky index, language table per A-029), Quality (six steps with live gold, overlap, kappa and routing diagrams, trust score, security), Industries, Contributors, About, case studies index and template (D-056). Four new photo crops. |
 
 ## Notes for the next session
 
@@ -71,6 +75,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key", ...)` (any of), and must be added to `expectedAccess` in `authz_matrix_test.go`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.
 - Emails: `mail.Enqueue(ctx, q, to, template, data)` inside the transaction; add templates in `internal/mail/templates.go`.
 - Public pages: add the route to `publicRoutes` in `frontend/lib/site.ts` (sitemap). Copy goes in `frontend/content/`, never inline claims.
-- Public page motion: mark elements with `data-reveal`, `data-reveal-group`, `data-rule` or `data-connector`; `home-motion.tsx` does the rest. The test in `tests/e2e/home-motion.spec.ts` fails if anything stays hidden.
+- Public page motion: mark elements with `data-reveal`, `data-reveal-group`, `data-rule` or `data-connector` and render `<PageMotion />` (home, services, quality only). `tests/e2e/home-motion.spec.ts` fails if anything stays hidden.
+- Inner public pages: `PageHeader` (one h1), sections, `CtaBand`. Stock photos go through `IllustrativePhoto` and get a row in `docs/content/image-credits.md`; crops in `frontend/scripts/prepare-photos.mjs`.
+- New public pages: add to `pages` in `tests/e2e/pages.spec.ts` (axe, overflow, sourced stats).
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.

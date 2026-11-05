@@ -2,7 +2,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { TextLink } from "@/components/ui/text-link";
 import { SignalLattice } from "@/components/brand/signal-lattice";
 import { hero, services } from "@/content/home";
-import { Accent, Container } from "./layout";
+import { Accent, Container } from "@/components/public/layout";
 
 /** Frame 1. Reduced-motion final state; Stage 5b adds the line reveals. */
 export function Hero() {

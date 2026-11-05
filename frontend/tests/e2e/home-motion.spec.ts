@@ -90,3 +90,49 @@ test.describe("home motion", () => {
     expect(errors).toEqual([]);
   });
 });
+
+// Services and Quality share the page motion: after scrolling, nothing it
+// hid may stay hidden, and nothing may log an error.
+for (const path of ["/services", "/quality"]) {
+  test.describe(`${path} motion`, () => {
+    test.use({ reducedMotion: "no-preference" });
+
+    test("everything revealed after scrolling, no console errors", async ({ page }) => {
+      const errors: string[] = [];
+      page.on(
+        "console",
+        (m) =>
+          m.type() === "error" && !m.text().startsWith("Failed to load resource") && errors.push(m.text()),
+      );
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.goto(path);
+      // GSAP starts when the browser is idle (chunk names are hashed in builds).
+      await page.waitForLoadState("load");
+      await page.waitForTimeout(2600);
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
+      for (let y = 0; y <= height; y += 300) {
+        await page.mouse.wheel(0, 300);
+        await page.waitForTimeout(60);
+      }
+      await page.waitForTimeout(1500);
+      const hidden = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll("[data-reveal]"),
+          ...[...document.querySelectorAll("[data-reveal-group]")].flatMap((g) => [...g.children]),
+          ...document.querySelectorAll("[data-rule], [data-connector]"),
+        ]
+          .filter((el) => (el as HTMLElement).offsetParent !== null)
+          .filter((el) => {
+            const cs = getComputedStyle(el);
+            return (
+              Number(cs.opacity) < 0.99 ||
+              (cs.transform !== "none" && cs.transform !== "matrix(1, 0, 0, 1, 0, 0)")
+            );
+          })
+          .map((el) => el.outerHTML.slice(0, 80)),
+      );
+      expect(hidden).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  });
+}

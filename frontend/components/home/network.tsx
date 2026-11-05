@@ -1,5 +1,5 @@
 import { network } from "@/content/home";
-import { Container, Eyebrow, SectionTitle } from "./layout";
+import { Container, Eyebrow, SectionTitle } from "@/components/public/layout";
 import { StatBand } from "./stat-band";
 
 // Illustrative cities (labelled as such). Positions use an equirectangular

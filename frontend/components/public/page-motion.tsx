@@ -2,15 +2,15 @@
 
 import { useEffect } from "react";
 
-// Scroll motion for the home page (DESIGN.md section 9). GSAP and its plugins
-// load after the browser is idle, only on this page, and never with reduced
-// motion. The server-rendered page is complete without it: GSAP only animates
+// Scroll motion for the marketing pages: home, services and quality
+// (DESIGN.md section 9). GSAP and its plugins load after the browser is idle,
+// only on those pages, and never with reduced motion. The server-rendered page is complete without it: GSAP only animates
 // what is still below the viewport, so nothing visible ever flickers.
 // Eases approximate the motion tokens: expo.out ≈ ease-out, power3.inOut ≈ ease-in-out.
 
 type Cleanup = () => void;
 
-export function HomeMotion() {
+export function PageMotion() {
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let cleanup: Cleanup | undefined;
@@ -90,15 +90,18 @@ export function HomeMotion() {
 
       // Pattern 4 again, for the quality steps: connectors draw as steps enter.
       const steps = (axis: "x" | "y") => {
-        const list = document.querySelector("[data-steps]");
-        if (!list || !below(list)) return;
-        gsap.from(list.querySelectorAll("[data-connector]"), {
-          [axis === "x" ? "scaleX" : "scaleY"]: 0,
-          transformOrigin: axis === "x" ? "left center" : "center top",
-          duration: 0.5,
-          ease: "power3.inOut",
-          stagger: 0.15,
-          scrollTrigger: { trigger: list, start: "top 75%", once: true },
+        document.querySelectorAll("[data-steps]").forEach((list) => {
+          if (!below(list)) return;
+          // A list can pin its own axis (data-steps="y" stays vertical at every width).
+          const a = (list.getAttribute("data-steps") || axis) as "x" | "y";
+          gsap.from(list.querySelectorAll("[data-connector]"), {
+            [a === "x" ? "scaleX" : "scaleY"]: 0,
+            transformOrigin: a === "x" ? "left center" : "center top",
+            duration: 0.5,
+            ease: "power3.inOut",
+            stagger: 0.15,
+            scrollTrigger: { trigger: list, start: "top 75%", once: true },
+          });
         });
       };
 
