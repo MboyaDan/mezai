@@ -35,6 +35,34 @@ const photos = [
     region: { left: 0, top: 3368, width: 4300, height: 2867 },
     width: 1800,
   },
+  // About, 3:2: the shared table seen from above (the "meza" idea), uncropped.
+  {
+    from: "about-meza.jpg",
+    to: "about-table.jpg",
+    region: { left: 0, top: 0, width: 6000, height: 4000 },
+    width: 1800,
+  },
+  // Contributors, 4:5: the hand and phone; drops the laptop and its model name.
+  {
+    from: "contributors-detail.jpg",
+    to: "contributors-phone.jpg",
+    region: { left: 2343, top: 0, width: 3332, height: 4165 },
+    width: 1400,
+  },
+  // Contributors, 21:9 band: the front desk with the room behind it.
+  {
+    from: "contributors-band.jpg",
+    to: "contributors-room.jpg",
+    region: { left: 0, top: 1060, width: 5656, height: 2424 },
+    width: 2400,
+  },
+  // Industries, education, 3:2: the teacher at the whiteboard, uncropped.
+  {
+    from: "industry-education.jpg",
+    to: "industry-education.jpg",
+    region: { left: 0, top: 0, width: 6000, height: 4000 },
+    width: 1800,
+  },
 ];
 
 for (const p of photos) {
