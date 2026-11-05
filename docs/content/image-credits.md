@@ -7,10 +7,10 @@ Every photo or video on the site has a row here (DESIGN.md section 8): the proof
 | home-people-main.jpg → `frontend/content/images/people-linguist.jpg` | Diva Plavalaguna* | Pexels | https://www.pexels.com/photo/5711687/ | Pexels License | 2026-11-03 | Home, The people (large) |
 | home-people-engineer.jpg → `frontend/content/images/people-engineer.jpg` | (optional) | Nappy | **Needed** | Nappy licence (to confirm) | 2026-11-03 | Home, The people |
 | industry-health.jpg → `frontend/content/images/people-clinician.jpg` | cottonbro studio* | Pexels | https://www.pexels.com/photo/7578814/ | Pexels License | 2026-11-03 | Home, The people (in place of H3) |
-| about-meza.jpg | MART PRODUCTION* | Pexels | https://www.pexels.com/photo/7255284/ | Pexels License | 2026-11-03 | About (Stage 6) |
-| contributors-detail.jpg | Plann* | Pexels | https://www.pexels.com/photo/4549413/ | Pexels License | 2026-11-03 | Contributors (Stage 6, crop out the laptop name) |
-| contributors-band.jpg | MART PRODUCTION* | Pexels | https://www.pexels.com/photo/7709240/ | Pexels License | 2026-11-04 | Contributors, 21:9 band (Stage 6) |
-| industry-education.jpg | Katerina Holmes* | Pexels | https://www.pexels.com/photo/5905457/ | Pexels License | 2026-11-04 | Industries, education (Stage 6) |
+| about-meza.jpg → `frontend/content/images/about-table.jpg` | MART PRODUCTION* | Pexels | https://www.pexels.com/photo/7255284/ | Pexels License | 2026-11-03 | About (3:2) |
+| contributors-detail.jpg → `frontend/content/images/contributors-phone.jpg` | Plann* | Pexels | https://www.pexels.com/photo/4549413/ | Pexels License | 2026-11-03 | Contributors (4:5; the crop removes the laptop and its model name, A-031) |
+| contributors-band.jpg → `frontend/content/images/contributors-room.jpg` | MART PRODUCTION* | Pexels | https://www.pexels.com/photo/7709240/ | Pexels License | 2026-11-04 | Contributors, 21:9 band |
+| industry-education.jpg → `frontend/content/images/industry-education.jpg` | Katerina Holmes* | Pexels | https://www.pexels.com/photo/5905457/ | Pexels License | 2026-11-04 | Industries, education (3:2) |
 
 \* Name read from the download file name (Pexels blocks automated page checks). Confirm the display name on the page link.
 

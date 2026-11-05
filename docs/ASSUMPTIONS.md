@@ -32,3 +32,6 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-026 | 2026-11-03 | Links on the home page to pages not built yet (Services, Quality, Contributors, Industries, Contact, legal) | Kept; they 404 until Stage 6 builds them, and the sitemap lists only built pages | Open |
 | A-027 | 2026-11-03 | Headline reveal | Lines rise from clip masks in CSS (not GSAP SplitText), so the hero never waits for a script; the storyboard's lines are fixed, so splitting by line needs no measuring | Open |
 | A-028 | 2026-11-04 | Photo originals (19 MB) | Kept out of git (`docs/content/images/` is ignored); credits link to each source page so they can be re-downloaded; only cropped web masters are committed | Open |
+| A-029 | 2026-11-05 | Language table | English, Kiswahili and code-switched Kiswahili and English shown as available (code-switching mixes the two confirmed languages, as the home page already says); other African languages "on request". Sheng is not listed separately | Open |
+| A-030 | 2026-11-05 | Links to pages not built yet (`/contact`, `/legal/*` in 6b; `/join`, `/login` in Stage 7) | Kept; they 404 until those stages | Open |
+| A-031 | 2026-11-05 | `contributors-phone.jpg` | The phone screen shows a small third-party app logo (the photo's source app). Kept: tiny and not our brand. Replace if Dan prefers | Open |
