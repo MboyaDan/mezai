@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 7b (onboarding UI). Branch `stage-07b-onboarding-ui`, PR open. 7a merged as #23.
-- **Next stage:** 8: Projects, templates and data import (organisations, project create, CSV/JSONL import with validation report, gold upload, publish/pause/close, client project requests; the gold page also gets "Make a qualification test", D-073). Confirm whether to split before starting.
+- **Last stage:** 8b (project screens). Branch `stage-08b-projects-ui`, PR open. 8a merged as #25.
+- **Next stage:** 7c: one person, one account (D-078). Needs a new privacy notice and contributor terms version first; then Stage 9 (task engine, planned split).
 - **Blocking questions:** none.
 
 ## Where things are
@@ -55,6 +55,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Sign-in, join, verify, reset pages | `frontend/app/(auth)/`, `components/auth/` |
 | Contributor portal (dashboard, profile, qualification) | `frontend/app/(contributor)/c/`, `components/contributor/`, answer inputs in `components/qualification/` |
 | Workspace (overview, contributors, attempt review) | `frontend/app/(workspace)/w/`, `components/workspace/` |
+| Project screens (frame, tabs, form, imports, gold) | `frontend/components/workspace/projects/`, helpers in `frontend/lib/projects.ts`; requests and organisations in `components/workspace/{requests,organisations}.tsx` |
 | Full-stack tests | `frontend/tests/full/` (`npm run test:full`, needs `make up migrate seed`) |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -78,7 +79,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 6b | Merged | #22 | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
 | 7a | Merged | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
 | 7b | Merged | #24 | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
-| 8a | PR open | #25 | Migration 00010 (project QA checks, import digests, `project_requests` with RLS). 21 endpoints: organisations, task templates, projects (create, edit, lifecycle with readiness), CSV/JSONL import dry run and all-or-nothing commit, gold list/add/retire, client project requests with sample file, convert and decline. Object storage put/get. AC-05 API tests. Plan: auto QA checks (D-077, Stage 9) and one-account checks (D-078, new Stage 7c). |
+| 8a | Merged | #25 | Migration 00010 (project QA checks, import digests, `project_requests` with RLS). 21 endpoints: organisations, task templates, projects (create, edit, lifecycle with readiness), CSV/JSONL import dry run and all-or-nothing commit, gold list/add/retire, client project requests with sample file, convert and decline. Object storage put/get. AC-05 API tests. Plan: auto QA checks (D-077, Stage 9) and one-account checks (D-078, new Stage 7c). |
+| 8b | PR open | – | Projects list, create (and convert from a request), overview with readiness, status actions, settings with locks, item and gold import wizard (check → report → import), gold by hand, retire, "Make a qualification test" (D-073 done), organisations, client request form and Ops inbox with convert/decline. AC-05 full-stack UI test. |
 
 ## Notes for the next session
 
@@ -110,4 +112,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Projects: `internal/projects` (service) and `internal/imports` (pure file checks). Task-type rules (config, item fields, gold answers, QA checks) live in `internal/quality/content.go`; add a task type there first.
 - Uploads go through `storage.Blobs` (`AuthDeps.Files`); tests use `storage.NewMemory()` via `newEnv`, and `e.files.Corrupt` simulates a changed file. `S3_TEST_ENDPOINT=http://localhost:8333 make test` also round-trips real SeaweedFS.
 - Multipart endpoints in tests: `e.multipart(path, fields, fileField, fileName, content, session)`; `e.upload(...)` for imports.
-- Stage 8b screens: projects list and detail, create/edit form (config editor per task type, QA checks, skills), import wizard (upload → report → commit), gold page with "Make a qualification test" (D-073), requests inbox (Ops) and request form and list (Client Admin).
+- Project pages read the project with `useProject()` (from `ProjectFrame` in `/w/projects/[id]/layout.tsx`); call `reload()` after changes that affect counts.
+- Next 16 keeps the previous route's DOM hidden: in Playwright use `getByRole`, or add `.filter({ visible: true })` to `getByText` / `getByLabel`.
+- Local full-stack reruns hit the login limits (20/min per IP, 10 per 15 min per email). `docker compose restart api` resets them (in memory).
+- `npm run dev` prints "Could not validate instant navigation" for client-loaded workspace routes (also `/w` from 7b). Dev-only; `npm run build` passes and the full-stack tests run against it.
