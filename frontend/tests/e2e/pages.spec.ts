@@ -1,8 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-// Stage 6a public pages: each renders its heading, fits the viewport, passes
-// axe and shows no number without a source (AC-03).
+// Public pages: each renders its heading, fits the viewport, passes axe and
+// shows no number without a source (AC-03). honesty.spec.ts crawls them all.
 const pages: Array<{ path: string; h1: RegExp }> = [
   { path: "/services", h1: /Careful human judgment/ },
   { path: "/quality", h1: /Many careful judgments/ },
@@ -10,6 +10,13 @@ const pages: Array<{ path: string; h1: RegExp }> = [
   { path: "/contributors", h1: /Paid for careful work/ },
   { path: "/about", h1: /Meza is Kiswahili for/ },
   { path: "/case-studies", h1: /First pilots under way/ },
+  { path: "/contact", h1: /Tell us about/ },
+  { path: "/legal/privacy", h1: /Privacy notice/ },
+  { path: "/legal/terms", h1: /Terms of use/ },
+  { path: "/legal/contributor-terms", h1: /Contributor terms/ },
+  { path: "/legal/acceptable-use", h1: /Acceptable use/ },
+  { path: "/legal/cookies", h1: /Cookie notice/ },
+  { path: "/this-page-does-not-exist", h1: /Nothing lines up here/ },
 ];
 
 async function settle(page: Page) {
@@ -57,8 +64,12 @@ test("demonstrations and worked examples are labelled", async ({ page }) => {
 test("kappa explorer recomputes from the sliders", async ({ page }) => {
   await page.goto("/quality#agreement");
   const slider = page.getByLabel("Messages they label the same");
-  await slider.fill("50");
-  await expect(page.getByText("100%", { exact: true })).toBeVisible();
+  // A fill before hydration is lost (the dev server hydrates late), so retry it.
+  await expect(async () => {
+    await slider.fill("49");
+    await slider.fill("50");
+    await expect(page.getByText("100%", { exact: true })).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await expect(page.getByText("κ 1.00")).toBeVisible();
 });
 

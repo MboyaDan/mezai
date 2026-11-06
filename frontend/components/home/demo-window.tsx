@@ -178,7 +178,7 @@ export function DemoWindow() {
   const view = step === last ? "Client view" : "Contributor and reviewer view";
   return (
     <Bracket tone="accent">
-      <div ref={root} className="overflow-hidden rounded-card border border-border bg-surface shadow-float">
+      <div ref={root} data-demo className="overflow-hidden rounded-card border border-border bg-surface shadow-float">
         <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
           <p className="font-mono text-xs text-fg-muted">{view}</p>
           <span className="rounded-full border border-border px-2.5 py-0.5 font-mono text-[0.625rem] tracking-wider text-fg uppercase">

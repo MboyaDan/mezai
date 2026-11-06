@@ -32,7 +32,7 @@ function ManifestSample() {
     ["files", '[{ name: "labels.jsonl", sha256: "9f2c…e41a" }]'],
   ];
   return (
-    <figure className="overflow-hidden rounded-card border border-border">
+    <figure data-demo className="overflow-hidden rounded-card border border-border">
       <div
         data-theme="dark"
         className="flex items-center justify-between bg-bg px-4 py-2 font-mono text-[0.6875rem] tracking-wider text-fg-muted uppercase"
@@ -272,7 +272,7 @@ function QualifyVisual() {
   const score = 0.85;
   const pass = 0.8;
   return (
-    <figure className="rounded-card border border-border bg-surface p-5 md:p-6">
+    <figure data-demo className="rounded-card border border-border bg-surface p-5 md:p-6">
       <figcaption className="mb-4 flex justify-between font-mono text-[0.6875rem] tracking-wider text-fg-muted uppercase">
         <span>Qualification test · Kiswahili classification</span>
         <span>Worked example</span>
