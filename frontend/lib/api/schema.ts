@@ -694,6 +694,267 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/organisations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Client organisations with project and member counts (`org.manage` or `project.manage`). */
+    get: operations["listOrganisations"];
+    put?: never;
+    /** Create a client organisation (`org.manage`). The slug is derived from the name when left empty. */
+    post: operations["createOrganisation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/task-templates": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The task types and their import columns (`project.manage`, `item.import` or `gold.manage`). */
+    get: operations["listTaskTemplates"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Projects the caller may see. Client users see their own organisation's only (RLS). */
+    get: operations["listProjects"];
+    put?: never;
+    /** Create a draft project (`project.manage`). */
+    post: operations["createProject"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One project. The `staff` block (pay, QA checks, gold count, readiness) is for ELS staff only. */
+    get: operations["getProject"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Edit settings (`project.manage`). Organisation and task type are fixed; labels, rubric and overlap are fixed once the project has gold or has been live. */
+    patch: operations["updateProject"];
+    trace?: never;
+  };
+  "/v1/projects/{id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Move a project (`project.manage`). draft → ready needs instructions; ready → live and paused → live also need items, and active gold when the gold rate is above 0. */
+    post: operations["setProjectStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/imports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The project's import files (dataset versions). Gold files are hidden from client users. */
+    get: operations["listImports"];
+    put?: never;
+    /** Upload and check a CSV or JSONL file (dry run). Items need `item.import`, gold needs `gold.manage`. Nothing is imported until commit. */
+    post: operations["checkImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/imports/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One import with its row errors (up to 1000). */
+    get: operations["getImport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/imports/{id}/commit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Import every row of a checked file in one transaction. The file is re-read, its digest confirmed and checked again; any problem imports nothing. */
+    post: operations["commitImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/gold": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The project's gold items with expected answers (`gold.manage`). */
+    get: operations["listGold"];
+    put?: never;
+    /** Add one gold item by hand (`gold.manage`), checked like a file row. */
+    post: operations["createGold"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/gold/{id}/retire": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stop serving a gold item (`gold.manage`). Past results stay. */
+    post: operations["retireGold"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/project-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Project requests. Client users see their own organisation's only (RLS). */
+    get: operations["listProjectRequests"];
+    put?: never;
+    /** Submit a project request for the caller's organisation (`org.project.request`, client users only). Ops is emailed. */
+    post: operations["createProjectRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/project-requests/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One project request. */
+    get: operations["getProjectRequest"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/project-requests/{id}/sample": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download the attached sample file (always as an attachment). */
+    get: operations["downloadProjectRequestSample"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/project-requests/{id}/convert": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a draft project from a request (`project.manage`). The project joins the request's organisation. */
+    post: operations["convertProjectRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/project-requests/{id}/decline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Decline a request with a note the client sees (`project.manage`). */
+    post: operations["declineProjectRequest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1018,6 +1279,220 @@ export interface components {
       /** Format: uuid */
       source_project_id: string | null;
       question_count: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    Organisation: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      slug: string;
+      /** @enum {string} */
+      status: "active" | "archived";
+      project_count: number;
+      member_count: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @enum {string} */
+    TaskType: "classification" | "pairwise" | "translation_review";
+    TaskTemplate: {
+      task_type: components["schemas"]["TaskType"];
+      name: string;
+      version: number;
+      content_fields: string[];
+      item_columns: string[];
+      gold_columns: string[];
+    };
+    /** @enum {string} */
+    ProjectStatus: "draft" | "ready" | "live" | "paused" | "closed";
+    /** @description classification: labels (2 to 50), multi_label. pairwise: criteria (1 to 8 keys), scale [1, 5]. translation_review: error_tags (optional). */
+    ProjectConfig: {
+      labels?: string[];
+      multi_label?: boolean;
+      criteria?: string[];
+      scale?: number[];
+      error_tags?: string[];
+    };
+    /** @description Checks the task screen runs before a contributor submits (Stage 9). Blocking checks stop the submission; warnings are stored with it for reviewers. */
+    QAChecks: {
+      /** @description Translation review only */
+      block_unchanged_translation: boolean;
+      /** @description 0 turns it off */
+      warn_fast_seconds: number;
+      /** @description Pairwise only */
+      warn_rationale_mismatch: boolean;
+      warn_pasted: boolean;
+    };
+    ProjectSkill: {
+      /** @enum {string} */
+      kind: "language" | "domain" | "task_type";
+      value: string;
+      /** @enum {string} */
+      min_proficiency?: "native" | "fluent" | "working";
+    };
+    ProjectInput: {
+      /**
+       * Format: uuid
+       * @description Required on create; fixed afterwards
+       */
+      org_id?: string;
+      task_type?: components["schemas"]["TaskType"];
+      name: string;
+      instructions_md?: string;
+      config?: components["schemas"]["ProjectConfig"];
+      qa_checks?: components["schemas"]["QAChecks"];
+      overlap_k: number;
+      gold_rate: number;
+      /**
+       * Format: int64
+       * @description KES cents per approved task
+       */
+      pay_per_task_cents: number;
+      target_count?: number | null;
+      /** Format: date */
+      deadline?: string | null;
+      /** @description Pairwise only */
+      min_rationale_chars?: number;
+      skills?: components["schemas"]["ProjectSkill"][];
+    };
+    ProjectStaff: {
+      /** Format: int64 */
+      pay_per_task_cents: number;
+      currency: string;
+      qa_checks: components["schemas"]["QAChecks"];
+      min_rationale_chars: number;
+      /** @description Active gold items */
+      gold_count: number;
+      /** @description What stops the next step */
+      missing: ("instructions" | "items" | "gold")[];
+      config_locked: boolean;
+    };
+    Project: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      org_id: string;
+      org_name: string;
+      task_type: components["schemas"]["TaskType"];
+      name: string;
+      status: components["schemas"]["ProjectStatus"];
+      instructions_md: string;
+      config: components["schemas"]["ProjectConfig"];
+      overlap_k: number;
+      gold_rate: number;
+      target_count: number | null;
+      /** Format: date */
+      deadline: string | null;
+      /** @description Work items (excluding gold for staff) */
+      item_count: number;
+      skills: components["schemas"]["ProjectSkill"][];
+      /** Format: date-time */
+      published_at: string | null;
+      /** Format: date-time */
+      closed_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+      staff?: components["schemas"]["ProjectStaff"];
+    };
+    NotReady: {
+      error: string;
+      missing?: string[];
+    };
+    ImportRowError: {
+      /** @description CSV: file row, header is row 1. JSONL: line. */
+      row: number;
+      field?: string;
+      message: string;
+    };
+    ImportJob: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      project_id: string;
+      /** @enum {string} */
+      kind: "items" | "gold";
+      /** @enum {string} */
+      format: "csv" | "jsonl";
+      file_name: string;
+      /** Format: int64 */
+      size_bytes: number;
+      /** @enum {string} */
+      status: "validated" | "failed" | "committed";
+      total_rows: number;
+      valid_rows: number;
+      error_rows: number;
+      errors?: components["schemas"]["ImportRowError"][];
+      errors_truncated: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      committed_at: string | null;
+    };
+    Tolerance: {
+      adequacy?: number;
+      fluency?: number;
+    };
+    GoldItem: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      item_id: string;
+      external_id: string | null;
+      content: {
+        [key: string]: string;
+      };
+      expected: components["schemas"]["Answer"];
+      tolerance: components["schemas"]["Tolerance"];
+      /** @enum {string} */
+      status: "active" | "retired";
+      usage_count: number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      retired_at: string | null;
+    };
+    ProjectRequestInput: {
+      title: string;
+      /** @enum {string} */
+      task_type: "classification" | "pairwise" | "translation_review" | "other";
+      brief_md: string;
+      languages?: string[];
+      volume_estimate?: number | null;
+      /** Format: date */
+      wanted_by?: string | null;
+      contact_name: string;
+      /** Format: email */
+      contact_email: string;
+    };
+    ProjectRequest: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      org_id: string;
+      org_name: string;
+      title: string;
+      /** @enum {string} */
+      task_type: "classification" | "pairwise" | "translation_review" | "other";
+      brief_md: string;
+      languages: string[];
+      volume_estimate: number | null;
+      /** Format: date */
+      wanted_by: string | null;
+      contact_name: string;
+      contact_email: string;
+      sample_file_name: string | null;
+      /** Format: int64 */
+      sample_size: number | null;
+      /** @enum {string} */
+      status: "submitted" | "converted" | "declined";
+      decision_note: string | null;
+      /** Format: uuid */
+      project_id: string | null;
+      /** Format: date-time */
+      decided_at: string | null;
       /** Format: date-time */
       created_at: string;
     };
@@ -2253,6 +2728,628 @@ export interface operations {
       };
       404: components["responses"]["Error"];
       409: components["responses"]["Error"];
+    };
+  };
+  listOrganisations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Organisations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            organisations: components["schemas"]["Organisation"][];
+          };
+        };
+      };
+    };
+  };
+  createOrganisation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          name: string;
+          slug?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Organisation"];
+        };
+      };
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  listTaskTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Templates */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            templates: components["schemas"]["TaskTemplate"][];
+          };
+        };
+      };
+    };
+  };
+  listProjects: {
+    parameters: {
+      query?: {
+        status?: components["schemas"]["ProjectStatus"];
+        org_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Projects */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            projects: components["schemas"]["Project"][];
+          };
+        };
+      };
+    };
+  };
+  createProject: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectInput"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  getProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Project */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  updateProject: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectInput"];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  setProjectStatus: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          action: "ready" | "draft" | "publish" | "pause" | "resume" | "close";
+          reason?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      404: components["responses"]["Error"];
+      /** @description `illegal_transition`, or `not_ready` with the missing pieces */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotReady"];
+        };
+      };
+    };
+  };
+  listImports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Imports */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            imports: components["schemas"]["ImportJob"][];
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  checkImport: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": {
+          /**
+           * Format: binary
+           * @description .csv or .jsonl, up to 10 MB and 20,000 rows
+           */
+          file: string;
+          /** @enum {string} */
+          kind: "items" | "gold";
+        };
+      };
+    };
+    responses: {
+      /** @description Checked; `status` is `validated` or `failed`, with row errors */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportJob"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      413: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  getImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Import */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportJob"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  commitImport: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Committed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportJob"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      /** @description `import_not_committable`, `import_stale`, `file_changed` or `project_closed` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  listGold: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Gold */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            gold: components["schemas"]["GoldItem"][];
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  createGold: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          external_id?: string;
+          content: {
+            [key: string]: string;
+          };
+          expected: components["schemas"]["Answer"];
+          tolerance?: components["schemas"]["Tolerance"];
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GoldItem"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  retireGold: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Retired */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            status: "retired";
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+    };
+  };
+  listProjectRequests: {
+    parameters: {
+      query?: {
+        status?: "submitted" | "converted" | "declined";
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Requests */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            requests: components["schemas"]["ProjectRequest"][];
+          };
+        };
+      };
+    };
+  };
+  createProjectRequest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectRequestInput"];
+        "multipart/form-data": {
+          /** @description ProjectRequestInput as JSON */
+          request: string;
+          /**
+           * Format: binary
+           * @description .csv, .tsv, .jsonl, .json or .txt, up to 5 MB
+           */
+          sample?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Submitted */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectRequest"];
+        };
+      };
+      403: components["responses"]["Error"];
+      413: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  getProjectRequest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Request */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectRequest"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  downloadProjectRequestSample: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/octet-stream": string;
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  convertProjectRequest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProjectInput"];
+      };
+    };
+    responses: {
+      /** @description Project created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  declineProjectRequest: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          note: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Declined */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectRequest"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
     };
   };
 }

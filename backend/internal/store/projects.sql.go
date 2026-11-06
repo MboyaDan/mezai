@@ -68,7 +68,7 @@ INSERT INTO projects (
   $1, $2, $3, $4, $5, $6, $7,
   $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
 `
 
 type CreateProjectParams struct {
@@ -135,8 +135,18 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.QaChecks,
 	)
 	return i, err
+}
+
+const deleteProjectSkills = `-- name: DeleteProjectSkills :exec
+DELETE FROM project_skills WHERE project_id = $1
+`
+
+func (q *Queries) DeleteProjectSkills(ctx context.Context, projectID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteProjectSkills, projectID)
+	return err
 }
 
 const getLatestTaskTemplate = `-- name: GetLatestTaskTemplate :one
@@ -161,7 +171,7 @@ func (q *Queries) GetLatestTaskTemplate(ctx context.Context, taskType string) (T
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at FROM projects WHERE id = $1
+SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id uuid.UUID) (Project, error) {
@@ -194,12 +204,262 @@ func (q *Queries) GetProject(ctx context.Context, id uuid.UUID) (Project, error)
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.QaChecks,
 	)
 	return i, err
 }
 
+const getProjectSummary = `-- name: GetProjectSummary :one
+SELECT p.id, p.org_id, p.template_id, p.task_type, p.name, p.status, p.instructions_md, p.config, p.overlap_k, p.gold_rate, p.pay_per_task_cents, p.currency, p.target_count, p.deadline, p.reservation_minutes, p.review_spread_threshold, p.audit_sample_rate, p.agreement_threshold, p.min_rationale_chars, p.retention_days, p.client_visibility, p.published_at, p.closed_at, p.created_by, p.created_at, p.updated_at, p.qa_checks, o.name AS org_name,
+  (SELECT count(*) FROM items i WHERE i.project_id = p.id
+     AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id))::int AS item_count,
+  (SELECT count(*) FROM gold_items g WHERE g.project_id = p.id AND g.status = 'active')::int AS gold_count
+FROM projects p
+JOIN organisations o ON o.id = p.org_id
+WHERE p.id = $1
+`
+
+type GetProjectSummaryRow struct {
+	Project   Project
+	OrgName   string
+	ItemCount int32
+	GoldCount int32
+}
+
+func (q *Queries) GetProjectSummary(ctx context.Context, id uuid.UUID) (GetProjectSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getProjectSummary, id)
+	var i GetProjectSummaryRow
+	err := row.Scan(
+		&i.Project.ID,
+		&i.Project.OrgID,
+		&i.Project.TemplateID,
+		&i.Project.TaskType,
+		&i.Project.Name,
+		&i.Project.Status,
+		&i.Project.InstructionsMd,
+		&i.Project.Config,
+		&i.Project.OverlapK,
+		&i.Project.GoldRate,
+		&i.Project.PayPerTaskCents,
+		&i.Project.Currency,
+		&i.Project.TargetCount,
+		&i.Project.Deadline,
+		&i.Project.ReservationMinutes,
+		&i.Project.ReviewSpreadThreshold,
+		&i.Project.AuditSampleRate,
+		&i.Project.AgreementThreshold,
+		&i.Project.MinRationaleChars,
+		&i.Project.RetentionDays,
+		&i.Project.ClientVisibility,
+		&i.Project.PublishedAt,
+		&i.Project.ClosedAt,
+		&i.Project.CreatedBy,
+		&i.Project.CreatedAt,
+		&i.Project.UpdatedAt,
+		&i.Project.QaChecks,
+		&i.OrgName,
+		&i.ItemCount,
+		&i.GoldCount,
+	)
+	return i, err
+}
+
+const insertProject = `-- name: InsertProject :one
+INSERT INTO projects (
+  org_id, template_id, task_type, name, instructions_md, config, qa_checks,
+  overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline,
+  min_rationale_chars, created_by
+) VALUES (
+  $1, $2, $3, $4, $5, $6, $7,
+  $8, $9, $10, $11, $12, $13,
+  $14, $15
+)
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+`
+
+type InsertProjectParams struct {
+	OrgID             uuid.UUID
+	TemplateID        uuid.UUID
+	TaskType          string
+	Name              string
+	InstructionsMd    string
+	Config            []byte
+	QaChecks          []byte
+	OverlapK          int16
+	GoldRate          float64
+	PayPerTaskCents   int64
+	Currency          string
+	TargetCount       *int32
+	Deadline          *time.Time
+	MinRationaleChars int32
+	CreatedBy         *uuid.UUID
+}
+
+// Stage 8: every setting Ops enters on the create form.
+func (q *Queries) InsertProject(ctx context.Context, arg InsertProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, insertProject,
+		arg.OrgID,
+		arg.TemplateID,
+		arg.TaskType,
+		arg.Name,
+		arg.InstructionsMd,
+		arg.Config,
+		arg.QaChecks,
+		arg.OverlapK,
+		arg.GoldRate,
+		arg.PayPerTaskCents,
+		arg.Currency,
+		arg.TargetCount,
+		arg.Deadline,
+		arg.MinRationaleChars,
+		arg.CreatedBy,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.TemplateID,
+		&i.TaskType,
+		&i.Name,
+		&i.Status,
+		&i.InstructionsMd,
+		&i.Config,
+		&i.OverlapK,
+		&i.GoldRate,
+		&i.PayPerTaskCents,
+		&i.Currency,
+		&i.TargetCount,
+		&i.Deadline,
+		&i.ReservationMinutes,
+		&i.ReviewSpreadThreshold,
+		&i.AuditSampleRate,
+		&i.AgreementThreshold,
+		&i.MinRationaleChars,
+		&i.RetentionDays,
+		&i.ClientVisibility,
+		&i.PublishedAt,
+		&i.ClosedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaChecks,
+	)
+	return i, err
+}
+
+const listProjectSkills = `-- name: ListProjectSkills :many
+SELECT id, org_id, project_id, skill_kind, skill_value, min_proficiency, created_at, updated_at FROM project_skills WHERE project_id = $1 ORDER BY skill_kind, skill_value
+`
+
+func (q *Queries) ListProjectSkills(ctx context.Context, projectID uuid.UUID) ([]ProjectSkill, error) {
+	rows, err := q.db.Query(ctx, listProjectSkills, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProjectSkill{}
+	for rows.Next() {
+		var i ProjectSkill
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.ProjectID,
+			&i.SkillKind,
+			&i.SkillValue,
+			&i.MinProficiency,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectSummaries = `-- name: ListProjectSummaries :many
+SELECT p.id, p.org_id, p.template_id, p.task_type, p.name, p.status, p.instructions_md, p.config, p.overlap_k, p.gold_rate, p.pay_per_task_cents, p.currency, p.target_count, p.deadline, p.reservation_minutes, p.review_spread_threshold, p.audit_sample_rate, p.agreement_threshold, p.min_rationale_chars, p.retention_days, p.client_visibility, p.published_at, p.closed_at, p.created_by, p.created_at, p.updated_at, p.qa_checks, o.name AS org_name,
+  (SELECT count(*) FROM items i WHERE i.project_id = p.id
+     AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id))::int AS item_count,
+  (SELECT count(*) FROM gold_items g WHERE g.project_id = p.id AND g.status = 'active')::int AS gold_count
+FROM projects p
+JOIN organisations o ON o.id = p.org_id
+WHERE ($1::uuid IS NULL OR p.org_id = $1::uuid)
+  AND ($2::text IS NULL OR p.status = $2::text)
+ORDER BY p.created_at DESC
+LIMIT 500
+`
+
+type ListProjectSummariesParams struct {
+	OrgID  *uuid.UUID
+	Status *string
+}
+
+type ListProjectSummariesRow struct {
+	Project   Project
+	OrgName   string
+	ItemCount int32
+	GoldCount int32
+}
+
+// RLS limits clients to their organisation. item_count excludes gold for
+// staff; gold rows are staff-only, so outside that scope gold_count is 0.
+func (q *Queries) ListProjectSummaries(ctx context.Context, arg ListProjectSummariesParams) ([]ListProjectSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listProjectSummaries, arg.OrgID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProjectSummariesRow{}
+	for rows.Next() {
+		var i ListProjectSummariesRow
+		if err := rows.Scan(
+			&i.Project.ID,
+			&i.Project.OrgID,
+			&i.Project.TemplateID,
+			&i.Project.TaskType,
+			&i.Project.Name,
+			&i.Project.Status,
+			&i.Project.InstructionsMd,
+			&i.Project.Config,
+			&i.Project.OverlapK,
+			&i.Project.GoldRate,
+			&i.Project.PayPerTaskCents,
+			&i.Project.Currency,
+			&i.Project.TargetCount,
+			&i.Project.Deadline,
+			&i.Project.ReservationMinutes,
+			&i.Project.ReviewSpreadThreshold,
+			&i.Project.AuditSampleRate,
+			&i.Project.AgreementThreshold,
+			&i.Project.MinRationaleChars,
+			&i.Project.RetentionDays,
+			&i.Project.ClientVisibility,
+			&i.Project.PublishedAt,
+			&i.Project.ClosedAt,
+			&i.Project.CreatedBy,
+			&i.Project.CreatedAt,
+			&i.Project.UpdatedAt,
+			&i.Project.QaChecks,
+			&i.OrgName,
+			&i.ItemCount,
+			&i.GoldCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
-SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at FROM projects ORDER BY created_at
+SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks FROM projects ORDER BY created_at
 `
 
 // Row-level security decides which rows the caller's scope can see.
@@ -239,6 +499,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.QaChecks,
 		); err != nil {
 			return nil, err
 		}
@@ -248,4 +509,202 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listTaskTemplates = `-- name: ListTaskTemplates :many
+SELECT DISTINCT ON (task_type) id, task_type, version, name, import_schema, submission_schema, export_schema, created_at, updated_at FROM task_templates ORDER BY task_type, version DESC
+`
+
+func (q *Queries) ListTaskTemplates(ctx context.Context) ([]TaskTemplate, error) {
+	rows, err := q.db.Query(ctx, listTaskTemplates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TaskTemplate{}
+	for rows.Next() {
+		var i TaskTemplate
+		if err := rows.Scan(
+			&i.ID,
+			&i.TaskType,
+			&i.Version,
+			&i.Name,
+			&i.ImportSchema,
+			&i.SubmissionSchema,
+			&i.ExportSchema,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockProject = `-- name: LockProject :one
+SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks FROM projects WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockProject(ctx context.Context, id uuid.UUID) (Project, error) {
+	row := q.db.QueryRow(ctx, lockProject, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.TemplateID,
+		&i.TaskType,
+		&i.Name,
+		&i.Status,
+		&i.InstructionsMd,
+		&i.Config,
+		&i.OverlapK,
+		&i.GoldRate,
+		&i.PayPerTaskCents,
+		&i.Currency,
+		&i.TargetCount,
+		&i.Deadline,
+		&i.ReservationMinutes,
+		&i.ReviewSpreadThreshold,
+		&i.AuditSampleRate,
+		&i.AgreementThreshold,
+		&i.MinRationaleChars,
+		&i.RetentionDays,
+		&i.ClientVisibility,
+		&i.PublishedAt,
+		&i.ClosedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaChecks,
+	)
+	return i, err
+}
+
+const setProjectStatus = `-- name: SetProjectStatus :one
+UPDATE projects SET status = $1,
+  published_at = coalesce(published_at, $2::timestamptz),
+  closed_at = $3::timestamptz
+WHERE id = $4
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+`
+
+type SetProjectStatusParams struct {
+	Status      string
+	PublishedAt *time.Time
+	ClosedAt    *time.Time
+	ID          uuid.UUID
+}
+
+func (q *Queries) SetProjectStatus(ctx context.Context, arg SetProjectStatusParams) (Project, error) {
+	row := q.db.QueryRow(ctx, setProjectStatus,
+		arg.Status,
+		arg.PublishedAt,
+		arg.ClosedAt,
+		arg.ID,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.TemplateID,
+		&i.TaskType,
+		&i.Name,
+		&i.Status,
+		&i.InstructionsMd,
+		&i.Config,
+		&i.OverlapK,
+		&i.GoldRate,
+		&i.PayPerTaskCents,
+		&i.Currency,
+		&i.TargetCount,
+		&i.Deadline,
+		&i.ReservationMinutes,
+		&i.ReviewSpreadThreshold,
+		&i.AuditSampleRate,
+		&i.AgreementThreshold,
+		&i.MinRationaleChars,
+		&i.RetentionDays,
+		&i.ClientVisibility,
+		&i.PublishedAt,
+		&i.ClosedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaChecks,
+	)
+	return i, err
+}
+
+const updateProjectSettings = `-- name: UpdateProjectSettings :one
+UPDATE projects SET
+  name = $1, instructions_md = $2, config = $3, qa_checks = $4,
+  overlap_k = $5, gold_rate = $6, pay_per_task_cents = $7,
+  target_count = $8, deadline = $9, min_rationale_chars = $10
+WHERE id = $11
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+`
+
+type UpdateProjectSettingsParams struct {
+	Name              string
+	InstructionsMd    string
+	Config            []byte
+	QaChecks          []byte
+	OverlapK          int16
+	GoldRate          float64
+	PayPerTaskCents   int64
+	TargetCount       *int32
+	Deadline          *time.Time
+	MinRationaleChars int32
+	ID                uuid.UUID
+}
+
+func (q *Queries) UpdateProjectSettings(ctx context.Context, arg UpdateProjectSettingsParams) (Project, error) {
+	row := q.db.QueryRow(ctx, updateProjectSettings,
+		arg.Name,
+		arg.InstructionsMd,
+		arg.Config,
+		arg.QaChecks,
+		arg.OverlapK,
+		arg.GoldRate,
+		arg.PayPerTaskCents,
+		arg.TargetCount,
+		arg.Deadline,
+		arg.MinRationaleChars,
+		arg.ID,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.TemplateID,
+		&i.TaskType,
+		&i.Name,
+		&i.Status,
+		&i.InstructionsMd,
+		&i.Config,
+		&i.OverlapK,
+		&i.GoldRate,
+		&i.PayPerTaskCents,
+		&i.Currency,
+		&i.TargetCount,
+		&i.Deadline,
+		&i.ReservationMinutes,
+		&i.ReviewSpreadThreshold,
+		&i.AuditSampleRate,
+		&i.AgreementThreshold,
+		&i.MinRationaleChars,
+		&i.RetentionDays,
+		&i.ClientVisibility,
+		&i.PublishedAt,
+		&i.ClosedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaChecks,
+	)
+	return i, err
 }

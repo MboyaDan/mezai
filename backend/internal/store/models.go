@@ -292,21 +292,24 @@ type ImportError struct {
 }
 
 type ImportJob struct {
-	ID        uuid.UUID
-	OrgID     uuid.UUID
-	ProjectID uuid.UUID
-	Kind      string
-	Format    string
-	FileKey   string
-	FileName  string
-	DryRun    bool
-	Status    string
-	TotalRows int32
-	ValidRows int32
-	ErrorRows int32
-	CreatedBy *uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	ProjectID   uuid.UUID
+	Kind        string
+	Format      string
+	FileKey     string
+	FileName    string
+	DryRun      bool
+	Status      string
+	TotalRows   int32
+	ValidRows   int32
+	ErrorRows   int32
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	SizeBytes   int64
+	Sha256      string
+	CommittedAt *time.Time
 }
 
 type Invitation struct {
@@ -465,6 +468,7 @@ type Project struct {
 	CreatedBy             *uuid.UUID
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	QaChecks              []byte
 }
 
 type ProjectGuideline struct {
@@ -476,6 +480,30 @@ type ProjectGuideline struct {
 	Position  int32
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type ProjectRequest struct {
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	Title          string
+	TaskType       string
+	BriefMd        string
+	Languages      []string
+	VolumeEstimate *int32
+	WantedBy       *time.Time
+	ContactName    string
+	ContactEmail   string
+	SampleFileKey  *string
+	SampleFileName *string
+	SampleSize     *int64
+	Status         string
+	DecisionNote   *string
+	ProjectID      *uuid.UUID
+	DecidedBy      *uuid.UUID
+	DecidedAt      *time.Time
+	CreatedBy      uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type ProjectSkill struct {

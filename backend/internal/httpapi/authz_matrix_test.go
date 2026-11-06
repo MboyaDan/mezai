@@ -66,6 +66,28 @@ var expectedAccess = map[string]string{
 	"GET /v1/qualification/tests":                   "contributor.approve|gold.manage",
 	"POST /v1/qualification/tests":                  "gold.manage",
 	"POST /v1/qualification/tests/:id/status":       "gold.manage",
+
+	"GET /v1/organisations":                 "org.manage|project.manage",
+	"POST /v1/organisations":                "org.manage",
+	"GET /v1/task-templates":                "project.manage|item.import|gold.manage",
+	"GET /v1/projects":                      "project.manage|item.import|gold.manage|org.project.read",
+	"POST /v1/projects":                     "project.manage",
+	"GET /v1/projects/:id":                  "project.manage|item.import|gold.manage|org.project.read",
+	"PATCH /v1/projects/:id":                "project.manage",
+	"POST /v1/projects/:id/status":          "project.manage",
+	"GET /v1/projects/:id/imports":          "item.import|gold.manage|org.project.read",
+	"POST /v1/projects/:id/imports":         "item.import|gold.manage",
+	"GET /v1/imports/:id":                   "item.import|gold.manage|org.project.read",
+	"POST /v1/imports/:id/commit":           "item.import|gold.manage",
+	"GET /v1/projects/:id/gold":             "gold.manage",
+	"POST /v1/projects/:id/gold":            "gold.manage",
+	"POST /v1/gold/:id/retire":              "gold.manage",
+	"GET /v1/project-requests":              "project.manage|org.project.request|org.project.read",
+	"POST /v1/project-requests":             "org.project.request",
+	"GET /v1/project-requests/:id":          "project.manage|org.project.request|org.project.read",
+	"GET /v1/project-requests/:id/sample":   "project.manage|org.project.request|org.project.read",
+	"POST /v1/project-requests/:id/convert": "project.manage",
+	"POST /v1/project-requests/:id/decline": "project.manage",
 }
 
 var roleUser = map[string]string{
