@@ -9,6 +9,7 @@ import { Drawer } from "@/components/ui/dialog";
 import { brand } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { NavLink } from "./nav-link";
+import { legalDocs } from "@/content/legal";
 
 // Header navigation from docs/design/sitemap.md. Case studies stay hidden until one is published.
 const nav = [
@@ -37,12 +38,7 @@ const footer = [
   },
   {
     heading: "Legal",
-    links: [
-      { href: "/legal/privacy", label: "Privacy notice" },
-      { href: "/legal/terms", label: "Terms of use" },
-      { href: "/legal/contributor-terms", label: "Contributor terms" },
-      { href: "/legal/cookies", label: "Cookies" },
-    ],
+    links: legalDocs.map((d) => ({ href: `/legal/${d.slug}`, label: d.short })),
   },
 ];
 
