@@ -33,7 +33,7 @@ export function Projects() {
 
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 [&>header]:mb-0">
         <PageTitle title="Projects">
           {staff ? "Every client project, from draft to closed." : "Your organisation's projects with MezAI."}
         </PageTitle>
@@ -75,7 +75,10 @@ export function Projects() {
                 key: "name",
                 header: "Project",
                 cell: (p) => (
-                  <Link href={`/w/projects/${p.id}`} className="font-medium underline underline-offset-4">
+                  <Link
+                    href={`/w/projects/${p.id}`}
+                    className="inline-block min-w-48 font-medium underline underline-offset-4"
+                  >
                     {p.name}
                   </Link>
                 ),

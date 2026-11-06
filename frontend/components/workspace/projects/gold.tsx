@@ -571,7 +571,7 @@ export function ProjectGold() {
                 header: <span className="sr-only">Action</span>,
                 cell: (g) =>
                   g.status === "active" && !closed ? (
-                    <Button size="sm" variant="ghost" onClick={() => setRetiring(g)}>
+                    <Button size="sm" variant="ghost" className="-my-2" onClick={() => setRetiring(g)}>
                       Retire<span className="sr-only"> {g.external_id ?? "gold item"}</span>
                     </Button>
                   ) : null,

@@ -59,9 +59,9 @@ function Skills({
       {value.map((s, i) => (
         <div
           key={i}
-          className="grid grid-cols-[1fr_auto] items-end gap-2 sm:grid-cols-[10rem_1fr_10rem_auto]"
+          className="grid gap-3 rounded-card border border-border p-3 sm:grid-cols-[10rem_1fr_10rem_auto] sm:items-end sm:border-0 sm:p-0"
         >
-          <Field label="Kind" hideLabel={i > 0} className="col-span-2 sm:col-span-1">
+          <Field label="Kind" required hideLabel={i > 0}>
             <Select
               value={s.kind}
               onChange={(e) => set(i, { kind: e.target.value as ProjectSkill["kind"], value: "" })}
@@ -73,8 +73,8 @@ function Skills({
           </Field>
           <Field
             label="Skill"
-            hideLabel={i > 0}
             required
+            hideLabel={i > 0}
             className={s.kind === "language" ? "" : "sm:col-span-2"}
           >
             <Select value={s.value} onChange={(e) => set(i, { ...s, value: e.target.value })}>
@@ -87,7 +87,7 @@ function Skills({
             </Select>
           </Field>
           {s.kind === "language" && (
-            <Field label="At least" hideLabel={i > 0} className="col-start-1 sm:col-start-auto">
+            <Field label="At least" hideLabel={i > 0}>
               <Select
                 value={s.min_proficiency ?? ""}
                 onChange={(e) =>
@@ -110,7 +110,7 @@ function Skills({
             label={`Remove skill ${i + 1}`}
             icon={<X />}
             onClick={() => onChange(value.filter((_, j) => j !== i))}
-            className="row-start-2 sm:row-start-auto"
+            className="justify-self-end sm:justify-self-auto"
           />
         </div>
       ))}

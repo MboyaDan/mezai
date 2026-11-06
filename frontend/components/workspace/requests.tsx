@@ -49,7 +49,7 @@ export function Requests() {
   );
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 [&>header]:mb-0">
         <PageTitle title="Project requests">
           {staff
             ? "Client requests for new work. Convert one into a draft project, or decline it with a note."
@@ -386,7 +386,7 @@ export function RequestDetail() {
   return (
     <div className="grid gap-6">
       <Breadcrumb items={[{ label: "Project requests", href: "/w/requests" }, { label: req.title }]} />
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 [&>header]:mb-0">
         <PageTitle title={req.title}>
           <RequestStatus status={req.status} />
         </PageTitle>

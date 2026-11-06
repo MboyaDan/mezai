@@ -196,7 +196,14 @@ export function ProjectFrame({ children }: { children: ReactNode }) {
               {project.deadline && <span>· Due {shortDate(project.deadline)}</span>}
             </div>
           </div>
-          {can("project.manage") && <Lifecycle project={project} onChange={p.set} />}
+          {can("project.manage") && (
+            // Remount when the project changes, so an old "not ready" message clears.
+            <Lifecycle
+              key={`${project.updated_at}/${project.item_count}/${project.staff?.gold_count}`}
+              project={project}
+              onChange={p.set}
+            />
+          )}
         </header>
         <SubNav id={project.id} />
         {children}

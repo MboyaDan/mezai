@@ -23,7 +23,8 @@ export function skillText(s: ProjectSkill): string {
 function Facts() {
   const { project: p } = useProject();
   const rows: Array<[string, React.ReactNode]> = [
-    ["Items", p.item_count.toLocaleString("en-KE")],
+    // For client users the API's count includes gold check items (A-033).
+    [p.staff ? "Items" : "Items, with gold checks", p.item_count.toLocaleString("en-KE")],
     ["Target", p.target_count?.toLocaleString("en-KE") ?? "Not set"],
     ["Contributors per item", p.overlap_k],
     ["Gold mixed in", `${rateToPercent(p.gold_rate)}%`],
