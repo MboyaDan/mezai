@@ -17,6 +17,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/dbtest"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
+	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/seed"
 )
 
@@ -30,6 +31,7 @@ type env struct {
 	pool   *db.Pool
 	router *gin.Engine
 	rules  []httpapi.RouteRule
+	files  *storage.Memory
 }
 
 func newEnv(t *testing.T) *env {
@@ -38,6 +40,7 @@ func newEnv(t *testing.T) *env {
 	if _, err := seed.Run(context.Background(), pool, seed.Options{Password: pw}); err != nil {
 		t.Fatal(err)
 	}
+	files := storage.NewMemory()
 	opts := auth.DefaultOptions(time.Hour, 30*time.Minute)
 	opts.AppOrigin = origin
 	svc, err := auth.NewService(pool, opts)
@@ -46,8 +49,9 @@ func newEnv(t *testing.T) *env {
 	}
 	r, rules := httpapi.NewRouterWithRules(httpapi.Deps{Auth: &httpapi.AuthDeps{
 		Service: svc, Pool: pool, AppOrigin: origin, CookieSecure: true,
+		Files: files, Enquiry: httpapi.EnquiryDeps{NotifyTo: "ops@mezai.invalid"},
 	}})
-	return &env{t: t, pool: pool, router: r, rules: rules}
+	return &env{t: t, pool: pool, router: r, rules: rules, files: files}
 }
 
 type session struct{ cookie, csrf string }

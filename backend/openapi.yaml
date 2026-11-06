@@ -804,6 +804,428 @@ paths:
         "204": { description: Changed }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /v1/organisations:
+    get:
+      operationId: listOrganisations
+      summary: Client organisations with project and member counts (`org.manage` or `project.manage`).
+      tags: [projects]
+      responses:
+        "200":
+          description: Organisations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organisations]
+                properties:
+                  organisations: { type: array, items: { $ref: "#/components/schemas/Organisation" } }
+    post:
+      operationId: createOrganisation
+      summary: Create a client organisation (`org.manage`). The slug is derived from the name when left empty.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 200 }
+                slug: { type: string, maxLength: 60, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Organisation" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/task-templates:
+    get:
+      operationId: listTaskTemplates
+      summary: The task types and their import columns (`project.manage`, `item.import` or `gold.manage`).
+      tags: [projects]
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates: { type: array, items: { $ref: "#/components/schemas/TaskTemplate" } }
+  /v1/projects:
+    get:
+      operationId: listProjects
+      summary: Projects the caller may see. Client users see their own organisation's only (RLS).
+      tags: [projects]
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ProjectStatus" } }
+        - { name: org_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects: { type: array, items: { $ref: "#/components/schemas/Project" } }
+    post:
+      operationId: createProject
+      summary: Create a draft project (`project.manage`).
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/projects/{id}:
+    get:
+      operationId: getProject
+      summary: One project. The `staff` block (pay, QA checks, gold count, readiness) is for ELS staff only.
+      tags: [projects]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateProject
+      summary: Edit settings (`project.manage`). Organisation and task type are fixed; labels, rubric and overlap are fixed once the project has gold or has been live.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/projects/{id}/status:
+    post:
+      operationId: setProjectStatus
+      summary: Move a project (`project.manage`). draft → ready needs instructions; ready → live and paused → live also need items, and active gold when the gold rate is above 0.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [ready, draft, publish, pause, resume, close] }
+                reason: { type: string, maxLength: 1000 }
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: "`illegal_transition`, or `not_ready` with the missing pieces"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotReady" }
+  /v1/projects/{id}/imports:
+    get:
+      operationId: listImports
+      summary: The project's import files (dataset versions). Gold files are hidden from client users.
+      tags: [projects]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Imports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [imports]
+                properties:
+                  imports: { type: array, items: { $ref: "#/components/schemas/ImportJob" } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: checkImport
+      summary: Upload and check a CSV or JSONL file (dry run). Items need `item.import`, gold needs `gold.manage`. Nothing is imported until commit.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, kind]
+              properties:
+                file: { type: string, format: binary, description: ".csv or .jsonl, up to 10 MB and 20,000 rows" }
+                kind: { type: string, enum: [items, gold] }
+      responses:
+        "201":
+          description: Checked; `status` is `validated` or `failed`, with row errors
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/imports/{id}:
+    get:
+      operationId: getImport
+      summary: One import with its row errors (up to 1000).
+      tags: [projects]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Import
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/imports/{id}/commit:
+    post:
+      operationId: commitImport
+      summary: Import every row of a checked file in one transaction. The file is re-read, its digest confirmed and checked again; any problem imports nothing.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Committed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: "`import_not_committable`, `import_stale`, `file_changed` or `project_closed`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/projects/{id}/gold:
+    get:
+      operationId: listGold
+      summary: The project's gold items with expected answers (`gold.manage`).
+      tags: [projects]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Gold
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [gold]
+                properties:
+                  gold: { type: array, items: { $ref: "#/components/schemas/GoldItem" } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createGold
+      summary: Add one gold item by hand (`gold.manage`), checked like a file row.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content, expected]
+              properties:
+                external_id: { type: string, maxLength: 200 }
+                content: { type: object, additionalProperties: { type: string } }
+                expected: { $ref: "#/components/schemas/Answer" }
+                tolerance: { $ref: "#/components/schemas/Tolerance" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoldItem" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/gold/{id}/retire:
+    post:
+      operationId: retireGold
+      summary: Stop serving a gold item (`gold.manage`). Past results stay.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Retired
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [retired] }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/project-requests:
+    get:
+      operationId: listProjectRequests
+      summary: Project requests. Client users see their own organisation's only (RLS).
+      tags: [projects]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [submitted, converted, declined] } }
+      responses:
+        "200":
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests: { type: array, items: { $ref: "#/components/schemas/ProjectRequest" } }
+    post:
+      operationId: createProjectRequest
+      summary: Submit a project request for the caller's organisation (`org.project.request`, client users only). Ops is emailed.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRequestInput" }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [request]
+              properties:
+                request: { type: string, description: ProjectRequestInput as JSON }
+                sample: { type: string, format: binary, description: ".csv, .tsv, .jsonl, .json or .txt, up to 5 MB" }
+      responses:
+        "201":
+          description: Submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectRequest" }
+        "403": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/project-requests/{id}:
+    get:
+      operationId: getProjectRequest
+      summary: One project request.
+      tags: [projects]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectRequest" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/project-requests/{id}/sample:
+    get:
+      operationId: downloadProjectRequestSample
+      summary: Download the attached sample file (always as an attachment).
+      tags: [projects]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The file
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/project-requests/{id}/convert:
+    post:
+      operationId: convertProjectRequest
+      summary: Create a draft project from a request (`project.manage`). The project joins the request's organisation.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectInput" }
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/project-requests/{id}/decline:
+    post:
+      operationId: declineProjectRequest
+      summary: Decline a request with a note the client sees (`project.manage`).
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Declined
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectRequest" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
 components:
   securitySchemes:
     session:
@@ -1213,4 +1635,191 @@ components:
         config: { $ref: "#/components/schemas/TaskConfig" }
         source_project_id: { type: [string, "null"], format: uuid }
         question_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    Organisation:
+      type: object
+      required: [id, name, slug, status, project_count, member_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        status: { type: string, enum: [active, archived] }
+        project_count: { type: integer }
+        member_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    TaskType:
+      type: string
+      enum: [classification, pairwise, translation_review]
+    TaskTemplate:
+      type: object
+      required: [task_type, name, version, content_fields, item_columns, gold_columns]
+      properties:
+        task_type: { $ref: "#/components/schemas/TaskType" }
+        name: { type: string }
+        version: { type: integer }
+        content_fields: { type: array, items: { type: string } }
+        item_columns: { type: array, items: { type: string } }
+        gold_columns: { type: array, items: { type: string } }
+    ProjectStatus:
+      type: string
+      enum: [draft, ready, live, paused, closed]
+    ProjectConfig:
+      type: object
+      description: "classification: labels (2 to 50), multi_label. pairwise: criteria (1 to 8 keys), scale [1, 5]. translation_review: error_tags (optional)."
+      properties:
+        labels: { type: array, items: { type: string } }
+        multi_label: { type: boolean }
+        criteria: { type: array, items: { type: string } }
+        scale: { type: array, items: { type: integer } }
+        error_tags: { type: array, items: { type: string } }
+    QAChecks:
+      type: object
+      description: Checks the task screen runs before a contributor submits (Stage 9). Blocking checks stop the submission; warnings are stored with it for reviewers.
+      required: [block_unchanged_translation, warn_fast_seconds, warn_rationale_mismatch, warn_pasted]
+      properties:
+        block_unchanged_translation: { type: boolean, description: Translation review only }
+        warn_fast_seconds: { type: integer, minimum: 0, maximum: 600, description: 0 turns it off }
+        warn_rationale_mismatch: { type: boolean, description: Pairwise only }
+        warn_pasted: { type: boolean }
+    ProjectSkill:
+      type: object
+      required: [kind, value]
+      properties:
+        kind: { type: string, enum: [language, domain, task_type] }
+        value: { type: string }
+        min_proficiency: { type: string, enum: [native, fluent, working] }
+    ProjectInput:
+      type: object
+      required: [name, overlap_k, gold_rate, pay_per_task_cents]
+      properties:
+        org_id: { type: string, format: uuid, description: Required on create; fixed afterwards }
+        task_type: { $ref: "#/components/schemas/TaskType" }
+        name: { type: string, maxLength: 200 }
+        instructions_md: { type: string, maxLength: 50000 }
+        config: { $ref: "#/components/schemas/ProjectConfig" }
+        qa_checks: { $ref: "#/components/schemas/QAChecks" }
+        overlap_k: { type: integer, minimum: 1, maximum: 5 }
+        gold_rate: { type: number, minimum: 0, maximum: 0.5 }
+        pay_per_task_cents: { type: integer, format: int64, minimum: 0, description: KES cents per approved task }
+        target_count: { type: [integer, "null"], minimum: 1 }
+        deadline: { type: [string, "null"], format: date }
+        min_rationale_chars: { type: integer, minimum: 0, maximum: 2000, description: Pairwise only }
+        skills: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ProjectSkill" } }
+    ProjectStaff:
+      type: object
+      required: [pay_per_task_cents, currency, qa_checks, min_rationale_chars, gold_count, missing, config_locked]
+      properties:
+        pay_per_task_cents: { type: integer, format: int64 }
+        currency: { type: string }
+        qa_checks: { $ref: "#/components/schemas/QAChecks" }
+        min_rationale_chars: { type: integer }
+        gold_count: { type: integer, description: Active gold items }
+        missing: { type: array, items: { type: string, enum: [instructions, items, gold] }, description: What stops the next step }
+        config_locked: { type: boolean }
+    Project:
+      type: object
+      required: [id, org_id, org_name, task_type, name, status, instructions_md, config, overlap_k, gold_rate, target_count, deadline, item_count, skills, published_at, closed_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        org_name: { type: string }
+        task_type: { $ref: "#/components/schemas/TaskType" }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/ProjectStatus" }
+        instructions_md: { type: string }
+        config: { $ref: "#/components/schemas/ProjectConfig" }
+        overlap_k: { type: integer }
+        gold_rate: { type: number }
+        target_count: { type: [integer, "null"] }
+        deadline: { type: [string, "null"], format: date }
+        item_count: { type: integer, description: Work items (excluding gold for staff) }
+        skills: { type: array, items: { $ref: "#/components/schemas/ProjectSkill" } }
+        published_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        staff: { $ref: "#/components/schemas/ProjectStaff" }
+    NotReady:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        missing: { type: array, items: { type: string } }
+    ImportRowError:
+      type: object
+      required: [row, message]
+      properties:
+        row: { type: integer, description: "CSV: file row, header is row 1. JSONL: line." }
+        field: { type: string }
+        message: { type: string }
+    ImportJob:
+      type: object
+      required: [id, project_id, kind, format, file_name, size_bytes, status, total_rows, valid_rows, error_rows, errors_truncated, created_at, committed_at]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        kind: { type: string, enum: [items, gold] }
+        format: { type: string, enum: [csv, jsonl] }
+        file_name: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        status: { type: string, enum: [validated, failed, committed] }
+        total_rows: { type: integer }
+        valid_rows: { type: integer }
+        error_rows: { type: integer }
+        errors: { type: array, items: { $ref: "#/components/schemas/ImportRowError" } }
+        errors_truncated: { type: boolean }
+        created_at: { type: string, format: date-time }
+        committed_at: { type: [string, "null"], format: date-time }
+    Tolerance:
+      type: object
+      properties:
+        adequacy: { type: integer, minimum: 0, maximum: 4 }
+        fluency: { type: integer, minimum: 0, maximum: 4 }
+    GoldItem:
+      type: object
+      required: [id, item_id, external_id, content, expected, tolerance, status, usage_count, created_at, retired_at]
+      properties:
+        id: { type: string, format: uuid }
+        item_id: { type: string, format: uuid }
+        external_id: { type: [string, "null"] }
+        content: { type: object, additionalProperties: { type: string } }
+        expected: { $ref: "#/components/schemas/Answer" }
+        tolerance: { $ref: "#/components/schemas/Tolerance" }
+        status: { type: string, enum: [active, retired] }
+        usage_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        retired_at: { type: [string, "null"], format: date-time }
+    ProjectRequestInput:
+      type: object
+      required: [title, task_type, brief_md, contact_name, contact_email]
+      properties:
+        title: { type: string, maxLength: 200 }
+        task_type: { type: string, enum: [classification, pairwise, translation_review, other] }
+        brief_md: { type: string, maxLength: 20000 }
+        languages: { type: array, maxItems: 20, items: { type: string } }
+        volume_estimate: { type: [integer, "null"], minimum: 1 }
+        wanted_by: { type: [string, "null"], format: date }
+        contact_name: { type: string, maxLength: 200 }
+        contact_email: { type: string, format: email }
+    ProjectRequest:
+      type: object
+      required: [id, org_id, org_name, title, task_type, brief_md, languages, volume_estimate, wanted_by, contact_name, contact_email, sample_file_name, sample_size, status, decision_note, project_id, decided_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        org_name: { type: string }
+        title: { type: string }
+        task_type: { type: string, enum: [classification, pairwise, translation_review, other] }
+        brief_md: { type: string }
+        languages: { type: array, items: { type: string } }
+        volume_estimate: { type: [integer, "null"] }
+        wanted_by: { type: [string, "null"], format: date }
+        contact_name: { type: string }
+        contact_email: { type: string }
+        sample_file_name: { type: [string, "null"] }
+        sample_size: { type: [integer, "null"], format: int64 }
+        status: { type: string, enum: [submitted, converted, declined] }
+        decision_note: { type: [string, "null"] }
+        project_id: { type: [string, "null"], format: uuid }
+        decided_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }

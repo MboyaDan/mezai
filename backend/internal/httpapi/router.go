@@ -12,6 +12,8 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/projects"
+	"github.com/MboyaDan/mezai/backend/internal/storage"
 )
 
 // Checker is a dependency that /readyz must reach, such as the database or object storage.
@@ -34,6 +36,8 @@ type AuthDeps struct {
 	CookieSecure   bool
 	TrustedProxies []string
 	Enquiry        EnquiryDeps
+	// Files stores uploaded import files and request samples.
+	Files storage.Blobs
 }
 
 // RouteRule is one /v1 route and the access rule it declared.
@@ -140,6 +144,34 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/qualification/tests", Perm("contributor.approve", "gold.manage"), ch.listTests)
 		a.handle(http.MethodPost, "/qualification/tests", Perm("gold.manage"), ch.createTest)
 		a.handle(http.MethodPost, "/qualification/tests/:id/status", Perm("gold.manage"), ch.setTestStatus)
+
+		// Projects, imports, gold and client project requests (Stage 8).
+		ph := &projectHandlers{log: d.Log, svc: projects.NewService(d.Auth.Pool, d.Auth.Files,
+			projects.Options{NotifyTo: d.Auth.Enquiry.NotifyTo, AppOrigin: d.Auth.AppOrigin})}
+		a.handle(http.MethodGet, "/organisations", Perm("org.manage", "project.manage"), ph.listOrganisations)
+		a.handle(http.MethodPost, "/organisations", Perm("org.manage"), ph.createOrganisation)
+		a.handle(http.MethodGet, "/task-templates", Perm("project.manage", "item.import", "gold.manage"), ph.taskTemplates)
+		readProject := Perm("project.manage", "item.import", "gold.manage", "org.project.read")
+		a.handle(http.MethodGet, "/projects", readProject, ph.listProjects)
+		a.handle(http.MethodPost, "/projects", Perm("project.manage"), ph.createProject)
+		a.handle(http.MethodGet, "/projects/:id", readProject, ph.getProject)
+		a.handle(http.MethodPatch, "/projects/:id", Perm("project.manage"), ph.updateProject)
+		a.handle(http.MethodPost, "/projects/:id/status", Perm("project.manage"), ph.setProjectStatus)
+		// Item files need item.import and gold files gold.manage; the service checks the kind.
+		a.handle(http.MethodGet, "/projects/:id/imports", Perm("item.import", "gold.manage", "org.project.read"), ph.listImports)
+		a.handle(http.MethodPost, "/projects/:id/imports", Perm("item.import", "gold.manage"), rateLimit(newLimiter(60, time.Hour)), ph.checkImport)
+		a.handle(http.MethodGet, "/imports/:id", Perm("item.import", "gold.manage", "org.project.read"), ph.getImport)
+		a.handle(http.MethodPost, "/imports/:id/commit", Perm("item.import", "gold.manage"), ph.commitImport)
+		a.handle(http.MethodGet, "/projects/:id/gold", Perm("gold.manage"), ph.listGold)
+		a.handle(http.MethodPost, "/projects/:id/gold", Perm("gold.manage"), ph.createGold)
+		a.handle(http.MethodPost, "/gold/:id/retire", Perm("gold.manage"), ph.retireGold)
+		readRequest := Perm("project.manage", "org.project.request", "org.project.read")
+		a.handle(http.MethodGet, "/project-requests", readRequest, ph.listRequests)
+		a.handle(http.MethodPost, "/project-requests", Perm("org.project.request"), rateLimit(newLimiter(20, time.Hour)), ph.createRequest)
+		a.handle(http.MethodGet, "/project-requests/:id", readRequest, ph.getRequest)
+		a.handle(http.MethodGet, "/project-requests/:id/sample", readRequest, ph.requestSample)
+		a.handle(http.MethodPost, "/project-requests/:id/convert", Perm("project.manage"), ph.convertRequest)
+		a.handle(http.MethodPost, "/project-requests/:id/decline", Perm("project.manage"), ph.declineRequest)
 		rules = a.rules
 	}
 
