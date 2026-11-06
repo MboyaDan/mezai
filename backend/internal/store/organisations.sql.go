@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -50,6 +51,24 @@ func (q *Queries) CreateOrganisation(ctx context.Context, arg CreateOrganisation
 	return i, err
 }
 
+const getOrganisation = `-- name: GetOrganisation :one
+SELECT id, name, slug, status, created_at, updated_at FROM organisations WHERE id = $1
+`
+
+func (q *Queries) GetOrganisation(ctx context.Context, id uuid.UUID) (Organisation, error) {
+	row := q.db.QueryRow(ctx, getOrganisation, id)
+	var i Organisation
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getOrganisationBySlug = `-- name: GetOrganisationBySlug :one
 SELECT id, name, slug, status, created_at, updated_at FROM organisations WHERE slug = $1
 `
@@ -66,6 +85,54 @@ func (q *Queries) GetOrganisationBySlug(ctx context.Context, slug string) (Organ
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listOrganisationSummaries = `-- name: ListOrganisationSummaries :many
+SELECT o.id, o.name, o.slug, o.status, o.created_at, o.updated_at,
+  (SELECT count(*) FROM projects p WHERE p.org_id = o.id)::int AS project_count,
+  (SELECT count(*) FROM org_members m WHERE m.org_id = o.id)::int AS member_count
+FROM organisations o
+ORDER BY o.name
+`
+
+type ListOrganisationSummariesRow struct {
+	ID           uuid.UUID
+	Name         string
+	Slug         string
+	Status       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	ProjectCount int32
+	MemberCount  int32
+}
+
+func (q *Queries) ListOrganisationSummaries(ctx context.Context) ([]ListOrganisationSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listOrganisationSummaries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganisationSummariesRow{}
+	for rows.Next() {
+		var i ListOrganisationSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ProjectCount,
+			&i.MemberCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listOrganisations = `-- name: ListOrganisations :many

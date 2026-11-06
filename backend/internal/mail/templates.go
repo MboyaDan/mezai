@@ -11,10 +11,11 @@ import (
 
 // Template names stored in email_outbox.template.
 const (
-	TemplateVerifyEmail   = "verify_email"
-	TemplatePasswordReset = "password_reset"
-	TemplateInvitation    = "invitation"
-	TemplateEnquiry       = "enquiry_received"
+	TemplateVerifyEmail    = "verify_email"
+	TemplatePasswordReset  = "password_reset"
+	TemplateInvitation     = "invitation"
+	TemplateEnquiry        = "enquiry_received"
+	TemplateProjectRequest = "project_request_received"
 )
 
 // Plain text for now; Stage 16 adds HTML versions and preferences.
@@ -72,6 +73,20 @@ Message:
 
 Reference: {{.ID}}
 It is saved in the enquiries inbox with status "new".
+`,
+	},
+	TemplateProjectRequest: {
+		subject: "Project request from {{.Organisation}}: {{.Title}}",
+		body: `{{.Organisation}} submitted a project request in the {{.Brand}} workspace.
+
+Title:      {{.Title}}
+Task type:  {{.TaskType}}
+Sample:     {{.Sample}}
+
+Open it to convert it into a draft project or decline it:
+{{.Link}}
+
+Reference: {{.ID}}
 `,
 	},
 }

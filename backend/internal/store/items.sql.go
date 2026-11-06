@@ -7,9 +7,34 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const addImportError = `-- name: AddImportError :exec
+INSERT INTO import_errors (org_id, import_job_id, row_number, field, message)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type AddImportErrorParams struct {
+	OrgID       uuid.UUID
+	ImportJobID uuid.UUID
+	RowNumber   int32
+	Field       *string
+	Message     string
+}
+
+func (q *Queries) AddImportError(ctx context.Context, arg AddImportErrorParams) error {
+	_, err := q.db.Exec(ctx, addImportError,
+		arg.OrgID,
+		arg.ImportJobID,
+		arg.RowNumber,
+		arg.Field,
+		arg.Message,
+	)
+	return err
+}
 
 const countGoldItems = `-- name: CountGoldItems :one
 SELECT count(*) FROM gold_items
@@ -75,6 +100,99 @@ func (q *Queries) CreateGoldItem(ctx context.Context, arg CreateGoldItemParams) 
 	return i, err
 }
 
+const createImportJob = `-- name: CreateImportJob :one
+INSERT INTO import_jobs (id, org_id, project_id, kind, format, file_key, file_name, size_bytes, sha256,
+  status, total_rows, valid_rows, error_rows, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+  $10, $11, $12, $13, $14)
+RETURNING id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at
+`
+
+type CreateImportJobParams struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	ProjectID uuid.UUID
+	Kind      string
+	Format    string
+	FileKey   string
+	FileName  string
+	SizeBytes int64
+	Sha256    string
+	Status    string
+	TotalRows int32
+	ValidRows int32
+	ErrorRows int32
+	CreatedBy *uuid.UUID
+}
+
+func (q *Queries) CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error) {
+	row := q.db.QueryRow(ctx, createImportJob,
+		arg.ID,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.Kind,
+		arg.Format,
+		arg.FileKey,
+		arg.FileName,
+		arg.SizeBytes,
+		arg.Sha256,
+		arg.Status,
+		arg.TotalRows,
+		arg.ValidRows,
+		arg.ErrorRows,
+		arg.CreatedBy,
+	)
+	var i ImportJob
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.Kind,
+		&i.Format,
+		&i.FileKey,
+		&i.FileName,
+		&i.DryRun,
+		&i.Status,
+		&i.TotalRows,
+		&i.ValidRows,
+		&i.ErrorRows,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.CommittedAt,
+	)
+	return i, err
+}
+
+const createImportedItem = `-- name: CreateImportedItem :one
+INSERT INTO items (org_id, project_id, external_id, content, import_job_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id
+`
+
+type CreateImportedItemParams struct {
+	OrgID       uuid.UUID
+	ProjectID   uuid.UUID
+	ExternalID  *string
+	Content     []byte
+	ImportJobID *uuid.UUID
+}
+
+func (q *Queries) CreateImportedItem(ctx context.Context, arg CreateImportedItemParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createImportedItem,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.ExternalID,
+		arg.Content,
+		arg.ImportJobID,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createItem = `-- name: CreateItem :one
 INSERT INTO items (org_id, project_id, external_id, content)
 VALUES ($1, $2, $3, $4)
@@ -113,6 +231,212 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 	return i, err
 }
 
+const externalIDsInProject = `-- name: ExternalIDsInProject :many
+SELECT external_id::text FROM items WHERE project_id = $1 AND external_id IS NOT NULL
+`
+
+func (q *Queries) ExternalIDsInProject(ctx context.Context, projectID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, externalIDsInProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var external_id string
+		if err := rows.Scan(&external_id); err != nil {
+			return nil, err
+		}
+		items = append(items, external_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getGoldItem = `-- name: GetGoldItem :one
+SELECT id, org_id, project_id, item_id, expected, tolerance, status, usage_count, created_by, retired_at, created_at, updated_at FROM gold_items WHERE id = $1
+`
+
+func (q *Queries) GetGoldItem(ctx context.Context, id uuid.UUID) (GoldItem, error) {
+	row := q.db.QueryRow(ctx, getGoldItem, id)
+	var i GoldItem
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.Expected,
+		&i.Tolerance,
+		&i.Status,
+		&i.UsageCount,
+		&i.CreatedBy,
+		&i.RetiredAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getImportJob = `-- name: GetImportJob :one
+SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at FROM import_jobs WHERE id = $1
+`
+
+func (q *Queries) GetImportJob(ctx context.Context, id uuid.UUID) (ImportJob, error) {
+	row := q.db.QueryRow(ctx, getImportJob, id)
+	var i ImportJob
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.Kind,
+		&i.Format,
+		&i.FileKey,
+		&i.FileName,
+		&i.DryRun,
+		&i.Status,
+		&i.TotalRows,
+		&i.ValidRows,
+		&i.ErrorRows,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.CommittedAt,
+	)
+	return i, err
+}
+
+const listGoldByProject = `-- name: ListGoldByProject :many
+SELECT g.id, g.item_id, g.status, g.expected, g.tolerance, g.usage_count, g.created_at, g.retired_at,
+  i.external_id, i.content
+FROM gold_items g JOIN items i ON i.id = g.item_id
+WHERE g.project_id = $1
+ORDER BY g.status, g.created_at, g.id
+LIMIT 2000
+`
+
+type ListGoldByProjectRow struct {
+	ID         uuid.UUID
+	ItemID     uuid.UUID
+	Status     string
+	Expected   []byte
+	Tolerance  []byte
+	UsageCount int32
+	CreatedAt  time.Time
+	RetiredAt  *time.Time
+	ExternalID *string
+	Content    []byte
+}
+
+func (q *Queries) ListGoldByProject(ctx context.Context, projectID uuid.UUID) ([]ListGoldByProjectRow, error) {
+	rows, err := q.db.Query(ctx, listGoldByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGoldByProjectRow{}
+	for rows.Next() {
+		var i ListGoldByProjectRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemID,
+			&i.Status,
+			&i.Expected,
+			&i.Tolerance,
+			&i.UsageCount,
+			&i.CreatedAt,
+			&i.RetiredAt,
+			&i.ExternalID,
+			&i.Content,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listImportErrors = `-- name: ListImportErrors :many
+SELECT id, org_id, import_job_id, row_number, field, message, created_at FROM import_errors WHERE import_job_id = $1 ORDER BY row_number, id LIMIT 1000
+`
+
+func (q *Queries) ListImportErrors(ctx context.Context, importJobID uuid.UUID) ([]ImportError, error) {
+	rows, err := q.db.Query(ctx, listImportErrors, importJobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportError{}
+	for rows.Next() {
+		var i ImportError
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.ImportJobID,
+			&i.RowNumber,
+			&i.Field,
+			&i.Message,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listImportJobs = `-- name: ListImportJobs :many
+SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at FROM import_jobs WHERE project_id = $1 ORDER BY created_at DESC LIMIT 200
+`
+
+func (q *Queries) ListImportJobs(ctx context.Context, projectID uuid.UUID) ([]ImportJob, error) {
+	rows, err := q.db.Query(ctx, listImportJobs, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportJob{}
+	for rows.Next() {
+		var i ImportJob
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.ProjectID,
+			&i.Kind,
+			&i.Format,
+			&i.FileKey,
+			&i.FileName,
+			&i.DryRun,
+			&i.Status,
+			&i.TotalRows,
+			&i.ValidRows,
+			&i.ErrorRows,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SizeBytes,
+			&i.Sha256,
+			&i.CommittedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listItemsByProject = `-- name: ListItemsByProject :many
 SELECT id, org_id, project_id, external_id, content, status, submission_count, current_revision, import_job_id, finalised_at, created_at, updated_at FROM items WHERE project_id = $1 ORDER BY created_at, id
 `
@@ -148,4 +472,69 @@ func (q *Queries) ListItemsByProject(ctx context.Context, projectID uuid.UUID) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockImportJob = `-- name: LockImportJob :one
+SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at FROM import_jobs WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockImportJob(ctx context.Context, id uuid.UUID) (ImportJob, error) {
+	row := q.db.QueryRow(ctx, lockImportJob, id)
+	var i ImportJob
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.Kind,
+		&i.Format,
+		&i.FileKey,
+		&i.FileName,
+		&i.DryRun,
+		&i.Status,
+		&i.TotalRows,
+		&i.ValidRows,
+		&i.ErrorRows,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.CommittedAt,
+	)
+	return i, err
+}
+
+const markImportCommitted = `-- name: MarkImportCommitted :exec
+UPDATE import_jobs SET status = 'committed', dry_run = false, committed_at = now() WHERE id = $1
+`
+
+func (q *Queries) MarkImportCommitted(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markImportCommitted, id)
+	return err
+}
+
+const retireGold = `-- name: RetireGold :one
+UPDATE gold_items SET status = 'retired', retired_at = now()
+WHERE id = $1 AND status = 'active'
+RETURNING id, org_id, project_id, item_id, expected, tolerance, status, usage_count, created_by, retired_at, created_at, updated_at
+`
+
+func (q *Queries) RetireGold(ctx context.Context, id uuid.UUID) (GoldItem, error) {
+	row := q.db.QueryRow(ctx, retireGold, id)
+	var i GoldItem
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.Expected,
+		&i.Tolerance,
+		&i.Status,
+		&i.UsageCount,
+		&i.CreatedBy,
+		&i.RetiredAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
