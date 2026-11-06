@@ -15,6 +15,18 @@ export type ContributorSummary = Schemas["ContributorSummary"];
 export type AttemptSummary = Schemas["AttemptSummary"];
 export type AttemptReview = Schemas["AttemptReview"];
 export type ContributorStatus = Schemas["ContributorStatus"];
+export type Organisation = Schemas["Organisation"];
+export type TaskTemplate = Schemas["TaskTemplate"];
+export type Project = Schemas["Project"];
+export type ProjectInput = Schemas["ProjectInput"];
+export type ProjectStatus = Schemas["ProjectStatus"];
+export type ProjectSkill = Schemas["ProjectSkill"];
+export type QAChecks = Schemas["QAChecks"];
+export type ImportJob = Schemas["ImportJob"];
+export type GoldItem = Schemas["GoldItem"];
+export type ProjectRequest = Schemas["ProjectRequest"];
+export type ProjectRequestInput = Schemas["ProjectRequestInput"];
+export type QualificationTest = Schemas["QualificationTest"];
 
 /** An error answer from the API, or a network failure (status 0). */
 export class ApiError extends Error {
@@ -24,6 +36,8 @@ export class ApiError extends Error {
     readonly field?: string,
     readonly detail?: string,
     readonly retryAfter?: number,
+    /** The parsed error body, for codes that carry more (for example `not_ready` lists `missing`). */
+    readonly body?: Record<string, unknown>,
   ) {
     super(detail ?? code);
     this.name = "ApiError";
@@ -37,18 +51,33 @@ export function setCsrfToken(token: string | null) {
   csrfToken = token;
 }
 
-type Method = "GET" | "POST" | "PUT" | "DELETE";
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export async function api<T = void>(method: Method, path: `/v1/${string}`, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
+  return send<T>(method, path, headers, body === undefined ? undefined : JSON.stringify(body));
+}
+
+/** POST a multipart form (file uploads). The browser sets the boundary header. */
+export function upload<T>(path: `/v1/${string}`, form: FormData): Promise<T> {
+  return send<T>("POST", path, {}, form);
+}
+
+async function send<T>(
+  method: Method,
+  path: string,
+  extra: Record<string, string>,
+  body: BodyInit | undefined,
+): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", ...extra };
   if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body,
       credentials: "same-origin",
       cache: "no-store",
     });
@@ -65,6 +94,7 @@ export async function api<T = void>(method: Method, path: `/v1/${string}`, body?
       typeof data?.field === "string" ? data.field : undefined,
       typeof data?.message === "string" ? data.message : undefined,
       retry,
+      data && typeof data === "object" ? data : undefined,
     );
   }
   return data as T;

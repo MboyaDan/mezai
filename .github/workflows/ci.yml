@@ -116,7 +116,7 @@ jobs:
         run: npm ci && npm run build
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - name: Sign up, qualify and approve through the UI
+      - name: Full-stack UI tests (AC-04 join and qualify, AC-05 projects and imports)
         working-directory: frontend
         run: npm run test:full
       - name: API logs

@@ -154,6 +154,16 @@ export function errorMessage(e: ApiError): string {
     csrf_failed: "Your session changed. Reload the page and try again.",
     forbidden: "You do not have permission to do that.",
     not_found: "We could not find that.",
+    slug_taken: "Another organisation already uses that short name. Choose a different one.",
+    project_closed: "This project is closed, so it cannot change.",
+    not_ready: "The project is not ready for that step yet. See the checklist.",
+    import_not_committable: "This file has errors or was already imported. Upload a corrected file.",
+    import_stale: "The project changed after this file was checked. Check the file again.",
+    file_changed: "The stored file no longer matches the checked file. Upload it again.",
+    already_decided: "This request has already been decided.",
+    storage_unavailable: "File storage is not responding. Try again in a minute.",
+    file_too_large: "The file is too large.",
+    no_gold: "This project has no active gold items left to copy.",
   };
   return m[e.code] ?? "Something went wrong. Try again in a moment.";
 }
