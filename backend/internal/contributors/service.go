@@ -41,7 +41,7 @@ func fieldErr(field, format string, a ...any) error {
 	return &FieldError{Field: field, Message: fmt.Sprintf(format, a...)}
 }
 
-// RetakeCooldown is how long after a rejected attempt the same test reopens (A-033).
+// RetakeCooldown is how long after a rejected attempt the same test reopens (A-035).
 const RetakeCooldown = 7 * 24 * time.Hour
 
 // Service is the onboarding service.

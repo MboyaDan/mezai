@@ -38,3 +38,8 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-032 | 2026-11-06 | Retention for enquiries that do not become a project | 24 months after the last contact; stated in the draft privacy notice and listed as an open point for the advocate | Open |
 | A-033 | 2026-11-06 | Reply time promised to enquirers | None; the page says a person reads every enquiry and replies by email, with no deadline | Open |
 | A-034 | 2026-11-06 | Draft legal text | Written from the brief and from what the software does, shown publicly with a "Draft, not yet in force" banner and open points until DG-05 | Open |
+| A-035 | 2026-11-06 | Retaking a qualification test after a rejection | Allowed 7 days after the decision (`contributors.RetakeCooldown`); a passed and approved test cannot be retaken | Open |
+| A-036 | 2026-11-06 | Documents a contributor must accept | Privacy notice and contributor terms (brief 6.2). Acceptable use and terms of use can be accepted through the same endpoint but are not required | Open |
+| A-037 | 2026-11-06 | Failed attempts | Still go to the Ops queue, so a person writes the note the contributor sees; Ops cannot approve a failed attempt | Open |
+| A-038 | 2026-11-06 | M-Pesa numbers | Kenyan mobiles only (07…, 01…, 254…, +254…), stored as E.164, shown masked (`+254 7•• ••• 678`) everywhere including to the owner; entering it twice counts as confirmation (no SMS check until DG-06) | Open |
+| A-039 | 2026-11-06 | Profile fields required before qualifying | Display name, country, education level, weekly hours above 0, at least one language and one domain, and a confirmed M-Pesa number. City and dialects are optional | Open |
