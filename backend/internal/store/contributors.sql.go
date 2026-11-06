@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,6 +97,24 @@ func (q *Queries) AddQualificationQuestion(ctx context.Context, arg AddQualifica
 	return err
 }
 
+const clearContributorDomains = `-- name: ClearContributorDomains :exec
+DELETE FROM contributor_domains WHERE contributor_id = $1
+`
+
+func (q *Queries) ClearContributorDomains(ctx context.Context, contributorID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearContributorDomains, contributorID)
+	return err
+}
+
+const clearContributorLanguages = `-- name: ClearContributorLanguages :exec
+DELETE FROM contributor_languages WHERE contributor_id = $1
+`
+
+func (q *Queries) ClearContributorLanguages(ctx context.Context, contributorID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearContributorLanguages, contributorID)
+	return err
+}
+
 const createContributorProfile = `-- name: CreateContributorProfile :one
 INSERT INTO contributor_profiles (
   user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at
@@ -147,19 +166,25 @@ func (q *Queries) CreateContributorProfile(ctx context.Context, arg CreateContri
 }
 
 const createQualificationTest = `-- name: CreateQualificationTest :one
-INSERT INTO qualification_tests (title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, status, created_at, updated_at
+INSERT INTO qualification_tests (
+  title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, status, config, source_project_id, created_by
+) VALUES (
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+)
+RETURNING id, title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, status, created_at, updated_at, config, source_project_id, created_by
 `
 
 type CreateQualificationTestParams struct {
-	Title          string
-	SkillKind      string
-	SkillValue     string
-	TaskType       string
-	PassThreshold  float64
-	InstructionsMd string
-	Status         string
+	Title           string
+	SkillKind       string
+	SkillValue      string
+	TaskType        string
+	PassThreshold   float64
+	InstructionsMd  string
+	Status          string
+	Config          []byte
+	SourceProjectID *uuid.UUID
+	CreatedBy       *uuid.UUID
 }
 
 func (q *Queries) CreateQualificationTest(ctx context.Context, arg CreateQualificationTestParams) (QualificationTest, error) {
@@ -171,6 +196,9 @@ func (q *Queries) CreateQualificationTest(ctx context.Context, arg CreateQualifi
 		arg.PassThreshold,
 		arg.InstructionsMd,
 		arg.Status,
+		arg.Config,
+		arg.SourceProjectID,
+		arg.CreatedBy,
 	)
 	var i QualificationTest
 	err := row.Scan(
@@ -184,6 +212,340 @@ func (q *Queries) CreateQualificationTest(ctx context.Context, arg CreateQualifi
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Config,
+		&i.SourceProjectID,
+		&i.CreatedBy,
 	)
 	return i, err
+}
+
+const getContributorProfile = `-- name: GetContributorProfile :one
+SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, u.email, u.display_name
+FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
+WHERE cp.id = $1
+`
+
+type GetContributorProfileRow struct {
+	ID                    uuid.UUID
+	UserID                uuid.UUID
+	PublicCode            string
+	Status                string
+	Country               *string
+	City                  *string
+	EducationLevel        *string
+	WeeklyHours           *int16
+	MpesaPhone            *string
+	MpesaPhoneConfirmedAt *time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	Email                 string
+	DisplayName           string
+}
+
+func (q *Queries) GetContributorProfile(ctx context.Context, id uuid.UUID) (GetContributorProfileRow, error) {
+	row := q.db.QueryRow(ctx, getContributorProfile, id)
+	var i GetContributorProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.PublicCode,
+		&i.Status,
+		&i.Country,
+		&i.City,
+		&i.EducationLevel,
+		&i.WeeklyHours,
+		&i.MpesaPhone,
+		&i.MpesaPhoneConfirmedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.DisplayName,
+	)
+	return i, err
+}
+
+const insertConsent = `-- name: InsertConsent :exec
+INSERT INTO consents (user_id, document, version, ip) VALUES ($1, $2, $3, $4)
+`
+
+type InsertConsentParams struct {
+	UserID   uuid.UUID
+	Document string
+	Version  string
+	Ip       *netip.Addr
+}
+
+func (q *Queries) InsertConsent(ctx context.Context, arg InsertConsentParams) error {
+	_, err := q.db.Exec(ctx, insertConsent,
+		arg.UserID,
+		arg.Document,
+		arg.Version,
+		arg.Ip,
+	)
+	return err
+}
+
+const listContributorDomains = `-- name: ListContributorDomains :many
+SELECT domain FROM contributor_domains WHERE contributor_id = $1 ORDER BY domain
+`
+
+func (q *Queries) ListContributorDomains(ctx context.Context, contributorID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listContributorDomains, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			return nil, err
+		}
+		items = append(items, domain)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContributorLanguages = `-- name: ListContributorLanguages :many
+SELECT language, proficiency, dialects FROM contributor_languages WHERE contributor_id = $1 ORDER BY language
+`
+
+type ListContributorLanguagesRow struct {
+	Language    string
+	Proficiency string
+	Dialects    []string
+}
+
+func (q *Queries) ListContributorLanguages(ctx context.Context, contributorID uuid.UUID) ([]ListContributorLanguagesRow, error) {
+	rows, err := q.db.Query(ctx, listContributorLanguages, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListContributorLanguagesRow{}
+	for rows.Next() {
+		var i ListContributorLanguagesRow
+		if err := rows.Scan(&i.Language, &i.Proficiency, &i.Dialects); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContributorStatusHistory = `-- name: ListContributorStatusHistory :many
+SELECT h.from_status, h.to_status, h.reason, h.created_at, u.display_name AS changed_by_name
+FROM contributor_status_history h LEFT JOIN users u ON u.id = h.changed_by
+WHERE h.contributor_id = $1
+ORDER BY h.created_at DESC, h.id DESC
+`
+
+type ListContributorStatusHistoryRow struct {
+	FromStatus    *string
+	ToStatus      string
+	Reason        string
+	CreatedAt     time.Time
+	ChangedByName *string
+}
+
+func (q *Queries) ListContributorStatusHistory(ctx context.Context, contributorID uuid.UUID) ([]ListContributorStatusHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listContributorStatusHistory, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListContributorStatusHistoryRow{}
+	for rows.Next() {
+		var i ListContributorStatusHistoryRow
+		if err := rows.Scan(
+			&i.FromStatus,
+			&i.ToStatus,
+			&i.Reason,
+			&i.CreatedAt,
+			&i.ChangedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContributors = `-- name: ListContributors :many
+SELECT cp.id, cp.public_code, cp.status, cp.country, cp.mpesa_phone, cp.created_at, u.display_name, u.email,
+  (SELECT array_agg(cl.language ORDER BY cl.language) FROM contributor_languages cl WHERE cl.contributor_id = cp.id)::text[] AS languages
+FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
+WHERE $1::text IS NULL OR cp.status = $1::text
+ORDER BY cp.created_at DESC, cp.id DESC
+LIMIT 500
+`
+
+type ListContributorsRow struct {
+	ID          uuid.UUID
+	PublicCode  string
+	Status      string
+	Country     *string
+	MpesaPhone  *string
+	CreatedAt   time.Time
+	DisplayName string
+	Email       string
+	Languages   []string
+}
+
+func (q *Queries) ListContributors(ctx context.Context, status *string) ([]ListContributorsRow, error) {
+	rows, err := q.db.Query(ctx, listContributors, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListContributorsRow{}
+	for rows.Next() {
+		var i ListContributorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicCode,
+			&i.Status,
+			&i.Country,
+			&i.MpesaPhone,
+			&i.CreatedAt,
+			&i.DisplayName,
+			&i.Email,
+			&i.Languages,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestConsents = `-- name: ListLatestConsents :many
+SELECT DISTINCT ON (document) document, version, accepted_at
+FROM consents WHERE user_id = $1
+ORDER BY document, accepted_at DESC, id DESC
+`
+
+type ListLatestConsentsRow struct {
+	Document   string
+	Version    string
+	AcceptedAt time.Time
+}
+
+func (q *Queries) ListLatestConsents(ctx context.Context, userID uuid.UUID) ([]ListLatestConsentsRow, error) {
+	rows, err := q.db.Query(ctx, listLatestConsents, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLatestConsentsRow{}
+	for rows.Next() {
+		var i ListLatestConsentsRow
+		if err := rows.Scan(&i.Document, &i.Version, &i.AcceptedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockContributorProfile = `-- name: LockContributorProfile :one
+SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at FROM contributor_profiles WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (ContributorProfile, error) {
+	row := q.db.QueryRow(ctx, lockContributorProfile, id)
+	var i ContributorProfile
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.PublicCode,
+		&i.Status,
+		&i.Country,
+		&i.City,
+		&i.EducationLevel,
+		&i.WeeklyHours,
+		&i.MpesaPhone,
+		&i.MpesaPhoneConfirmedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setContributorStatus = `-- name: SetContributorStatus :execrows
+UPDATE contributor_profiles SET status = $1 WHERE id = $2 AND status = $3
+`
+
+type SetContributorStatusParams struct {
+	ToStatus   string
+	ID         uuid.UUID
+	FromStatus string
+}
+
+// Moves only from the expected status, so two racing changes cannot both win.
+func (q *Queries) SetContributorStatus(ctx context.Context, arg SetContributorStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setContributorStatus, arg.ToStatus, arg.ID, arg.FromStatus)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserDisplayName = `-- name: SetUserDisplayName :exec
+UPDATE users SET display_name = $1 WHERE id = $2
+`
+
+type SetUserDisplayNameParams struct {
+	DisplayName string
+	ID          uuid.UUID
+}
+
+func (q *Queries) SetUserDisplayName(ctx context.Context, arg SetUserDisplayNameParams) error {
+	_, err := q.db.Exec(ctx, setUserDisplayName, arg.DisplayName, arg.ID)
+	return err
+}
+
+const updateContributorProfile = `-- name: UpdateContributorProfile :exec
+UPDATE contributor_profiles SET
+  country = $1, city = $2, education_level = $3, weekly_hours = $4,
+  mpesa_phone = $5, mpesa_phone_confirmed_at = $6
+WHERE id = $7
+`
+
+type UpdateContributorProfileParams struct {
+	Country               *string
+	City                  *string
+	EducationLevel        *string
+	WeeklyHours           *int16
+	MpesaPhone            *string
+	MpesaPhoneConfirmedAt *time.Time
+	ID                    uuid.UUID
+}
+
+func (q *Queries) UpdateContributorProfile(ctx context.Context, arg UpdateContributorProfileParams) error {
+	_, err := q.db.Exec(ctx, updateContributorProfile,
+		arg.Country,
+		arg.City,
+		arg.EducationLevel,
+		arg.WeeklyHours,
+		arg.MpesaPhone,
+		arg.MpesaPhoneConfirmedAt,
+		arg.ID,
+	)
+	return err
 }
