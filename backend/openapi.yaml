@@ -453,6 +453,357 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "500": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+  /v1/contributors/signup:
+    post:
+      operationId: contributorSignUp
+      summary: Contributor self sign-up (brief 6.2, AC-04).
+      description: >-
+        Creates an unverified contributor in status `applied`, stores consent to the current
+        privacy notice and contributor terms (version, time and IP), and emails a verification
+        link. A registered email gets the same 202 and nothing changes (an unverified
+        contributor gets a fresh link). Limits: 10 an hour per IP, 5 an hour per address.
+      tags: [contributors]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, display_name, password, consents]
+              properties:
+                email: { type: string, format: email }
+                display_name: { type: string, minLength: 1, maxLength: 120 }
+                password: { type: string, minLength: 12 }
+                consents:
+                  type: object
+                  description: Document key → accepted version. Must hold the current version of `privacy_notice` and `contributor_terms`.
+                  additionalProperties: { type: string }
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { description: "`consent_required`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/WeakPassword" }
+        "429": { $ref: "#/components/responses/TooMany" }
+  /v1/me/contributor:
+    get:
+      operationId: getMyContributorProfile
+      summary: The caller's contributor profile (`profile.manage`). Staff get 403 `not_a_contributor`.
+      tags: [contributors]
+      responses:
+        "200": { description: Profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/me/contributor/profile:
+    put:
+      operationId: updateMyContributorProfile
+      summary: Replace the caller's profile. A complete `applied` profile moves to `qualifying`.
+      description: >-
+        Languages and domains are replaced as sets. Leave both M-Pesa fields empty to keep
+        the stored number; a new number must be entered twice and is stored in E.164. Removed
+        contributors get 403 `not_eligible`.
+      tags: [contributors]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContributorProfileInput" }
+      responses:
+        "200": { description: Updated profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/contributor/consents:
+    post:
+      operationId: acceptConsents
+      summary: Accept the current version of legal documents (asked again after a version change).
+      tags: [contributors]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consents]
+              properties:
+                consents: { type: object, additionalProperties: { type: string } }
+      responses:
+        "200": { description: Updated profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
+        "409": { description: "`consent_required`: a version is not current (reload the document)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/qualification/tests:
+    get:
+      operationId: listMyQualificationTests
+      summary: Active tests with the caller's state on each (`qualification.take`).
+      tags: [qualification]
+      responses:
+        "200":
+          description: Tests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tests]
+                properties:
+                  tests: { type: array, items: { $ref: "#/components/schemas/MyQualificationTest" } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/me/qualification/tests/{id}/attempts:
+    post:
+      operationId: startQualificationAttempt
+      summary: Start an attempt, or get the one already in progress.
+      description: >-
+        409 codes: `profile_incomplete` (status applied), `consent_required`,
+        `already_qualified`, `retake_too_soon` (7 days after a rejection), `test_unavailable`,
+        `attempt_closed` (submitted, waiting for Ops). 403 `not_eligible` when paused or removed.
+      tags: [qualification]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Attempt, content: { application/json: { schema: { $ref: "#/components/schemas/QualificationAttempt" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/me/qualification/attempts/{id}:
+    get:
+      operationId: getMyQualificationAttempt
+      summary: One of the caller's attempts. Expected answers are never included.
+      tags: [qualification]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Attempt, content: { application/json: { schema: { $ref: "#/components/schemas/QualificationAttempt" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/me/qualification/attempts/{id}/answers:
+    put:
+      operationId: saveQualificationAnswers
+      summary: Autosave draft answers on an open attempt (not validated beyond belonging to the test).
+      tags: [qualification]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AnswersRequest" } } }
+      responses:
+        "204": { description: Saved }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "`attempt_closed`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/qualification/attempts/{id}/submit:
+    post:
+      operationId: submitQualificationAttempt
+      summary: Score the attempt and send it to the Ops queue.
+      description: >-
+        Uses `answers` when given, otherwise the saved draft. Every question needs a valid
+        answer (422 names the first that does not). Submitting an attempt that is already
+        scored returns it unchanged, so a retry cannot score twice.
+      tags: [qualification]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AnswersRequest" } } }
+      responses:
+        "200": { description: Scored attempt, content: { application/json: { schema: { $ref: "#/components/schemas/QualificationAttempt" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/contributors:
+    get:
+      operationId: listContributors
+      summary: Contributors, newest first (`contributor.approve` or `contributor.pause`). Phone numbers masked.
+      tags: [contributors]
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ContributorStatus" } }
+      responses:
+        "200":
+          description: Contributors
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contributors]
+                properties:
+                  contributors: { type: array, items: { $ref: "#/components/schemas/ContributorSummary" } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/contributors/{id}:
+    get:
+      operationId: getContributor
+      summary: A contributor's profile, status history and attempts.
+      tags: [contributors]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: Contributor
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profile, history, attempts]
+                properties:
+                  profile: { $ref: "#/components/schemas/ContributorProfile" }
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      required: [from, to, reason, changed_by, at]
+                      properties:
+                        from: { type: [string, "null"] }
+                        to: { type: string }
+                        reason: { type: string }
+                        changed_by: { type: [string, "null"], description: Display name; null for the system }
+                        at: { type: string, format: date-time }
+                  attempts: { type: array, items: { $ref: "#/components/schemas/AttemptSummary" } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/contributors/{id}/status:
+    post:
+      operationId: setContributorStatus
+      summary: Pause, reinstate or remove a contributor (`contributor.pause`).
+      description: >-
+        Allowed: active → paused, paused → active, any status except removed → removed.
+        Anything else is 409 `illegal_transition` (activation comes only from an approved
+        attempt). Removing signs the contributor out everywhere. The reason is audited.
+      tags: [contributors]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: { $ref: "#/components/schemas/ContributorStatus" }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200": { description: Updated profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/qualification/attempts:
+    get:
+      operationId: listQualificationAttempts
+      summary: Attempts in one status, oldest first (`contributor.approve`). Default `scored` is the Ops queue.
+      tags: [qualification]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [scored, approved, rejected] } }
+      responses:
+        "200":
+          description: Attempts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attempts]
+                properties:
+                  attempts: { type: array, items: { $ref: "#/components/schemas/AttemptSummary" } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/qualification/attempts/{id}:
+    get:
+      operationId: reviewQualificationAttempt
+      summary: An attempt with expected answers and per-question results, for Ops.
+      tags: [qualification]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Attempt, content: { application/json: { schema: { $ref: "#/components/schemas/AttemptReview" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/qualification/attempts/{id}/decision:
+    post:
+      operationId: decideQualificationAttempt
+      summary: Approve or reject a scored attempt (`contributor.approve`).
+      description: >-
+        Only a passed attempt can be approved (409 `not_passed`); approving moves a qualifying
+        contributor to active. A rejection needs a note, which the contributor sees. A second
+        decision is 409 `attempt_closed`.
+      tags: [qualification]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+                note: { type: string, maxLength: 1000 }
+      responses:
+        "200": { description: Decided attempt, content: { application/json: { schema: { $ref: "#/components/schemas/AttemptReview" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/qualification/tests:
+    get:
+      operationId: listQualificationTests
+      summary: Every qualification test (`contributor.approve` or `gold.manage`).
+      tags: [qualification]
+      responses:
+        "200":
+          description: Tests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tests]
+                properties:
+                  tests: { type: array, items: { $ref: "#/components/schemas/QualificationTest" } }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createQualificationTest
+      summary: Create a draft test by copying active gold items from a project (`gold.manage`).
+      description: >-
+        Copies up to `question_count` random active gold items (content, expected answer,
+        tolerance) and the project's labels or rubric, then retires those gold items in the
+        project, because applicants will have seen them (D-063). `content_shareable` must be
+        true: the copied content is shown to people not yet vetted. 409 `no_gold` when the
+        project has none left.
+      tags: [qualification]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, skill_kind, skill_value, pass_threshold, project_id, question_count, content_shareable]
+              properties:
+                title: { type: string, maxLength: 200 }
+                skill_kind: { type: string, enum: [language, domain, task_type] }
+                skill_value: { type: string, description: "BCP 47 code, domain or task type" }
+                pass_threshold: { type: number, exclusiveMinimum: 0, maximum: 1 }
+                instructions_md: { type: string, maxLength: 20000 }
+                project_id: { type: string, format: uuid }
+                question_count: { type: integer, minimum: 1, maximum: 50 }
+                content_shareable: { type: boolean, const: true }
+      responses:
+        "201": { description: Draft test, content: { application/json: { schema: { $ref: "#/components/schemas/QualificationTest" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/qualification/tests/{id}/status:
+    post:
+      operationId: setQualificationTestStatus
+      summary: Open (`active`) or close (`retired`) a test (`gold.manage`). Past results are kept.
+      tags: [qualification]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, retired] }
+      responses:
+        "204": { description: Changed }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     session:
@@ -509,6 +860,17 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    InvalidField:
+      description: "`invalid_input` with the first invalid `field` and a `message` safe to show"
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, field, message]
+            properties:
+              error: { type: string, enum: [invalid_input] }
+              field: { type: string }
+              message: { type: string }
     TooMany:
       description: Rate limited (`too_many_requests`)
       headers:
@@ -637,3 +999,218 @@ components:
         source: { type: string, minLength: 1 }
         source_url: { type: [string, "null"] }
         verified_at: { type: string, format: date-time }
+    ContributorStatus:
+      type: string
+      enum: [applied, qualifying, active, paused, removed]
+    Language:
+      type: object
+      required: [language, proficiency, dialects]
+      properties:
+        language: { type: string, description: "BCP 47, for example sw or sw-KE" }
+        proficiency: { type: string, enum: [native, fluent, working] }
+        dialects: { type: array, maxItems: 5, items: { type: string, maxLength: 40 } }
+    ContributorProfile:
+      type: object
+      required: [id, public_code, status, email, display_name, country, city, education_level, weekly_hours,
+        mpesa_phone_masked, mpesa_phone_confirmed, languages, domains, missing, consents, consent_required, qualifications, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        public_code: { type: string, description: "C-0001; the only identifier clients ever see" }
+        status: { $ref: "#/components/schemas/ContributorStatus" }
+        email: { type: string }
+        display_name: { type: string }
+        country: { type: [string, "null"], description: ISO 3166-1 alpha-2 }
+        city: { type: [string, "null"] }
+        education_level: { type: [string, "null"], enum: [secondary, certificate, diploma, bachelor, master, doctorate, other, null] }
+        weekly_hours: { type: [integer, "null"] }
+        mpesa_phone_masked: { type: string, description: "+254 7•• ••• 678; empty when none. The full number is never returned." }
+        mpesa_phone_confirmed: { type: boolean }
+        languages: { type: array, items: { $ref: "#/components/schemas/Language" } }
+        domains: { type: array, items: { type: string, enum: [health, law, finance, education, software, agriculture, other] } }
+        missing: { type: array, items: { type: string }, description: Fields still needed before the contributor can qualify }
+        consents:
+          type: array
+          items:
+            type: object
+            required: [document, version, accepted_at]
+            properties:
+              document: { type: string }
+              version: { type: string }
+              accepted_at: { type: string, format: date-time }
+        consent_required: { type: array, items: { type: string }, description: Documents whose current version is not yet accepted }
+        qualifications:
+          type: array
+          items:
+            type: object
+            required: [test_id, title, skill_kind, skill_value, approved_at]
+            properties:
+              test_id: { type: string, format: uuid }
+              title: { type: string }
+              skill_kind: { type: string }
+              skill_value: { type: string }
+              approved_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    ContributorProfileInput:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        country: { type: [string, "null"] }
+        city: { type: [string, "null"], maxLength: 100 }
+        education_level: { type: [string, "null"] }
+        weekly_hours: { type: [integer, "null"], minimum: 0, maximum: 80 }
+        languages: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/Language" } }
+        domains: { type: array, items: { type: string } }
+        mpesa_phone: { type: string, description: "07XXXXXXXX, 01XXXXXXXX, 254… or +254…" }
+        mpesa_phone_confirm: { type: string, description: Must match mpesa_phone }
+    ContributorSummary:
+      type: object
+      required: [id, public_code, status, display_name, email, country, languages, mpesa_phone_masked, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        public_code: { type: string }
+        status: { $ref: "#/components/schemas/ContributorStatus" }
+        display_name: { type: string }
+        email: { type: string }
+        country: { type: [string, "null"] }
+        languages: { type: array, items: { type: string } }
+        mpesa_phone_masked: { type: string }
+        created_at: { type: string, format: date-time }
+    TaskConfig:
+      type: object
+      description: Labels for classification, rubric criteria (scored 1 to 5) for pairwise.
+      properties:
+        labels: { type: array, items: { type: string } }
+        multi_label: { type: boolean }
+        criteria: { type: array, items: { type: string } }
+    Answer:
+      type: object
+      description: >-
+        Shape of the task template's submission schema. Classification: `labels` (optional
+        `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and
+        `scores_b` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and
+        `fluency` 1 to 5, `corrected`, optional `error_tags`.
+      additionalProperties: true
+    AnswersRequest:
+      type: object
+      properties:
+        answers:
+          type: object
+          description: Question ID → answer
+          additionalProperties: { $ref: "#/components/schemas/Answer" }
+    MyQualificationTest:
+      type: object
+      required: [id, title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, question_count,
+        state, attempt_id, score, decision_note, retake_after, can_start]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        skill_kind: { type: string, enum: [language, domain, task_type] }
+        skill_value: { type: string }
+        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        pass_threshold: { type: number }
+        instructions_md: { type: string }
+        question_count: { type: integer }
+        state: { type: string, enum: [available, in_progress, awaiting_review, qualified, not_passed] }
+        attempt_id: { type: [string, "null"], format: uuid }
+        score: { type: [number, "null"] }
+        decision_note: { type: [string, "null"] }
+        retake_after: { type: [string, "null"], format: date-time }
+        can_start: { type: boolean }
+    QualificationAttempt:
+      type: object
+      required: [id, status, test_id, title, task_type, config, instructions_md, pass_threshold, questions, answers,
+        score, passed, started_at, submitted_at, decision_note, decided_at]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [in_progress, scored, approved, rejected] }
+        test_id: { type: string, format: uuid }
+        title: { type: string }
+        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        config: { $ref: "#/components/schemas/TaskConfig" }
+        instructions_md: { type: string }
+        pass_threshold: { type: number }
+        questions:
+          type: array
+          items:
+            type: object
+            required: [id, position, content]
+            properties:
+              id: { type: string, format: uuid }
+              position: { type: integer }
+              content: { type: object, description: Item content in the task template's import shape }
+        answers: { type: object, additionalProperties: { $ref: "#/components/schemas/Answer" } }
+        score: { type: [number, "null"], description: "Share correct, after submission" }
+        passed: { type: [boolean, "null"] }
+        started_at: { type: string, format: date-time }
+        submitted_at: { type: [string, "null"], format: date-time }
+        decision_note: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+    AttemptSummary:
+      type: object
+      required: [id, status, score, passed, submitted_at, decided_at, decision_note, test_id, test_title, pass_threshold,
+        skill_kind, skill_value, contributor_id, public_code, contributor_status, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        score: { type: [number, "null"] }
+        passed: { type: [boolean, "null"] }
+        submitted_at: { type: [string, "null"], format: date-time }
+        decided_at: { type: [string, "null"], format: date-time }
+        decision_note: { type: [string, "null"] }
+        test_id: { type: string, format: uuid }
+        test_title: { type: string }
+        pass_threshold: { type: number }
+        skill_kind: { type: string }
+        skill_value: { type: string }
+        contributor_id: { type: string, format: uuid }
+        public_code: { type: string }
+        contributor_status: { $ref: "#/components/schemas/ContributorStatus" }
+        display_name: { type: string }
+    AttemptReview:
+      type: object
+      required: [id, status, score, passed, submitted_at, decided_at, decision_note, test_id, test_title, task_type,
+        config, pass_threshold, contributor, questions]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        score: { type: [number, "null"] }
+        passed: { type: [boolean, "null"] }
+        submitted_at: { type: [string, "null"], format: date-time }
+        decided_at: { type: [string, "null"], format: date-time }
+        decision_note: { type: [string, "null"] }
+        test_id: { type: string, format: uuid }
+        test_title: { type: string }
+        task_type: { type: string }
+        config: { $ref: "#/components/schemas/TaskConfig" }
+        pass_threshold: { type: number }
+        contributor: { $ref: "#/components/schemas/ContributorSummary" }
+        questions:
+          type: array
+          items:
+            type: object
+            required: [id, position, content, expected, answer, correct]
+            properties:
+              id: { type: string, format: uuid }
+              position: { type: integer }
+              content: { type: object }
+              expected: { $ref: "#/components/schemas/Answer" }
+              answer: { oneOf: [{ $ref: "#/components/schemas/Answer" }, { type: "null" }] }
+              correct: { type: [boolean, "null"] }
+    QualificationTest:
+      type: object
+      required: [id, title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, status, config,
+        source_project_id, question_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        skill_kind: { type: string }
+        skill_value: { type: string }
+        task_type: { type: string }
+        pass_threshold: { type: number }
+        instructions_md: { type: string }
+        status: { type: string, enum: [draft, active, retired] }
+        config: { $ref: "#/components/schemas/TaskConfig" }
+        source_project_id: { type: [string, "null"], format: uuid }
+        question_count: { type: integer }
+        created_at: { type: string, format: date-time }

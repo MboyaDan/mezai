@@ -137,7 +137,7 @@ func (s *seeder) run() error {
 			return fmt.Errorf("project %q: %w", p.name, err)
 		}
 	}
-	return s.qualificationTests()
+	return s.qualificationTests(labels, rubric, trRubric)
 }
 
 func (s *seeder) user(email, name, role string, org *uuid.UUID) (uuid.UUID, error) {
@@ -274,19 +274,20 @@ func (s *seeder) project(org, admin uuid.UUID, name, taskType, status string, co
 	return nil
 }
 
-func (s *seeder) qualificationTests() error {
+func (s *seeder) qualificationTests(labels, rubric, trRubric map[string]any) error {
 	tests := []struct {
 		title, skillKind, skillVal, taskType string
+		config                               map[string]any
 		items                                []sampleItem
 	}{
-		{"Swahili message routing test (Sample)", "language", "sw", "classification", classificationItems[:4]},
-		{"Response comparison test (Sample)", "task_type", "pairwise", "pairwise", pairwiseItems[:2]},
-		{"English to Swahili review test (Sample)", "language", "sw", "translation_review", translationItems[:2]},
+		{"Swahili message routing test (Sample)", "language", "sw", "classification", labels, classificationItems[:4]},
+		{"Response comparison test (Sample)", "task_type", "pairwise", "pairwise", rubric, pairwiseItems[:2]},
+		{"English to Swahili review test (Sample)", "language", "sw", "translation_review", trRubric, translationItems[:2]},
 	}
 	for _, t := range tests {
 		qt, err := s.q.CreateQualificationTest(s.ctx, store.CreateQualificationTestParams{
 			Title: t.title, SkillKind: t.skillKind, SkillValue: t.skillVal, TaskType: t.taskType,
-			PassThreshold: 0.8, InstructionsMd: "Sample qualification test.", Status: "active",
+			PassThreshold: 0.8, InstructionsMd: "Sample qualification test.", Status: "active", Config: mustJSON(t.config),
 		})
 		if err != nil {
 			return err

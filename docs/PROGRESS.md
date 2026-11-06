@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 6b (contact, legal, errors, AC-03). Branch `stage-06b-contact-legal`, PR open. 6a merged as #21.
-- **Next stage:** 7: Contributor onboarding and qualification (sign-up, consent with the legal versions from `content/legal.ts`, profile, qualification tests, Ops approval). Confirm whether to split before starting.
+- **Last stage:** 7a (onboarding API). Branch `stage-07a-onboarding-api`, PR open. 6b merged as #22.
+- **Next stage:** 7b: onboarding UI (sign-in, sign-up with consent, verify email, contributor shell with profile and qualification test screens for the three task types, workspace approval queue and contributor list, generated API types from `openapi.yaml`, Playwright `join.spec.ts` for AC-04). Split agreed in D-064.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -45,7 +45,11 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Page motion | CSS in `frontend/app/globals.css` (hero, services, swaps), GSAP in `frontend/components/public/page-motion.tsx` (home, services, quality) |
 | Photo brief for Dan | `docs/content/PHOTO-BRIEF.md`, credits in `docs/content/image-credits.md` |
 | Lighthouse record | `docs/screenshots/stage-05b/lighthouse.md` |
-| API contract | `backend/openapi.yaml` |
+| API contract | `backend/openapi.yaml` (`TestOpenAPICoversRoutes` keeps it in step with the router) |
+| Contributor onboarding (profile, consent, qualification, Ops queue, status machine) | `backend/internal/contributors/`, handlers in `backend/internal/httpapi/contributors.go`, sign-up in `backend/internal/auth/signup.go` |
+| Answer checking (qualification now, gold in Stage 10) | `backend/internal/quality/answer.go` |
+| Legal document versions the API accepts | `backend/internal/legal/legal.go` (kept equal to `frontend/content/legal.ts` by `content/legal.test.ts`) |
+| Phone normalising and masking | `backend/internal/pii/phone.go` |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
 ## Stage log
@@ -65,7 +69,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 5c | Merged | #20 | Photo spread in frame 4 (D-053), photo pipeline with originals out of git (A-028), axe waits for animations. Commits pushed to the 5b branch after #19 merged, carried over unchanged. |
 | 6a | Merged | #21 | Services (sticky index, language table per A-029), Quality (six steps with live gold, overlap, kappa and routing diagrams, trust score, security), Industries, Contributors, About, case studies index and template (D-056). Four new photo crops. |
 
-| 6b | PR open | (see PR list) | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
+| 6b | Merged | #22 | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
+| 7a | PR open | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
 
 ## Notes for the next session
 
@@ -77,6 +82,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Components take semantic colours (`text-fg`, `bg-surface`, `border-border`...), never raw palette names, so they work on both themes. Put `data-theme="dark"` on dark bands.
 - SignalLattice fills its container width; size it with a wrapper div.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
+- Contributor endpoints call `contributorOf(p)`: Super Admin holds every permission but has no contributor profile.
+- Qualification answers use the task templates' submission shapes; reuse `quality.Parse` and `quality.Matches` for gold in Stages 9 and 10.
 - New tables: grant `mezai_app` privileges in the same migration (no default privileges), add RLS if the table has `org_id` (a test enforces it), and revoke UPDATE/DELETE if append-only.
 - Wrap SQL functions and DO blocks in `-- +goose StatementBegin/End`.
 - New /v1 routes go through `api.handle(method, path, Access, handlers...)` in `router.go` with `Public()`, `SignedIn()` or `Perm("key", ...)` (any of), and must be added to `expectedAccess` in `authz_matrix_test.go`. Database work in handlers: `pool.InScope(ctx, PrincipalFrom(c).Scope(), ...)`, and write an `auth.Audit` entry in the same transaction for every change.

@@ -109,7 +109,7 @@ func (s *Service) ResetPassword(ctx context.Context, token, plain string, m Meta
 }
 
 // SendVerification emails a verification link to an unverified active user.
-// Contributor sign-up (Stage 7) calls it; the resend endpoint does too.
+// The resend endpoint calls it; contributor sign-up uses the same email.
 func (s *Service) SendVerification(ctx context.Context, email string, m Meta) error {
 	return s.pool.InScope(ctx, db.System(), func(tx pgx.Tx) error {
 		q := store.New(tx)
@@ -120,13 +120,17 @@ func (s *Service) SendVerification(ctx context.Context, email string, m Meta) er
 		if err != nil {
 			return err
 		}
-		token, hash := newToken()
-		if err := q.CreateEmailVerification(ctx, store.CreateEmailVerificationParams{UserID: u.ID, TokenHash: hash, ExpiresAt: time.Now().Add(verifyTTL)}); err != nil {
-			return err
-		}
-		return mail.Enqueue(ctx, q, u.Email, mail.TemplateVerifyEmail, map[string]string{
-			"Name": u.DisplayName, "Link": s.link("/verify-email", token),
-		})
+		return s.enqueueVerification(ctx, q, u.ID, u.Email, u.DisplayName)
+	})
+}
+
+func (s *Service) enqueueVerification(ctx context.Context, q *store.Queries, userID uuid.UUID, email, name string) error {
+	token, hash := newToken()
+	if err := q.CreateEmailVerification(ctx, store.CreateEmailVerificationParams{UserID: userID, TokenHash: hash, ExpiresAt: time.Now().Add(verifyTTL)}); err != nil {
+		return err
+	}
+	return mail.Enqueue(ctx, q, email, mail.TemplateVerifyEmail, map[string]string{
+		"Name": name, "Link": s.link("/verify-email", token),
 	})
 }
 

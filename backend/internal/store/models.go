@@ -504,6 +504,7 @@ type QualificationAttempt struct {
 	DecisionNote  *string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	Results       []byte
 }
 
 type QualificationQuestion struct {
@@ -518,16 +519,19 @@ type QualificationQuestion struct {
 }
 
 type QualificationTest struct {
-	ID             uuid.UUID
-	Title          string
-	SkillKind      string
-	SkillValue     string
-	TaskType       string
-	PassThreshold  float64
-	InstructionsMd string
-	Status         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID              uuid.UUID
+	Title           string
+	SkillKind       string
+	SkillValue      string
+	TaskType        string
+	PassThreshold   float64
+	InstructionsMd  string
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Config          []byte
+	SourceProjectID *uuid.UUID
+	CreatedBy       *uuid.UUID
 }
 
 type Review struct {
