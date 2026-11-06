@@ -77,7 +77,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 | 6b | Merged | #22 | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
 | 7a | Merged | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
-| 7b | PR open | (see PR list) | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
+| 7b | PR open | #24 | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
 
 ## Notes for the next session
 
