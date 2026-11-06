@@ -77,7 +77,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 | 6b | Merged | #22 | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
 | 7a | Merged | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
-| 7b | PR open | #24 | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
+| 7b | Merged | #24 | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
+| 8a | PR open | (link after push) | Migration 00010 (project QA checks, import digests, `project_requests` with RLS). 21 endpoints: organisations, task templates, projects (create, edit, lifecycle with readiness), CSV/JSONL import dry run and all-or-nothing commit, gold list/add/retire, client project requests with sample file, convert and decline. Object storage put/get. AC-05 API tests. Plan: auto QA checks (D-077, Stage 9) and one-account checks (D-078, new Stage 7c). |
 
 ## Notes for the next session
 
@@ -106,3 +107,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Demonstrations and worked examples carry `data-demo`; the honesty tests require a visible "Demonstration" or "Worked example" label in each.
 - New public pages: also covered automatically by `honesty.spec.ts` if added to `publicRoutes` in `lib/site.ts`.
 - Docker Desktop did not start during 6b; Go tests against PostgreSQL ran only in CI for that stage.
+- Projects: `internal/projects` (service) and `internal/imports` (pure file checks). Task-type rules (config, item fields, gold answers, QA checks) live in `internal/quality/content.go`; add a task type there first.
+- Uploads go through `storage.Blobs` (`AuthDeps.Files`); tests use `storage.NewMemory()` via `newEnv`, and `e.files.Corrupt` simulates a changed file. `S3_TEST_ENDPOINT=http://localhost:8333 make test` also round-trips real SeaweedFS.
+- Multipart endpoints in tests: `e.multipart(path, fields, fileField, fileName, content, session)`; `e.upload(...)` for imports.
+- Stage 8b screens: projects list and detail, create/edit form (config editor per task type, QA checks, skills), import wizard (upload → report → commit), gold page with "Make a qualification test" (D-073), requests inbox (Ops) and request form and list (Client Admin).
