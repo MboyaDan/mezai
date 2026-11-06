@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, type ReactNode } from "react";
-import { LayoutGrid, Users } from "lucide-react";
+import { Building2, FolderKanban, Inbox, LayoutGrid, Users } from "lucide-react";
 import { initialsOf, SignOutButton } from "@/components/shells/account-menu";
 import { WorkspaceShell, type WorkspaceNavItem } from "@/components/shells/workspace-shell";
 import { brand } from "@/lib/brand";
@@ -18,11 +18,24 @@ export function useCan() {
 const items: Array<WorkspaceNavItem & { perms?: string[] }> = [
   { href: "/w", label: "Overview", icon: LayoutGrid, exact: true },
   {
+    href: "/w/projects",
+    label: "Projects",
+    icon: FolderKanban,
+    perms: ["project.manage", "item.import", "gold.manage", "org.project.read"],
+  },
+  {
+    href: "/w/requests",
+    label: "Requests",
+    icon: Inbox,
+    perms: ["project.manage", "org.project.request", "org.project.read"],
+  },
+  {
     href: "/w/contributors",
     label: "Contributors",
     icon: Users,
     perms: ["contributor.approve", "contributor.pause"],
   },
+  { href: "/w/organisations", label: "Organisations", icon: Building2, perms: ["org.manage"] },
 ];
 
 function Shell({ children }: { children: ReactNode }) {
