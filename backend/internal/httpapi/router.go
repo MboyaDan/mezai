@@ -32,6 +32,7 @@ type AuthDeps struct {
 	AppOrigin      string
 	CookieSecure   bool
 	TrustedProxies []string
+	Enquiry        EnquiryDeps
 }
 
 // RouteRule is one /v1 route and the access rule it declared.
@@ -110,6 +111,10 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPut, "/roles/:key/permissions", Perm("role.manage"), ah.setRolePermissions)
 
 		a.handle(http.MethodGet, "/stats", Public(), listStats(d.Auth.Pool, d.Log))
+
+		// Public project enquiries: honeypot, per-IP and per-address limits, Turnstile when configured.
+		eh := &enquiryHandlers{pool: d.Auth.Pool, log: d.Log, deps: d.Auth.Enquiry, perEmail: newLimiter(3, 24*time.Hour)}
+		a.handle(http.MethodPost, "/enquiries", Public(), rateLimit(newLimiter(5, time.Hour)), eh.create)
 		rules = a.rules
 	}
 

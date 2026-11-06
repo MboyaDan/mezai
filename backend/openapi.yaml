@@ -407,6 +407,52 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/PublicStat" }
         "500": { $ref: "#/components/responses/Error" }
+  /v1/enquiries:
+    post:
+      operationId: createEnquiry
+      summary: Submit a project enquiry from the public contact form.
+      description: >-
+        Saved with status `new`, emailed to the ops inbox (ENQUIRY_NOTIFY_TO) and audited
+        without personal details. A filled honeypot (`website`) gets the same 202 and stores
+        nothing. Limits: 5 an hour per IP, 3 a day per email address. When TURNSTILE_SECRET_KEY
+        is set (DG-07), `turnstile_token` is required and checked with Cloudflare; if the check
+        cannot run, the request fails closed with 503. Cross-origin requests are refused.
+      tags: [public]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnquiryRequest" }
+      responses:
+        "202":
+          description: Received (also returned for honeypot hits)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [received] }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422":
+          description: >-
+            `invalid_enquiry` with a code per field (`required`, `too_long`, `invalid`),
+            or `challenge_failed` when the Turnstile token is missing or wrong.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: { type: string, enum: [invalid_enquiry, challenge_failed] }
+                  fields:
+                    type: object
+                    additionalProperties: { type: string, enum: [required, too_long, invalid] }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     session:
@@ -566,6 +612,20 @@ components:
         description: { type: string }
         scope: { type: string, enum: [platform, org] }
         permissions: { type: array, items: { type: string } }
+    EnquiryRequest:
+      type: object
+      required: [name, organisation, email, project_type]
+      properties:
+        name: { type: string, maxLength: 120 }
+        organisation: { type: string, maxLength: 200 }
+        email: { type: string, format: email, maxLength: 254 }
+        project_type: { type: string, enum: [ai-evaluation, african-language-data, data-annotation, expert-review, not-sure] }
+        languages: { type: string, maxLength: 200 }
+        volume: { type: string, enum: ["", under-1k, 1k-10k, 10k-100k, over-100k, not-sure] }
+        timeline: { type: string, enum: ["", 1-month, 1-3-month, later, exploring] }
+        message: { type: string, maxLength: 5000 }
+        website: { type: string, description: "Honeypot. Leave empty." }
+        turnstile_token: { type: string, description: "Cloudflare Turnstile response, when DG-07 is on." }
     PublicStat:
       type: object
       required: [key, label, value, unit, source, verified_at]

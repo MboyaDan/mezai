@@ -54,3 +54,14 @@ func TestProductionNeedsStorageKeys(t *testing.T) {
 		t.Fatalf("expected storage key error, got %v", err)
 	}
 }
+
+func TestEnquiryRecipient(t *testing.T) {
+	c, err := FromLookup(lookup(map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b"}))
+	if err != nil || c.EnquiryNotifyTo != "ops@mezai.invalid" || c.TurnstileSecret != "" {
+		t.Fatalf("development defaults: %q %q %v", c.EnquiryNotifyTo, c.TurnstileSecret, err)
+	}
+	_, err = FromLookup(lookup(map[string]string{"APP_ENV": EnvStaging, "DATABASE_URL": "postgres://x", "S3_BUCKET": "b"}))
+	if err == nil || !strings.Contains(err.Error(), "ENQUIRY_NOTIFY_TO") {
+		t.Fatalf("staging must name an enquiry recipient, got %v", err)
+	}
+}

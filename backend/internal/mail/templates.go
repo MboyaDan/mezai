@@ -14,6 +14,7 @@ const (
 	TemplateVerifyEmail   = "verify_email"
 	TemplatePasswordReset = "password_reset"
 	TemplateInvitation    = "invitation"
+	TemplateEnquiry       = "enquiry_received"
 )
 
 // Plain text for now; Stage 16 adds HTML versions and preferences.
@@ -51,6 +52,26 @@ To accept and set your password, open this link:
 {{.Link}}
 
 The invitation expires in 7 days.
+`,
+	},
+	// To the ops inbox (ENQUIRY_NOTIFY_TO). Reply goes to the enquirer by hand.
+	TemplateEnquiry: {
+		subject: "New project enquiry: {{.Organisation}}",
+		body: `A project enquiry arrived through the {{.Brand}} website.
+
+Name:          {{.Name}}
+Organisation:  {{.Organisation}}
+Email:         {{.Email}}
+Project type:  {{.ProjectType}}
+Languages:     {{.Languages}}
+Volume:        {{.Volume}}
+Timeline:      {{.Timeline}}
+
+Message:
+{{.Message}}
+
+Reference: {{.ID}}
+It is saved in the enquiries inbox with status "new".
 `,
 	},
 }

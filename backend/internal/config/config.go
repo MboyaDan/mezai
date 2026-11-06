@@ -55,6 +55,13 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	MailFrom     string
+
+	// EnquiryNotifyTo receives a copy of every project enquiry from the
+	// public site. Required outside development and test.
+	EnquiryNotifyTo string
+	// TurnstileSecret turns on Cloudflare Turnstile checks on public forms
+	// (DG-07). Empty leaves them off; the honeypot and rate limits still apply.
+	TurnstileSecret string
 }
 
 // IsDevLike reports whether the environment allows development-only tools such as the seed command.
@@ -92,9 +99,14 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		SMTPUsername:      get("SMTP_USERNAME", ""),
 		SMTPPassword:      get("SMTP_PASSWORD", ""),
 		MailFrom:          get("MAIL_FROM", ""),
+		EnquiryNotifyTo:   get("ENQUIRY_NOTIFY_TO", ""),
+		TurnstileSecret:   get("TURNSTILE_SECRET_KEY", ""),
 	}
 	if c.MailFrom == "" && c.IsDevLike() {
 		c.MailFrom = "MezAI <no-reply@mezai.invalid>"
+	}
+	if c.EnquiryNotifyTo == "" && c.IsDevLike() {
+		c.EnquiryNotifyTo = "ops@mezai.invalid"
 	}
 	for _, p := range strings.Split(get("TRUSTED_PROXIES", "127.0.0.1,::1"), ",") {
 		if p = strings.TrimSpace(p); p != "" {
@@ -142,6 +154,9 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		errs = append(errs, fmt.Errorf("APP_ORIGIN must start with http:// or https://, got %q", c.AppOrigin))
 	}
 
+	if _, err := mail.ParseAddress(c.EnquiryNotifyTo); err != nil {
+		errs = append(errs, errors.New("ENQUIRY_NOTIFY_TO must be an email address (required outside development and test)"))
+	}
 	if _, err := mail.ParseAddress(c.MailFrom); err != nil {
 		errs = append(errs, fmt.Errorf("MAIL_FROM must be an address such as \"MezAI <no-reply@example.com>\" (required outside development and test)"))
 	}
