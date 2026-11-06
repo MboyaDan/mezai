@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
+	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 )
 
@@ -115,6 +116,30 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		// Public project enquiries: honeypot, per-IP and per-address limits, Turnstile when configured.
 		eh := &enquiryHandlers{pool: d.Auth.Pool, log: d.Log, deps: d.Auth.Enquiry, perEmail: newLimiter(3, 24*time.Hour)}
 		a.handle(http.MethodPost, "/enquiries", Public(), rateLimit(newLimiter(5, time.Hour)), eh.create)
+
+		// Contributor onboarding (Stage 7). Sign-up is public and answers the
+		// same way for new and registered emails.
+		ch := &contributorHandlers{auth: d.Auth.Service, svc: contributors.NewService(d.Auth.Pool), log: d.Log, perEmail: newLimiter(5, time.Hour)}
+		a.handle(http.MethodPost, "/contributors/signup", Public(), rateLimit(newLimiter(10, time.Hour)), ch.signUp)
+		a.handle(http.MethodGet, "/me/contributor", Perm("profile.manage"), ch.myProfile)
+		a.handle(http.MethodPut, "/me/contributor/profile", Perm("profile.manage"), ch.updateMyProfile)
+		a.handle(http.MethodPost, "/me/contributor/consents", Perm("profile.manage"), ch.acceptConsents)
+		a.handle(http.MethodGet, "/me/qualification/tests", Perm("qualification.take"), ch.myTests)
+		a.handle(http.MethodPost, "/me/qualification/tests/:id/attempts", Perm("qualification.take"), ch.startAttempt)
+		a.handle(http.MethodGet, "/me/qualification/attempts/:id", Perm("qualification.take"), ch.myAttempt)
+		a.handle(http.MethodPut, "/me/qualification/attempts/:id/answers", Perm("qualification.take"), ch.saveAnswers)
+		a.handle(http.MethodPost, "/me/qualification/attempts/:id/submit", Perm("qualification.take"), ch.submitAttempt)
+
+		// Ops: contributors, the qualification queue and tests.
+		a.handle(http.MethodGet, "/contributors", Perm("contributor.approve", "contributor.pause"), ch.listContributors)
+		a.handle(http.MethodGet, "/contributors/:id", Perm("contributor.approve", "contributor.pause"), ch.getContributor)
+		a.handle(http.MethodPost, "/contributors/:id/status", Perm("contributor.pause"), ch.setContributorStatus)
+		a.handle(http.MethodGet, "/qualification/attempts", Perm("contributor.approve"), ch.listAttempts)
+		a.handle(http.MethodGet, "/qualification/attempts/:id", Perm("contributor.approve"), ch.reviewAttempt)
+		a.handle(http.MethodPost, "/qualification/attempts/:id/decision", Perm("contributor.approve"), ch.decideAttempt)
+		a.handle(http.MethodGet, "/qualification/tests", Perm("contributor.approve", "gold.manage"), ch.listTests)
+		a.handle(http.MethodPost, "/qualification/tests", Perm("gold.manage"), ch.createTest)
+		a.handle(http.MethodPost, "/qualification/tests/:id/status", Perm("gold.manage"), ch.setTestStatus)
 		rules = a.rules
 	}
 

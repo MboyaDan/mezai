@@ -19,7 +19,7 @@ var rolePermissions = map[string][]string{
 		"feedback.write", "deliverable.publish", "payout.create", "enquiry.manage"},
 	"payout_approver": {"payout.approve"},
 	"reviewer":        {"review.read", "review.decide", "feedback.write"},
-	"contributor":     {"task.submit", "qualification.take"},
+	"contributor":     {"task.submit", "qualification.take", "profile.manage"},
 	"client_admin":    {"org.project.read", "org.project.request", "org.deliverable.download", "org.user.invite"},
 	"client_viewer":   {"org.project.read", "org.deliverable.download"},
 }
@@ -47,6 +47,25 @@ var expectedAccess = map[string]string{
 	"PUT /v1/roles/:key/permissions":       "role.manage",
 	"GET /v1/stats":                        "public",
 	"POST /v1/enquiries":                   "public",
+
+	"POST /v1/contributors/signup":                  "public",
+	"GET /v1/me/contributor":                        "profile.manage",
+	"PUT /v1/me/contributor/profile":                "profile.manage",
+	"POST /v1/me/contributor/consents":              "profile.manage",
+	"GET /v1/me/qualification/tests":                "qualification.take",
+	"POST /v1/me/qualification/tests/:id/attempts":  "qualification.take",
+	"GET /v1/me/qualification/attempts/:id":         "qualification.take",
+	"PUT /v1/me/qualification/attempts/:id/answers": "qualification.take",
+	"POST /v1/me/qualification/attempts/:id/submit": "qualification.take",
+	"GET /v1/contributors":                          "contributor.approve|contributor.pause",
+	"GET /v1/contributors/:id":                      "contributor.approve|contributor.pause",
+	"POST /v1/contributors/:id/status":              "contributor.pause",
+	"GET /v1/qualification/attempts":                "contributor.approve",
+	"GET /v1/qualification/attempts/:id":            "contributor.approve",
+	"POST /v1/qualification/attempts/:id/decision":  "contributor.approve",
+	"GET /v1/qualification/tests":                   "contributor.approve|gold.manage",
+	"POST /v1/qualification/tests":                  "gold.manage",
+	"POST /v1/qualification/tests/:id/status":       "gold.manage",
 }
 
 var roleUser = map[string]string{
