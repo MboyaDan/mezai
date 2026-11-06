@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 6a (content pages). Branch `stage-06a-content-pages`, PR open. 5c merged as #20.
-- **Next stage:** 6b: Contact and enquiry form (DB, email to ops, honeypot, rate limit; Turnstile behind DG-07), legal pages, 404 and 500, site-wide AC-03 honesty test (D-054).
+- **Last stage:** 6b (contact, legal, errors, AC-03). Branch `stage-06b-contact-legal`, PR open. 6a merged as #21.
+- **Next stage:** 7: Contributor onboarding and qualification (sign-up, consent with the legal versions from `content/legal.ts`, profile, qualification tests, Ops approval). Confirm whether to split before starting.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -33,6 +33,11 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Email templates and outbox worker | `backend/internal/mail/` (mailpit UI at http://localhost:8025) |
 | Home page sections and copy | `frontend/components/home/`, `frontend/content/home.ts` |
 | Inner public pages | `frontend/app/(public)/{services,quality,industries,contributors,about,case-studies}/`, copy in `frontend/content/*.ts` |
+| Enquiry endpoint (validation, honeypot, limits, Turnstile) | `backend/internal/httpapi/enquiries.go`; ops email template in `internal/mail/templates.go` |
+| Contact page, form and client checks | `frontend/app/(public)/contact/`, `components/contact/`, `lib/enquiry.ts`, copy and choices in `content/contact.ts` |
+| Legal documents (versioned drafts) | `frontend/content/legal.ts`, `components/legal/legal-document.tsx`, one route per document in `app/(public)/legal/` |
+| 404 and 500 | `frontend/app/not-found.tsx`, `app/(public)/error.tsx`, `app/global-error.tsx`, `components/public/error-screen.tsx` |
+| AC-03 honesty tests | `frontend/content/honesty.test.ts` (source), `tests/e2e/honesty.spec.ts` (rendered) |
 | Shared public pieces (Container, PageHeader, CtaBand, IllustrativePhoto, PageMotion) | `frontend/components/public/` |
 | Quality page live diagrams, kappa helper | `frontend/components/quality/diagrams.tsx`, `frontend/lib/kappa.ts` |
 | Stats (API, fallback, filter) | `backend/internal/httpapi/stats.go`, `frontend/lib/stats.ts`, `frontend/content/stats.ts` |
@@ -58,7 +63,9 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 5a | Merged | #18 | Home frames 1 to 8 (static, reduced-motion form), public stats endpoint, cached stats with fallback, metadata, OG image, sitemap, robots. Fixed animation-delay under reduced motion. |
 | 5b | Merged | #19 | CSS hero and hover motion, lazy GSAP scroll stories, demo autoplay with pause, Motion moved off public pages (JS 186 → 156 KB first load), Lighthouse mobile 93/100/96, photo brief. |
 | 5c | Merged | #20 | Photo spread in frame 4 (D-053), photo pipeline with originals out of git (A-028), axe waits for animations. Commits pushed to the 5b branch after #19 merged, carried over unchanged. |
-| 6a | PR open | (see PR list) | Services (sticky index, language table per A-029), Quality (six steps with live gold, overlap, kappa and routing diagrams, trust score, security), Industries, Contributors, About, case studies index and template (D-056). Four new photo crops. |
+| 6a | Merged | #21 | Services (sticky index, language table per A-029), Quality (six steps with live gold, overlap, kappa and routing diagrams, trust score, security), Industries, Contributors, About, case studies index and template (D-056). Four new photo crops. |
+
+| 6b | PR open | (see PR list) | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
 
 ## Notes for the next session
 
@@ -80,3 +87,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - New public pages: add to `pages` in `tests/e2e/pages.spec.ts` (axe, overflow, sourced stats).
 - Agreement is always number plus band: use `<Agreement>` or `agreementBand()` from `lib/agreement.ts`. The quality engine (Stage 10) computes kappa; the UI only displays it.
 - Run Playwright against a production build with `ENABLE_DESIGN_PAGE=1 npm run build` then `CI=1 npx playwright test`.
+- Legal versions: `legalBySlug("privacy").version` etc. Stage 7 stores the accepted version with the consent; raise `version` and `updated` whenever the text changes, and set `approved: true` only after DG-05.
+- Demonstrations and worked examples carry `data-demo`; the honesty tests require a visible "Demonstration" or "Worked example" label in each.
+- New public pages: also covered automatically by `honesty.spec.ts` if added to `publicRoutes` in `lib/site.ts`.
+- Docker Desktop did not start during 6b; Go tests against PostgreSQL ran only in CI for that stage.

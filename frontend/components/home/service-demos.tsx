@@ -6,7 +6,7 @@ import type { ServiceKey } from "@/content/home";
 
 function Frame({ kind, children }: { kind: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-card border border-border bg-surface p-4 text-sm">
+    <div data-demo className="rounded-card border border-border bg-surface p-4 text-sm">
       <div className="mb-3 flex justify-between font-mono text-[0.625rem] tracking-wider text-fg-muted uppercase">
         <span>{kind}</span>
         <span>Demonstration</span>

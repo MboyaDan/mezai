@@ -35,3 +35,6 @@ Defaults in use until Dan answers. When an answer arrives, move it to `DECISIONS
 | A-029 | 2026-11-05 | Language table | English, Kiswahili and code-switched Kiswahili and English shown as available (code-switching mixes the two confirmed languages, as the home page already says); other African languages "on request". Sheng is not listed separately | Open |
 | A-030 | 2026-11-05 | Links to pages not built yet (`/contact`, `/legal/*` in 6b; `/join`, `/login` in Stage 7) | Kept; they 404 until those stages | Open |
 | A-031 | 2026-11-05 | `contributors-phone.jpg` | The phone screen shows a small third-party app logo (the photo's source app). Kept: tiny and not our brand. Replace if Dan prefers | Open |
+| A-032 | 2026-11-06 | Retention for enquiries that do not become a project | 24 months after the last contact; stated in the draft privacy notice and listed as an open point for the advocate | Open |
+| A-033 | 2026-11-06 | Reply time promised to enquirers | None; the page says a person reads every enquiry and replies by email, with no deadline | Open |
+| A-034 | 2026-11-06 | Draft legal text | Written from the brief and from what the software does, shown publicly with a "Draft, not yet in force" banner and open points until DG-05 | Open |

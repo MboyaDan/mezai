@@ -18,7 +18,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <figure className={cn("rounded-card border border-border bg-surface p-5 md:p-6", className)}>
+    <figure data-demo className={cn("rounded-card border border-border bg-surface p-5 md:p-6", className)}>
       <figcaption className="mb-4 flex items-baseline justify-between gap-4 font-mono text-[0.6875rem] tracking-wider text-fg-muted uppercase">
         <span>{title}</span>
         <span>Worked example</span>

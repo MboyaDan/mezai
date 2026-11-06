@@ -79,6 +79,7 @@ func run() error {
 			Checks: map[string]httpapi.Checker{"database": pool, "storage": store},
 			Auth: &httpapi.AuthDeps{
 				Service: authSvc, Pool: pool, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
+				Enquiry: enquiryDeps(cfg),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -133,4 +134,13 @@ func probe() int {
 		return 1
 	}
 	return 0
+}
+
+// enquiryDeps turns on Turnstile only when its secret is set (DG-07).
+func enquiryDeps(cfg config.Config) httpapi.EnquiryDeps {
+	d := httpapi.EnquiryDeps{NotifyTo: cfg.EnquiryNotifyTo}
+	if cfg.TurnstileSecret != "" {
+		d.Turnstile = httpapi.Turnstile{Secret: cfg.TurnstileSecret}
+	}
+	return d
 }

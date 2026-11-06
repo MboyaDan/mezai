@@ -46,6 +46,7 @@ var expectedAccess = map[string]string{
 	"GET /v1/permissions":                  "role.manage",
 	"PUT /v1/roles/:key/permissions":       "role.manage",
 	"GET /v1/stats":                        "public",
+	"POST /v1/enquiries":                   "public",
 }
 
 var roleUser = map[string]string{
