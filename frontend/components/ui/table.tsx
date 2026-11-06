@@ -52,8 +52,9 @@ export function Table<T>({
 
   return (
     <div className={cn("min-w-0 rounded-card border border-border bg-surface", className)}>
-      {/* Focusable region so keyboard users can scroll wide tables at 360 px. */}
-      <div role="region" aria-label={caption} tabIndex={0} className="overflow-x-auto">
+      {/* Focusable region so keyboard users can scroll wide tables at 360 px. "relative" keeps
+          absolutely positioned descendants (sr-only text) inside the scroll area. */}
+      <div role="region" aria-label={caption} tabIndex={0} className="relative overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <caption
             className={cn(
