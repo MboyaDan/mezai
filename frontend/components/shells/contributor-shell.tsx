@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BookOpen, LayoutDashboard, ListChecks, Wallet } from "lucide-react";
+import { BookOpen, LayoutDashboard, ListChecks, Wallet, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { brand } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { NavLink } from "./nav-link";
 
-const nav = [
+export type ContributorNavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean };
+
+/** The full portal navigation (sitemap). Pages pass the items that exist so far. */
+export const contributorNav: ContributorNavItem[] = [
   { href: "/c", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/c/work", label: "Tasks", icon: ListChecks },
   { href: "/c/earnings", label: "Earnings", icon: Wallet },
@@ -19,7 +22,18 @@ const nav = [
  * Contributor portal: calm ivory canvas, charcoal top bar, larger targets,
  * mobile-first with a bottom tab bar under 768 px.
  */
-export function ContributorShell({ initials, children }: { initials: string; children: ReactNode }) {
+export function ContributorShell({
+  initials,
+  nav = contributorNav,
+  account,
+  children,
+}: {
+  initials: string;
+  nav?: ContributorNavItem[];
+  /** Replaces the default account link (the real portal passes a menu with sign-out). */
+  account?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
       <a
@@ -57,13 +71,15 @@ export function ContributorShell({ initials, children }: { initials: string; chi
               </NavLink>
             ))}
           </nav>
-          <Link
-            href="/account"
-            className="ml-auto grid size-9 place-items-center rounded-full border border-border bg-surface-raised font-mono text-xs font-semibold text-fg md:ml-0"
-          >
-            <span className="sr-only">Account </span>
-            {initials}
-          </Link>
+          {account ?? (
+            <Link
+              href="/account"
+              className="ml-auto grid size-9 place-items-center rounded-full border border-border bg-surface-raised font-mono text-xs font-semibold text-fg md:ml-0"
+            >
+              <span className="sr-only">Account </span>
+              {initials}
+            </Link>
+          )}
         </div>
       </header>
 
@@ -76,7 +92,7 @@ export function ContributorShell({ initials, children }: { initials: string; chi
         data-theme="dark"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg pb-[env(safe-area-inset-bottom)] md:hidden"
       >
-        <ul className="grid grid-cols-4">
+        <ul className="grid" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }}>
           {nav.map((n) => (
             <li key={n.href}>
               <NavLink

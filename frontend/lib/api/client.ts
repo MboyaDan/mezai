@@ -1,0 +1,71 @@
+// Browser client for the Go API. Every call goes to /api/* on this origin
+// (next.config.ts rewrites it). Types come from lib/api/schema.ts, generated
+// from backend/openapi.yaml with `npm run gen:api`.
+
+import type { components } from "./schema";
+
+export type Schemas = components["schemas"];
+export type Me = Schemas["Me"];
+export type ContributorProfile = Schemas["ContributorProfile"];
+export type ProfileInput = Schemas["ContributorProfileInput"];
+export type MyTest = Schemas["MyQualificationTest"];
+export type Attempt = Schemas["QualificationAttempt"];
+export type TaskConfig = Schemas["TaskConfig"];
+export type ContributorSummary = Schemas["ContributorSummary"];
+export type AttemptSummary = Schemas["AttemptSummary"];
+export type AttemptReview = Schemas["AttemptReview"];
+export type ContributorStatus = Schemas["ContributorStatus"];
+
+/** An error answer from the API, or a network failure (status 0). */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    readonly field?: string,
+    readonly detail?: string,
+    readonly retryAfter?: number,
+  ) {
+    super(detail ?? code);
+    this.name = "ApiError";
+  }
+}
+
+let csrfToken: string | null = null;
+
+/** Set from login and /v1/auth/me; sent as X-CSRF-Token on state-changing calls. */
+export function setCsrfToken(token: string | null) {
+  csrfToken = token;
+}
+
+type Method = "GET" | "POST" | "PUT" | "DELETE";
+
+export async function api<T = void>(method: Method, path: `/v1/${string}`, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError(0, "network");
+  }
+  if (res.status === 204) return undefined as T;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const retry = Number(res.headers.get("Retry-After")) || undefined;
+    throw new ApiError(
+      res.status,
+      typeof data?.error === "string" ? data.error : "unknown",
+      typeof data?.field === "string" ? data.field : undefined,
+      typeof data?.message === "string" ? data.message : undefined,
+      retry,
+    );
+  }
+  return data as T;
+}

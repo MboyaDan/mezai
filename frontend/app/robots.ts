@@ -6,7 +6,8 @@ export default function robots(): MetadataRoute.Robots {
     return { rules: { userAgent: "*", disallow: "/" } };
   }
   return {
-    rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/design", "/workspace", "/contributor"] },
+    // "$" ends a rule so "/c" does not also block /contact or /contributors.
+    rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/design", "/c$", "/c/", "/w$", "/w/"] },
     sitemap: `${siteUrl}/sitemap.xml`,
   };
 }

@@ -80,11 +80,14 @@ export function WorkspaceShell({
   nav = opsNav,
   user,
   orgLabel,
+  account,
   children,
 }: {
   nav?: WorkspaceNavItem[];
   user: { name: string; initials: string; role: string };
   orgLabel: string;
+  /** Shown under the user (the real workspace passes a sign-out button). */
+  account?: ReactNode;
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -97,6 +100,7 @@ export function WorkspaceShell({
         <span className="truncate text-fg">{user.name}</span>
         <span className="truncate text-xs text-fg-muted">{user.role}</span>
       </span>
+      {account && <span className="ml-auto">{account}</span>}
     </div>
   );
 

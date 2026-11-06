@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 7a (onboarding API). Branch `stage-07a-onboarding-api`, PR open. 6b merged as #22.
-- **Next stage:** 7b: onboarding UI (sign-in, sign-up with consent, verify email, contributor shell with profile and qualification test screens for the three task types, workspace approval queue and contributor list, generated API types from `openapi.yaml`, Playwright `join.spec.ts` for AC-04). Split agreed in D-064.
+- **Last stage:** 7b (onboarding UI). Branch `stage-07b-onboarding-ui`, PR open. 7a merged as #23.
+- **Next stage:** 8: Projects, templates and data import (organisations, project create, CSV/JSONL import with validation report, gold upload, publish/pause/close, client project requests; the gold page also gets "Make a qualification test", D-073). Confirm whether to split before starting.
 - **Blocking questions:** none.
 
 ## Where things are
@@ -50,6 +50,12 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Answer checking (qualification now, gold in Stage 10) | `backend/internal/quality/answer.go` |
 | Legal document versions the API accepts | `backend/internal/legal/legal.go` (kept equal to `frontend/content/legal.ts` by `content/legal.test.ts`) |
 | Phone normalising and masking | `backend/internal/pii/phone.go` |
+| API types and client (frontend) | `frontend/lib/api/schema.ts` (generated: `npm run gen:api`), `lib/api/client.ts` |
+| Session, sign-in gate, redirects | `frontend/lib/session.tsx`, `frontend/proxy.ts`, `lib/onboarding.ts` (`safeNext`) |
+| Sign-in, join, verify, reset pages | `frontend/app/(auth)/`, `components/auth/` |
+| Contributor portal (dashboard, profile, qualification) | `frontend/app/(contributor)/c/`, `components/contributor/`, answer inputs in `components/qualification/` |
+| Workspace (overview, contributors, attempt review) | `frontend/app/(workspace)/w/`, `components/workspace/` |
+| Full-stack tests | `frontend/tests/full/` (`npm run test:full`, needs `make up migrate seed`) |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
 ## Stage log
@@ -70,7 +76,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 6a | Merged | #21 | Services (sticky index, language table per A-029), Quality (six steps with live gold, overlap, kappa and routing diagrams, trust score, security), Industries, Contributors, About, case studies index and template (D-056). Four new photo crops. |
 
 | 6b | Merged | #22 | Contact page and `POST /v1/enquiries` (DB, ops email, audit, honeypot, limits, Turnstile off until DG-07), five versioned draft legal pages, 404/500, AC-03 honesty tests on source and rendered pages. Fixed: Vitest never ran `content/*.test.ts`; kappa e2e raced hydration. |
-| 7a | PR open | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
+| 7a | Merged | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
+| 7b | PR open | #24 | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
 
 ## Notes for the next session
 
@@ -82,6 +89,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Components take semantic colours (`text-fg`, `bg-surface`, `border-border`...), never raw palette names, so they work on both themes. Put `data-theme="dark"` on dark bands.
 - SignalLattice fills its container width; size it with a wrapper div.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
+- Local databases seeded before 7a have empty qualification test `config`: re-seed a fresh volume, or run the UPDATE in the 7b PR notes.
 - Contributor endpoints call `contributorOf(p)`: Super Admin holds every permission but has no contributor profile.
 - Qualification answers use the task templates' submission shapes; reuse `quality.Parse` and `quality.Matches` for gold in Stages 9 and 10.
 - New tables: grant `mezai_app` privileges in the same migration (no default privileges), add RLS if the table has `org_id` (a test enforces it), and revoke UPDATE/DELETE if append-only.
