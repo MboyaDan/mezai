@@ -80,6 +80,7 @@ func run() error {
 			Auth: &httpapi.AuthDeps{
 				Service: authSvc, Pool: pool, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
 				Enquiry: enquiryDeps(cfg),
+				Files:   store,
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
