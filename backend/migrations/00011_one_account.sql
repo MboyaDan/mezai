@@ -21,6 +21,13 @@ ALTER TABLE contributor_profiles
   ADD CONSTRAINT contributor_profiles_identity_note_chk CHECK (identity_status <> 'rejected' OR identity_note IS NOT NULL),
   ADD CONSTRAINT contributor_profiles_name_check_chk CHECK ((mpesa_name_checked_at IS NULL) = (mpesa_name_checked_by IS NULL));
 
+-- Before 7c the same number could sit on several accounts (only test data
+-- exists). Keep it on the oldest account; the others must enter their own.
+UPDATE contributor_profiles cp SET mpesa_phone = NULL, mpesa_phone_confirmed_at = NULL
+WHERE mpesa_phone IS NOT NULL AND EXISTS (
+  SELECT 1 FROM contributor_profiles o
+  WHERE o.mpesa_phone = cp.mpesa_phone AND (o.created_at, o.id) < (cp.created_at, cp.id));
+
 -- One account per M-Pesa number and per National ID number, removed
 -- accounts included, so a removed person cannot simply join again.
 CREATE UNIQUE INDEX contributor_profiles_mpesa_phone_key ON contributor_profiles (mpesa_phone) WHERE mpesa_phone IS NOT NULL;

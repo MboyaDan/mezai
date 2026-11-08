@@ -23,7 +23,7 @@ const MinKeyBytes = 32
 var DevKey = []byte("mezai-development-identity-key-not-secret")
 
 // NormaliseNationalID strips spaces, dashes and dots and leading zeros, and
-// accepts 6 to 9 digits (A-085). The same person typing "0123 4567" and
+// accepts 6 to 9 digits (A-050). The same person typing "0123 4567" and
 // "1234567" gets the same result.
 func NormaliseNationalID(in string) (string, error) {
 	s := strings.NewReplacer(" ", "", "-", "", ".", "").Replace(strings.TrimSpace(in))
