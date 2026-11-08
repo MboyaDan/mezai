@@ -220,7 +220,10 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await dialog.getByLabel(/Note/).fill("Numbers checked; no other account found.");
   await axe(page, "verify identity dialog");
   await dialog.getByRole("button", { name: "Verify", exact: true }).click();
-  await expect(page.getByText("Verified", { exact: true })).toBeVisible();
+  // Verified: the panel offers only Reject now, and the history shows activation.
+  await expect(page.getByRole("button", { name: "Verify identity" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject identity" })).toBeVisible();
+  await expect(page.getByText(/Identity verified · /)).toBeVisible();
   await expect(page.getByText("qualifying → ")).toBeVisible();
   await shot(page, "ops-identity-verified");
   await page.goto("/w/contributors?tab=identity");
