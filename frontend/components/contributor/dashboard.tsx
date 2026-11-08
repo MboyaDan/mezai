@@ -14,7 +14,7 @@ import { StatusBadge } from "./status";
 
 type Row = { id: string; title: string; body: ReactNode; action?: ReactNode };
 
-const order: Step[] = ["consent", "profile", "qualify", "review", "active"];
+const order: Step[] = ["consent", "profile", "qualify", "review", "identity", "active"];
 
 export function Dashboard() {
   const { profile } = useProfile();
@@ -43,7 +43,7 @@ export function Dashboard() {
         profile.missing.length > 0 ? (
           <>Still needed: {profile.missing.map((f) => fieldLabels[f] ?? f).join(", ")}.</>
         ) : (
-          "Languages, domains, availability and your M-Pesa number."
+          "Languages, domains, availability, your M-Pesa number and National ID number."
         ),
       action: (
         <ButtonLink href="/c/profile" arrow>
@@ -74,6 +74,22 @@ export function Dashboard() {
         waiting.length > 0
           ? `Your ${waiting.map((t) => t.title).join(", ")} attempt is waiting for a person to review it.`
           : "A person checks every passed test before you can take paid tasks.",
+    },
+    {
+      id: "identity",
+      title: "Identity check",
+      body:
+        profile.identity_status === "rejected" ? (
+          <>We could not confirm your details: {profile.identity_note} Correct them on your profile.</>
+        ) : (
+          "We check that your National ID and M-Pesa numbers are not on another account. One person, one account."
+        ),
+      action:
+        profile.identity_status === "rejected" ? (
+          <ButtonLink href="/c/profile" arrow>
+            Correct your details
+          </ButtonLink>
+        ) : undefined,
     },
   ];
   const at = order.indexOf(step);

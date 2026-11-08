@@ -7,6 +7,7 @@ import {
   isComplete,
   maskedPreview,
   normaliseKenyanMobile,
+  normaliseNationalId,
   safeNext,
 } from "./onboarding";
 import { legalDocs } from "@/content/legal";
@@ -77,14 +78,28 @@ describe("isComplete (mirrors quality.Parse)", () => {
   });
 });
 
+describe("normaliseNationalId", () => {
+  it("mirrors identity.NormaliseNationalID", () => {
+    expect(normaliseNationalId(" 2468 1357 ")).toBe("24681357");
+    expect(normaliseNationalId("02468-1357")).toBe("24681357");
+    expect(normaliseNationalId("123456")).toBe("123456");
+    expect(normaliseNationalId("12345")).toBeNull();
+    expect(normaliseNationalId("1234567890")).toBeNull();
+    expect(normaliseNationalId("A1234567")).toBeNull();
+    expect(normaliseNationalId("000000")).toBeNull();
+  });
+});
+
 describe("currentStep", () => {
-  const p = (status: string, consent: string[] = []) =>
-    ({ status, consent_required: consent }) as Parameters<typeof currentStep>[0];
+  const p = (status: string, consent: string[] = [], qualifications: unknown[] = []) =>
+    ({ status, consent_required: consent, qualifications }) as Parameters<typeof currentStep>[0];
   it("orders the onboarding steps", () => {
     expect(currentStep(p("applied", ["privacy_notice"]), [])).toBe("consent");
     expect(currentStep(p("applied"), [])).toBe("profile");
     expect(currentStep(p("qualifying"), [])).toBe("qualify");
     expect(currentStep(p("qualifying"), [{ state: "awaiting_review" } as never])).toBe("review");
+    // Qualified but identity not verified yet (D-078).
+    expect(currentStep(p("qualifying", [], [{}]), [])).toBe("identity");
     expect(currentStep(p("active"), [])).toBe("active");
     expect(currentStep(p("paused"), [])).toBe("paused");
     expect(currentStep(p("removed", ["privacy_notice"]), [])).toBe("removed");

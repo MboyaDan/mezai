@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { LogOut } from "lucide-react";
 import { IconButton } from "@/components/ui/button";
@@ -13,7 +12,6 @@ export function AccountMenu({ initials, name, email }: { initials: string; name:
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const { signOut } = useSession();
-  const router = useRouter();
 
   useEffect(() => {
     if (!open) return;
@@ -34,10 +32,7 @@ export function AccountMenu({ initials, name, email }: { initials: string; name:
     };
   }, [open]);
 
-  async function out() {
-    await signOut().catch(() => undefined);
-    router.replace("/login");
-  }
+  const out = () => signOutAndLeave(signOut);
 
   return (
     <div ref={ref} className="relative ml-auto md:ml-0">
@@ -76,17 +71,17 @@ export function AccountMenu({ initials, name, email }: { initials: string; name:
 /** Compact sign-out for the workspace sidebar. */
 export function SignOutButton() {
   const { signOut } = useSession();
-  const router = useRouter();
-  return (
-    <IconButton
-      label="Sign out"
-      icon={<LogOut />}
-      onClick={async () => {
-        await signOut().catch(() => undefined);
-        router.replace("/login");
-      }}
-    />
-  );
+  return <IconButton label="Sign out" icon={<LogOut />} onClick={() => signOutAndLeave(signOut)} />;
+}
+
+/**
+ * Signs out, then loads /login as a full page. A client-side replace raced
+ * the signed-in areas' own redirect to /login?next=… and could leave the
+ * browser on the old page; a full load also drops every cached page.
+ */
+async function signOutAndLeave(signOut: () => Promise<void>) {
+  await signOut().catch(() => undefined);
+  window.location.replace("/login");
 }
 
 export const initialsOf = (name: string) =>

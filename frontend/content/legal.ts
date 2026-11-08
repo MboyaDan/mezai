@@ -34,8 +34,8 @@ export const legalDocs: LegalDoc[] = [
     slug: "privacy",
     title: "Privacy notice",
     short: "Privacy notice",
-    version: "0.1",
-    updated: "2026-11-06",
+    version: "0.2",
+    updated: "2026-11-08",
     approved: false,
     summary: `How ${entity} collects, uses and protects personal data on ${brand.name}, under Kenya's Data Protection Act, 2019.`,
     sections: [
@@ -52,13 +52,13 @@ export const legalDocs: LegalDoc[] = [
           {
             list: [
               "If you send a project enquiry: your name, organisation, email address and what you tell us about the project.",
-              "If you apply as a contributor: your name, email address, a password (stored only as a one-way hash), languages and how well you know them, dialects, subject areas, education level, weekly availability and an M-Pesa phone number for payments.",
+              "If you apply as a contributor: your name, email address, a password (stored only as a one-way hash), languages and how well you know them, dialects, subject areas, education level, weekly availability, an M-Pesa phone number for payments, and your National ID number. We do not keep the ID number itself: we store only a one-way code made from it with a secret key, and its last 3 digits.",
               "If you work as a contributor: the tasks you are assigned, your answers and their revisions, time spent on tasks, review decisions and feedback, gold-question results, your quality and trust scores, and your earnings and payouts.",
               "If you use the workspace for a client: your name, work email, organisation and role.",
               "For everyone who signs in: the date and version of the documents you accepted, your session, and a security record of important actions (who did what and when, with an IP address).",
             ],
           },
-          "We do not ask contributors for identity documents during the pilot.",
+          "We do not ask contributors for identity documents, photographs or selfies during the pilot.",
         ],
       },
       {
@@ -68,6 +68,7 @@ export const legalDocs: LegalDoc[] = [
             list: [
               "To reply to enquiries and plan projects (our legitimate interest in answering people who contact us).",
               "To run the contributor relationship: qualification, assigning tasks, measuring quality, paying for approved work (performing our agreement with you).",
+              "To make sure each person has only one contributor account and is paid under their own name: we compare the code made from your National ID number, and your M-Pesa number, with other accounts, and before your first payment our operations team checks that the name M-Pesa shows for your number matches your profile name. We do not store the name M-Pesa shows (legitimate interest in preventing fraud, and performing our agreement with you).",
               "To keep the platform secure: sign-in protection, rate limits and audit records (legitimate interest and legal obligation).",
               "To keep payment and tax records (legal obligation).",
               "Where we rely on your consent, we record which version you accepted and when, and you can withdraw it at any time.",
@@ -105,6 +106,7 @@ export const legalDocs: LegalDoc[] = [
               "Payment, ledger and audit records: at least 7 years, for tax purposes. If you ask us to delete your data, we anonymise your identity in these records where the law allows.",
               "Enquiries that do not become a project: 24 months after the last contact.",
               "Contributor accounts: until you close the account, then as above for payment records.",
+              "The code made from your National ID number and its last 3 digits: while your account exists, and after it closes only for as long as needed to stop the same person opening a second account.",
             ],
           },
         ],
@@ -136,6 +138,7 @@ export const legalDocs: LegalDoc[] = [
       "Confirm the lawful basis for each purpose and whether contributor processing needs consent as well as contract.",
       "Confirm the 24-month retention for enquiries that do not proceed (an assumption, A-032).",
       "Add a dedicated data protection contact address once one exists (Q2).",
+      "New in this draft: the National ID number (D-078). The brief said “M-Pesa number only”: confirm the lawful basis for collecting it, the retention period for the code after an account closes, and whether a DPIA is needed.",
     ],
   },
   {
@@ -195,8 +198,8 @@ export const legalDocs: LegalDoc[] = [
     slug: "contributor-terms",
     title: "Contributor terms",
     short: "Contributor terms",
-    version: "0.1",
-    updated: "2026-11-06",
+    version: "0.2",
+    updated: "2026-11-08",
     approved: false,
     summary: `The agreement between ${entity} and each person who does paid task work on ${brand.name}.`,
     sections: [
@@ -210,6 +213,7 @@ export const legalDocs: LegalDoc[] = [
         heading: "Joining and qualifying",
         body: [
           "You must be at least 18 and give true details. You take a qualification test for each skill. We decide whether to approve an application and which projects you are eligible for.",
+          "One person, one account. You give your own National ID number and an M-Pesa number registered in your name. A number that is already on another account cannot be used, and we may remove duplicate accounts. Your account becomes active only after we have checked these details.",
         ],
       },
       {
@@ -234,7 +238,7 @@ export const legalDocs: LegalDoc[] = [
       {
         heading: "Pay",
         body: [
-          "Each project states its rate per task before you start. You earn for each task that is approved. Approved earnings are paid to the M-Pesa number on your profile, in batches. Your dashboard shows pending, approved and paid amounts, and every payment carries its M-Pesa reference. If we make a mistake, we correct it with a new entry you can see; we never silently change past records.",
+          "Each project states its rate per task before you start. You earn for each task that is approved. Approved earnings are paid to the M-Pesa number on your profile, which must be registered in your name, in batches. Before your first payment we check that the name M-Pesa shows matches your profile name. Your dashboard shows pending, approved and paid amounts, and every payment carries its M-Pesa reference. If we make a mistake, we correct it with a new entry you can see; we never silently change past records.",
         ],
       },
       {
@@ -261,6 +265,7 @@ export const legalDocs: LegalDoc[] = [
       "Confirm the transfer of rights in submitted work and the confidentiality wording.",
       "Payout schedule and minimum payout amount, once Stage 14 sets them.",
       "Whether contributors outside Kenya can join, and what changes for them.",
+      "New in this draft: the one-account rule and the M-Pesa name check (D-078).",
     ],
   },
   {
