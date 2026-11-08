@@ -54,6 +54,14 @@ export function normaliseKenyanMobile(input: string): string | null {
   return /^[71]\d{8}$/.test(s) ? `+254${s}` : null;
 }
 
+/** Mirrors identity.NormaliseNationalID in the API. Returns null when invalid. */
+export function normaliseNationalId(input: string): string | null {
+  const s = input.trim().replace(/[\s.-]/g, "");
+  if (!/^\d+$/.test(s)) return null;
+  const n = s.replace(/^0+/, "");
+  return n.length >= 6 && n.length <= 9 ? n : null;
+}
+
 export const fieldLabels: Record<string, string> = {
   display_name: "Display name",
   country: "Country",
@@ -62,13 +70,15 @@ export const fieldLabels: Record<string, string> = {
   languages: "Languages",
   domains: "Domains",
   mpesa_phone: "M-Pesa number",
+  national_id: "National ID number",
 };
 
 /** The onboarding step a contributor is on, for the dashboard and redirects. */
-export type Step = "consent" | "profile" | "qualify" | "review" | "active" | "paused" | "removed";
+export type Step =
+  "consent" | "profile" | "qualify" | "review" | "identity" | "active" | "paused" | "removed";
 
 export function currentStep(
-  p: Pick<ContributorProfile, "status" | "consent_required">,
+  p: Pick<ContributorProfile, "status" | "consent_required" | "qualifications">,
   tests: MyTest[],
 ): Step {
   if (p.status === "removed") return "removed";
@@ -76,6 +86,8 @@ export function currentStep(
   if (p.consent_required.length > 0) return "consent";
   if (p.status === "applied") return "profile";
   if (p.status === "active") return "active";
+  // Qualified but not active yet: the identity check is what remains (D-078).
+  if (p.qualifications.length > 0) return "identity";
   return tests.some((t) => t.state === "awaiting_review") ? "review" : "qualify";
 }
 
@@ -164,6 +176,8 @@ export function errorMessage(e: ApiError): string {
     storage_unavailable: "File storage is not responding. Try again in a minute.",
     file_too_large: "The file is too large.",
     no_gold: "This project has no active gold items left to copy.",
+    identity_incomplete:
+      "The contributor has not given a confirmed M-Pesa number and National ID number yet.",
   };
   return m[e.code] ?? "Something went wrong. Try again in a moment.";
 }

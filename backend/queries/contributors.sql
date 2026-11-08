@@ -71,9 +71,14 @@ ORDER BY h.created_at DESC, h.id DESC;
 
 -- name: ListContributors :many
 SELECT cp.id, cp.public_code, cp.status, cp.country, cp.mpesa_phone, cp.created_at, u.display_name, u.email,
-  (SELECT array_agg(cl.language ORDER BY cl.language) FROM contributor_languages cl WHERE cl.contributor_id = cp.id)::text[] AS languages
+  cp.identity_status, cp.national_id_last3,
+  (SELECT array_agg(cl.language ORDER BY cl.language) FROM contributor_languages cl WHERE cl.contributor_id = cp.id)::text[] AS languages,
+  (SELECT count(*) FROM identity_flags f WHERE f.contributor_id = cp.id OR f.other_contributor_id = cp.id)::int AS flag_count,
+  (SELECT count(*) FROM contributor_profiles o JOIN users ou ON ou.id = o.user_id
+     WHERE o.id <> cp.id AND norm_name(ou.display_name) = norm_name(u.display_name))::int AS same_name_count
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
-WHERE sqlc.narg(status)::text IS NULL OR cp.status = sqlc.narg(status)::text
+WHERE (sqlc.narg(status)::text IS NULL OR cp.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(identity_status)::text IS NULL OR cp.identity_status = sqlc.narg(identity_status)::text)
 ORDER BY cp.created_at DESC, cp.id DESC
 LIMIT 500;
 
@@ -84,3 +89,54 @@ INSERT INTO consents (user_id, document, version, ip) VALUES (@user_id, @documen
 SELECT DISTINCT ON (document) document, version, accepted_at
 FROM consents WHERE user_id = $1
 ORDER BY document, accepted_at DESC, id DESC;
+
+-- One person, one account (Stage 7c, D-078).
+
+-- name: SetContributorNationalID :exec
+UPDATE contributor_profiles SET national_id_fp = @national_id_fp, national_id_last3 = @national_id_last3 WHERE id = @id;
+
+-- name: ResetContributorIdentity :exec
+-- A changed number needs checking again.
+UPDATE contributor_profiles SET identity_status = 'pending', identity_note = NULL,
+  identity_decided_by = NULL, identity_decided_at = NULL
+WHERE id = @id;
+
+-- name: ClearMpesaNameCheck :exec
+UPDATE contributor_profiles SET mpesa_name_checked_at = NULL, mpesa_name_checked_by = NULL WHERE id = @id;
+
+-- name: ContributorHoldingPhone :one
+SELECT id FROM contributor_profiles WHERE mpesa_phone = @mpesa_phone AND id <> @id;
+
+-- name: ContributorHoldingNationalID :one
+SELECT id FROM contributor_profiles WHERE national_id_fp = @national_id_fp AND id <> @id;
+
+-- name: AddIdentityFlag :exec
+INSERT INTO identity_flags (contributor_id, other_contributor_id, kind) VALUES (@contributor_id, @other_contributor_id, @kind);
+
+-- name: ListIdentityFlags :many
+-- Flags raised by or against a contributor, with the other account's code.
+SELECT f.kind, f.created_at, f.contributor_id = @id AS raised_by_this,
+  o.id AS other_id, o.public_code AS other_public_code, o.status AS other_status
+FROM identity_flags f
+JOIN contributor_profiles o ON o.id = CASE WHEN f.contributor_id = @id THEN f.other_contributor_id ELSE f.contributor_id END
+WHERE f.contributor_id = @id OR f.other_contributor_id = @id
+ORDER BY f.created_at DESC
+LIMIT 50;
+
+-- name: ListSameNameContributors :many
+SELECT o.id, o.public_code, o.status
+FROM contributor_profiles o JOIN users ou ON ou.id = o.user_id
+WHERE o.id <> @id AND norm_name(ou.display_name) = norm_name(@display_name::text)
+ORDER BY o.created_at
+LIMIT 20;
+
+-- name: DecideContributorIdentity :exec
+UPDATE contributor_profiles SET identity_status = @identity_status, identity_note = @identity_note,
+  identity_decided_by = @decided_by, identity_decided_at = now()
+WHERE id = @id;
+
+-- name: RecordMpesaNameCheck :exec
+UPDATE contributor_profiles SET mpesa_name_checked_at = now(), mpesa_name_checked_by = @checked_by WHERE id = @id;
+
+-- name: GetUserDisplayNameByID :one
+SELECT display_name FROM users WHERE id = $1;

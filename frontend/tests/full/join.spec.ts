@@ -3,14 +3,19 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
 // AC-04 through the real UI: sign up with consent, confirm the email, complete
-// the profile, pass a qualification test, and be approved by Ops.
+// the profile, pass a qualification test, be approved by Ops and have the
+// identity verified (D-078).
 
 const mailpit = process.env.MAILPIT_URL ?? "http://localhost:8025";
 const seedPassword = process.env.SEED_PASSWORD ?? "sample-password-only";
-const shots = "../docs/screenshots/stage-07b";
-const email = `e2e.${Date.now()}@sample.invalid`;
+const shots = "../docs/screenshots/stage-07c";
+const stamp = String(Date.now()).slice(-8);
+const email = `e2e.${stamp}@sample.invalid`;
+// One account per number (D-078), so each run uses fresh numbers.
+const phone = `07${stamp}`;
+const nationalId = `3${stamp.slice(1)}`;
 const password = "an end to end test passphrase";
-const name = "Sample Joiner";
+const name = `Sample Joiner ${stamp.slice(-4)}`;
 
 // Seed sample text → correct label (backend/seed/content.go).
 const routing: Record<string, string> = {
@@ -79,12 +84,15 @@ async function signOut(page: Page) {
   } else {
     await page.getByRole("button", { name: "Sign out" }).first().click();
   }
-  await expect(page).toHaveURL(/\/login/);
+  // Full page load of /login; the dev server may compile it first.
+  await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
 }
 
 test.describe.configure({ mode: "serial" });
 
 test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => {
+  // The longest flow in the suite: 12 screenshots at two widths and axe checks.
+  test.setTimeout(180_000);
   // Signed-out visitors to the portal are sent to sign in.
   await page.goto("/c/profile");
   await expect(page).toHaveURL(/\/login\?next=%2Fc%2Fprofile/);
@@ -128,15 +136,20 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await page.getByRole("combobox", { name: "Level" }).selectOption("native");
   await page.getByLabel("Dialects").fill("Sheng");
   await page.getByLabel("Health").check();
-  await page.getByRole("textbox", { name: "M-Pesa number", exact: true }).fill("0712 345 678");
-  await page.getByLabel("Enter it again").fill("0712 345 679");
+  await page.getByRole("textbox", { name: "M-Pesa number", exact: true }).fill(phone);
+  await page.getByLabel("Enter it again").fill("0700000000");
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.getByText("The two numbers do not match.")).toBeVisible();
-  await page.getByLabel("Enter it again").fill("0712345678");
+  await page.getByLabel("Enter it again").fill(phone);
+  await page.getByRole("textbox", { name: "National ID number" }).fill("12AB");
   await axe(page, "/c/profile");
   await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByText("Enter your National ID number: 6 to 9 digits.")).toBeVisible();
+  await page.getByRole("textbox", { name: "National ID number" }).fill(nationalId);
+  await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.getByText("Profile complete")).toBeVisible();
-  await expect(page.getByText("+254 7•• ••• 678")).toBeVisible();
+  await expect(page.getByText(`+254 7•• ••• ${phone.slice(-3)}`)).toBeVisible();
+  await expect(page.getByText(`ID ending ${nationalId.slice(-3)}`)).toBeVisible();
   await shot(page, "profile");
 
   // 4. Take the classification test.
@@ -192,12 +205,34 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /C-\d+ Sample Joiner/ }).click();
-  await expect(page.getByText("qualifying → ")).toBeVisible();
+  // Approved but still qualifying: the identity check is outstanding (D-078).
+  await expect(page.getByText("applied → ")).toBeVisible();
+  await expect(page.getByText("qualifying → ")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Identity", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Verify identity" })).toBeEnabled();
   await axe(page, "/w/contributors/[id]");
   await shot(page, "ops-contributor");
+
+  // 6. Ops verifies the identity, which completes activation (D-078).
+  await page.getByRole("button", { name: "Verify identity" }).click();
+  const dialog = page.getByRole("dialog");
+  // A note is optional without possible duplicates; it goes to the audit log.
+  await dialog.getByLabel(/Note/).fill("Numbers checked; no other account found.");
+  await axe(page, "verify identity dialog");
+  await dialog.getByRole("button", { name: "Verify", exact: true }).click();
+  // Verified: the panel offers only Reject now, and the history shows activation.
+  await expect(page.getByRole("button", { name: "Verify identity" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reject identity" })).toBeVisible();
+  await expect(page.getByText(/Identity verified · /)).toBeVisible();
+  await expect(page.getByText("qualifying → ")).toBeVisible();
+  await shot(page, "ops-identity-verified");
+  await page.goto("/w/contributors?tab=identity");
+  await expect(page.getByRole("tab", { name: "Identity checks" })).toHaveAttribute("aria-selected", "true");
+  await axe(page, "identity queue");
+  await shot(page, "ops-identity-queue");
   await signOut(page);
 
-  // 6. The contributor is active.
+  // 7. The contributor is active.
   await signIn(page, email, password);
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "You are active" })).toBeVisible();

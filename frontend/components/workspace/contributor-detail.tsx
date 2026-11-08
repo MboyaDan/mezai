@@ -22,10 +22,12 @@ import {
 import { errorMessage } from "@/lib/onboarding";
 import { useLoad } from "@/lib/use-load";
 import { pct, shortDate } from "./contributors";
+import { IdentityPanel, type IdentityChecks } from "./identity-panel";
 import { PageTitle, useCan } from "./workspace";
 
 type Detail = {
   profile: ContributorProfile;
+  identity: IdentityChecks;
   history: Array<{ from: string | null; to: string; reason: string; changed_by: string | null; at: string }>;
   attempts: AttemptSummary[];
 };
@@ -51,7 +53,7 @@ export function ContributorDetail() {
 
   if (d.status === "loading") return <Skeleton className="h-80 w-full" />;
   if (d.status === "error") return <Alert tone="danger" title={errorMessage(d.error)} />;
-  const { profile: p, history, attempts } = d.data;
+  const { profile: p, identity, history, attempts } = d.data;
 
   async function change() {
     if (!target) return;
@@ -121,36 +123,39 @@ export function ContributorDetail() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-1">
-          <h2 className="font-display font-semibold">Profile</h2>
-          <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            {facts.map(([k, v]) => (
-              <div key={k} className="contents">
-                <dt className="text-fg-muted">{k}</dt>
-                <dd className="min-w-0 truncate">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="mt-4 grid gap-2 text-sm">
-            <p className="text-fg-muted">Languages</p>
-            <ul className="flex flex-wrap gap-1.5">
-              {p.languages.map((l) => (
-                <li key={l.language}>
-                  <Tag>
-                    {labelFor(l.language)} · {l.proficiency}
-                    {l.dialects.length > 0 && ` (${l.dialects.join(", ")})`}
-                  </Tag>
-                </li>
+        <div className="grid content-start gap-6 lg:col-span-1">
+          <Card className="p-5">
+            <h2 className="font-display font-semibold">Profile</h2>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+              {facts.map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt className="text-fg-muted">{k}</dt>
+                  <dd className="min-w-0 truncate">{v}</dd>
+                </div>
               ))}
-              {p.languages.length === 0 && <li>–</li>}
-            </ul>
-            <p className="text-fg-muted">Domains</p>
-            <p>{p.domains.map(labelFor).join(", ") || "–"}</p>
-            {p.missing.length > 0 && (
-              <p className="text-fg-muted">Profile incomplete: {p.missing.length} fields missing.</p>
-            )}
-          </div>
-        </Card>
+            </dl>
+            <div className="mt-4 grid gap-2 text-sm">
+              <p className="text-fg-muted">Languages</p>
+              <ul className="flex flex-wrap gap-1.5">
+                {p.languages.map((l) => (
+                  <li key={l.language}>
+                    <Tag>
+                      {labelFor(l.language)} · {l.proficiency}
+                      {l.dialects.length > 0 && ` (${l.dialects.join(", ")})`}
+                    </Tag>
+                  </li>
+                ))}
+                {p.languages.length === 0 && <li>–</li>}
+              </ul>
+              <p className="text-fg-muted">Domains</p>
+              <p>{p.domains.map(labelFor).join(", ") || "–"}</p>
+              {p.missing.length > 0 && (
+                <p className="text-fg-muted">Profile incomplete: {p.missing.length} fields missing.</p>
+              )}
+            </div>
+          </Card>
+          <IdentityPanel profile={p} checks={identity} onChange={d.reload} />
+        </div>
 
         <div className="grid content-start gap-6 lg:col-span-2">
           <section aria-labelledby="attempts-h">

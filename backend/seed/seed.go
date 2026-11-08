@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/identity"
 	"github.com/MboyaDan/mezai/backend/internal/password"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
@@ -209,6 +210,25 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 		}
 		if err := s.q.AddContributorDomain(s.ctx, store.AddContributorDomainParams{ContributorID: cp.ID, Domain: domains[i%len(domains)]}); err != nil {
 			return err
+		}
+		// Identity (D-078): a fingerprint of "sample-NNN", which no real
+		// National ID number can produce (they are digits only). Everyone
+		// past qualifying is verified; the qualifying one waits for Ops.
+		if status != "applied" {
+			last3 := fmt.Sprintf("%03d", n)
+			if err := s.q.SetContributorNationalID(s.ctx, store.SetContributorNationalIDParams{
+				ID: cp.ID, NationalIDFp: identity.Fingerprint(identity.DevKey, "sample-"+last3), NationalIDLast3: &last3,
+			}); err != nil {
+				return err
+			}
+		}
+		if status != "applied" && status != "qualifying" {
+			note := "Sample data"
+			if err := s.q.DecideContributorIdentity(s.ctx, store.DecideContributorIdentityParams{
+				ID: cp.ID, IdentityStatus: "verified", IdentityNote: &note, DecidedBy: &admin,
+			}); err != nil {
+				return err
+			}
 		}
 		if status != "applied" {
 			if err := s.q.AddContributorStatusHistory(s.ctx, store.AddContributorStatusHistoryParams{

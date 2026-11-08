@@ -65,3 +65,23 @@ func TestEnquiryRecipient(t *testing.T) {
 		t.Fatalf("staging must name an enquiry recipient, got %v", err)
 	}
 }
+
+func TestIdentityKey(t *testing.T) {
+	c, err := FromLookup(lookup(map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b"}))
+	if err != nil || len(c.IdentityKey) < 32 {
+		t.Fatalf("development default key: %d bytes, %v", len(c.IdentityKey), err)
+	}
+	_, err = FromLookup(lookup(map[string]string{"APP_ENV": EnvProduction, "DATABASE_URL": "postgres://x", "S3_BUCKET": "b"}))
+	if err == nil || !strings.Contains(err.Error(), "IDENTITY_HMAC_KEY is required") {
+		t.Fatalf("production without a key: %v", err)
+	}
+	_, err = FromLookup(lookup(map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b", "IDENTITY_HMAC_KEY": "c2hvcnQ="}))
+	if err == nil || !strings.Contains(err.Error(), "IDENTITY_HMAC_KEY") {
+		t.Fatalf("short key: %v", err)
+	}
+	c, err = FromLookup(lookup(map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b",
+		"IDENTITY_HMAC_KEY": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="}))
+	if err != nil || len(c.IdentityKey) != 32 {
+		t.Fatalf("valid key: %v", err)
+	}
+}

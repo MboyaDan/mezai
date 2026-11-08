@@ -13,10 +13,12 @@ const (
 
 // Current maps each document to the version in force. Raise a version here
 // and in legal.ts together; contributors are then asked to accept again.
+// 0.2 (2026-11-08): the privacy notice adds the National ID fingerprint and
+// the contributor terms add one account per person (D-078).
 var Current = map[string]string{
-	PrivacyNotice:    "0.1",
+	PrivacyNotice:    "0.2",
 	TermsOfUse:       "0.1",
-	ContributorTerms: "0.1",
+	ContributorTerms: "0.2",
 	AcceptableUse:    "0.1",
 }
 

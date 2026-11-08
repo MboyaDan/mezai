@@ -26,7 +26,7 @@ Other "done when" checks without an AC ID:
 | Contributors see only items they currently hold; never gold rows | 3 (DB), 9 (API) | `backend/internal/db/rls_test.go` (DB done) |
 | Append-only tables reject update and delete from the app role | 3 | `backend/internal/db/rls_test.go` (done) |
 | Pre-submit QA checks: blocking checks stop a submission, warnings are stored with it (D-077) | 8 (settings), 9 (enforced) | 8a: `quality/content_test.go` (`TestQAChecks`). 9: submit endpoint and task screen tests |
-| One contributor account per person: unique M-Pesa number and ID fingerprint, duplicates flagged for Ops (D-078) | 7c | Planned |
+| One contributor account per person: unique M-Pesa number and ID fingerprint, duplicates flagged for Ops (D-078) | 7c | `TestOneAccountPerPerson` in `backend/internal/httpapi/identity_test.go` (ID never stored, reuse refused and flagged, verify/reject rules, reset on change, name check); `internal/identity` unit tests (normalising, HMAC known value, key parsing); `TestIdentityKey` (config); `normaliseNationalId` and `currentStep` in `frontend/lib/onboarding.test.ts`; AC-04 full-stack test now includes the National ID and the Ops identity check (`frontend/tests/full/join.spec.ts`) |
 | Clients never see gold files or another organisation's imports and requests | 8 | `TestClientProjectIsolation`, `TestProjectRequests` (done) |
 | Reconciliation: dashboard numbers equal ledger | 12 | `backend/internal/ledger/reconcile_test.go` |
 | axe: no critical issues on `/design` and key pages | 2, 6, 18 | Playwright plus axe |

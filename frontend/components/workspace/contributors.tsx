@@ -13,6 +13,7 @@ import { labelFor } from "@/content/profile";
 import { api, type AttemptSummary, type ContributorStatus, type ContributorSummary } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
 import { useLoad } from "@/lib/use-load";
+import { identityLabel, identityPill } from "./identity-panel";
 import { PageTitle, useCan } from "./workspace";
 
 export const shortDate = (iso: string | null | undefined) =>
@@ -84,6 +85,66 @@ function Queue() {
   );
 }
 
+/** Identities waiting for Ops: numbers given, not yet verified (D-078). */
+function IdentityQueue() {
+  const list = useLoad(() =>
+    api<{ contributors: ContributorSummary[] }>("GET", "/v1/contributors?identity=pending").then((r) =>
+      r.contributors.filter((c) => c.national_id_last3 && c.status !== "removed").reverse(),
+    ),
+  );
+  if (list.status === "loading") return <Skeleton className="h-40 w-full" />;
+  if (list.status === "error") return <Alert tone="danger" title={errorMessage(list.error)} />;
+  return (
+    <Table
+      caption="Identities waiting for a check, oldest first"
+      hideCaption
+      rows={list.data}
+      rowKey={(c) => c.id}
+      empty="No identities are waiting. Contributors appear here once they give their National ID and M-Pesa numbers."
+      columns={[
+        {
+          key: "who",
+          header: "Contributor",
+          cell: (c) => (
+            <span className="grid">
+              <span className="font-mono text-xs text-fg-muted">{c.public_code}</span>
+              <span>{c.display_name}</span>
+            </span>
+          ),
+          sortValue: (c) => c.public_code,
+        },
+        { key: "status", header: "Status", cell: (c) => <StatusBadge status={c.status} /> },
+        {
+          key: "id",
+          header: "ID ending",
+          cell: (c) => <span className="font-mono">{c.national_id_last3}</span>,
+        },
+        {
+          key: "dupes",
+          header: "Possible duplicates",
+          numeric: true,
+          cell: (c) =>
+            c.possible_duplicates > 0 ? (
+              <StatusPill status="warning">{c.possible_duplicates}</StatusPill>
+            ) : (
+              "None"
+            ),
+          sortValue: (c) => c.possible_duplicates,
+        },
+        {
+          key: "go",
+          header: <span className="sr-only">Action</span>,
+          cell: (c) => (
+            <Link href={`/w/contributors/${c.id}`} className="font-medium underline underline-offset-4">
+              Check<span className="sr-only"> {c.public_code}</span>
+            </Link>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
 const statuses: Array<ContributorStatus | ""> = ["", "applied", "qualifying", "active", "paused", "removed"];
 
 function All() {
@@ -134,6 +195,16 @@ function All() {
               cell: (c) => <StatusBadge status={c.status} />,
               sortValue: (c) => c.status,
             },
+            {
+              key: "identity",
+              header: "Identity",
+              cell: (c) => (
+                <StatusPill status={identityPill(c.identity_status)}>
+                  {identityLabel[c.identity_status]}
+                </StatusPill>
+              ),
+              sortValue: (c) => c.identity_status,
+            },
             { key: "langs", header: "Languages", cell: (c) => c.languages.map(labelFor).join(", ") || "–" },
             {
               key: "phone",
@@ -158,7 +229,12 @@ export function Contributors() {
   const params = useSearchParams();
   const approve = can("contributor.approve");
   const tabs = [
-    ...(approve ? [{ id: "queue", label: "Waiting for review", content: <Queue /> }] : []),
+    ...(approve
+      ? [
+          { id: "queue", label: "Waiting for review", content: <Queue /> },
+          { id: "identity", label: "Identity checks", content: <IdentityQueue /> },
+        ]
+      : []),
     { id: "all", label: "All contributors", content: <All /> },
   ];
   return (
@@ -167,7 +243,13 @@ export function Contributors() {
       <Tabs
         label="Contributors"
         tabs={tabs}
-        defaultTab={params.get("tab") === "all" || !approve ? "all" : "queue"}
+        defaultTab={
+          !approve
+            ? "all"
+            : params.get("tab") === "all" || params.get("tab") === "identity"
+              ? params.get("tab")!
+              : "queue"
+        }
       />
     </>
   );

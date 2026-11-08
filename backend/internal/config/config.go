@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/MboyaDan/mezai/backend/internal/identity"
 )
 
 // Environment names accepted in APP_ENV.
@@ -62,6 +64,12 @@ type Config struct {
 	// TurnstileSecret turns on Cloudflare Turnstile checks on public forms
 	// (DG-07). Empty leaves them off; the honeypot and rate limits still apply.
 	TurnstileSecret string
+
+	// IdentityKey keys the National ID fingerprints (D-078), from
+	// IDENTITY_HMAC_KEY as base64 of at least 32 random bytes. Required
+	// outside development and test. Changing it breaks duplicate detection
+	// for every number already stored, so it is never rotated casually.
+	IdentityKey []byte
 }
 
 // IsDevLike reports whether the environment allows development-only tools such as the seed command.
@@ -159,6 +167,15 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if _, err := mail.ParseAddress(c.MailFrom); err != nil {
 		errs = append(errs, fmt.Errorf("MAIL_FROM must be an address such as \"MezAI <no-reply@example.com>\" (required outside development and test)"))
+	}
+	if k := get("IDENTITY_HMAC_KEY", ""); k != "" {
+		if c.IdentityKey, err = identity.ParseKey(k); err != nil {
+			errs = append(errs, fmt.Errorf("IDENTITY_HMAC_KEY: %w", err))
+		}
+	} else if c.IsDevLike() {
+		c.IdentityKey = identity.DevKey
+	} else {
+		errs = append(errs, errors.New("IDENTITY_HMAC_KEY is required outside development and test (base64 of 32 random bytes: openssl rand -base64 32)"))
 	}
 	if c.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))

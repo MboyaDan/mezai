@@ -17,6 +17,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/dbtest"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
+	"github.com/MboyaDan/mezai/backend/internal/identity"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/seed"
 )
@@ -49,7 +50,7 @@ func newEnv(t *testing.T) *env {
 	}
 	r, rules := httpapi.NewRouterWithRules(httpapi.Deps{Auth: &httpapi.AuthDeps{
 		Service: svc, Pool: pool, AppOrigin: origin, CookieSecure: true,
-		Files: files, Enquiry: httpapi.EnquiryDeps{NotifyTo: "ops@mezai.invalid"},
+		Files: files, Enquiry: httpapi.EnquiryDeps{NotifyTo: "ops@mezai.invalid"}, IdentityKey: identity.DevKey,
 	}})
 	return &env{t: t, pool: pool, router: r, rules: rules, files: files}
 }

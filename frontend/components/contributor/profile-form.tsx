@@ -16,7 +16,7 @@ import {
   proficiencyOptions,
 } from "@/content/profile";
 import { ApiError, api, type ContributorProfile, type ProfileInput } from "@/lib/api/client";
-import { errorMessage, maskedPreview, normaliseKenyanMobile } from "@/lib/onboarding";
+import { errorMessage, maskedPreview, normaliseKenyanMobile, normaliseNationalId } from "@/lib/onboarding";
 import { useProfile } from "./portal";
 
 type Lang = { language: string; proficiency: string; dialects: string };
@@ -50,6 +50,7 @@ export function ProfileForm() {
   const [domains, setDomains] = useState<string[]>(profile.domains);
   const [phone, setPhone] = useState("");
   const [phone2, setPhone2] = useState("");
+  const [nationalId, setNationalId] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,6 +72,8 @@ export function ProfileForm() {
       else if (normaliseKenyanMobile(phone) !== normaliseKenyanMobile(phone2))
         e.mpesa_phone_confirm = "The two numbers do not match.";
     }
+    if (nationalId && !normaliseNationalId(nationalId))
+      e.national_id = "Enter your National ID number: 6 to 9 digits.";
     return e;
   }
 
@@ -102,6 +105,7 @@ export function ProfileForm() {
       domains,
       mpesa_phone: phone,
       mpesa_phone_confirm: phone2,
+      national_id: nationalId,
     };
     setBusy(true);
     try {
@@ -110,6 +114,7 @@ export function ProfileForm() {
       setProfile(next);
       setPhone("");
       setPhone2("");
+      setNationalId("");
       setBecameQualifying(before === "applied" && next.status === "qualifying");
       toast({ tone: "success", title: "Profile saved" });
     } catch (err) {
@@ -153,7 +158,12 @@ export function ProfileForm() {
 
       <fieldset disabled={removed} className="grid gap-8">
         <Section title="About you">
-          <Field label="Display name" error={errors.display_name} required>
+          <Field
+            label="Display name"
+            hint="Your full name as registered with M-Pesa. We check it before your first payment."
+            error={errors.display_name}
+            required
+          >
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -345,6 +355,33 @@ export function ProfileForm() {
             </p>
           )}
         </Section>
+
+        <Section
+          title="National ID number"
+          hint="So each person has one account. We do not keep the number: we store a one-way code made from it and its last 3 digits."
+        >
+          {profile.national_id_last3 && (
+            <p className="text-sm">
+              On file: ID ending <span className="font-mono">{profile.national_id_last3}</span>. Leave the box
+              empty to keep it.
+            </p>
+          )}
+          <Field
+            label="National ID number"
+            hint="Digits only, as printed on your ID card. No photo or document is needed."
+            error={errors.national_id}
+            required={!profile.national_id_last3}
+          >
+            <Input
+              inputMode="numeric"
+              autoComplete="off"
+              value={nationalId}
+              onChange={(e) => setNationalId(e.target.value)}
+              maxLength={14}
+            />
+          </Field>
+          <IdentityNotice status={profile.identity_status} note={profile.identity_note} />
+        </Section>
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-4 border-t border-border pt-6">
@@ -357,4 +394,22 @@ export function ProfileForm() {
       </div>
     </form>
   );
+}
+
+/** Where the identity check stands, in the contributor's words. */
+export function IdentityNotice({
+  status,
+  note,
+}: {
+  status: ContributorProfile["identity_status"];
+  note: string | null;
+}) {
+  if (status === "verified") return <p className="text-sm text-fg-muted">Your details have been checked.</p>;
+  if (status === "rejected")
+    return (
+      <Alert tone="danger" title="We could not confirm your details">
+        {note} Correct the number above, or contact us through the contact form.
+      </Alert>
+    );
+  return null;
 }

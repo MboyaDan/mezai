@@ -4,9 +4,9 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 8b (project screens). Branch `stage-08b-projects-ui`, PR open. 8a merged as #25.
-- **Next stage:** 7c: one person, one account (D-078). Needs a new privacy notice and contributor terms version first; then Stage 9 (task engine, planned split).
-- **Blocking questions:** none.
+- **Last stage:** 7c (one person, one account, D-078). Branch `stage-07c-one-account`, PR open. 8b merged as #26.
+- **Next stage:** 9 (task engine, planned split 9a/9b; confirm with Dan first).
+- **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
 
@@ -50,6 +50,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Answer checking (qualification now, gold in Stage 10) | `backend/internal/quality/answer.go` |
 | Legal document versions the API accepts | `backend/internal/legal/legal.go` (kept equal to `frontend/content/legal.ts` by `content/legal.test.ts`) |
 | Phone normalising and masking | `backend/internal/pii/phone.go` |
+| National ID fingerprint, identity checks | `backend/internal/identity/`, `backend/internal/contributors/identity.go`; Ops panel `frontend/components/workspace/identity-panel.tsx` |
 | API types and client (frontend) | `frontend/lib/api/schema.ts` (generated: `npm run gen:api`), `lib/api/client.ts` |
 | Session, sign-in gate, redirects | `frontend/lib/session.tsx`, `frontend/proxy.ts`, `lib/onboarding.ts` (`safeNext`) |
 | Sign-in, join, verify, reset pages | `frontend/app/(auth)/`, `components/auth/` |
@@ -80,7 +81,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 7a | Merged | #23 | Migration 00009 (`profile.manage`, test config, one open attempt per test, per-question results). 17 endpoints: sign-up with consent, profile, consents, qualification take/autosave/submit, Ops contributor list/detail/status, attempt queue/review/decision, tests from gold. Status machine, answer checking, phone masking, spec coverage test. |
 | 7b | Merged | #24 | Sign-in, join with consent, verify, reset; contributor dashboard steps, profile, qualification list and test (three task types, autosave); workspace overview, contributors, queue, attempt review, status changes; generated API types; full-stack AC-04 CI job. Fixed table overflow at 390 and robots rules. |
 | 8a | Merged | #25 | Migration 00010 (project QA checks, import digests, `project_requests` with RLS). 21 endpoints: organisations, task templates, projects (create, edit, lifecycle with readiness), CSV/JSONL import dry run and all-or-nothing commit, gold list/add/retire, client project requests with sample file, convert and decline. Object storage put/get. AC-05 API tests. Plan: auto QA checks (D-077, Stage 9) and one-account checks (D-078, new Stage 7c). |
-| 8b | PR open | #26 | Projects list, create (and convert from a request), overview with readiness, status actions, settings with locks, item and gold import wizard (check → report → import), gold by hand, retire, "Make a qualification test" (D-073 done), organisations, client request form and Ops inbox with convert/decline. AC-05 full-stack UI test. |
+| 8b | Merged | #26 | Projects list, create (and convert from a request), overview with readiness, status actions, settings with locks, item and gold import wizard (check → report → import), gold by hand, retire, "Make a qualification test" (D-073 done), organisations, client request form and Ops inbox with convert/decline. AC-05 full-stack UI test. |
+| 7c | PR open | #27 | Migration 00011 (ID fingerprint + last 3 digits, identity status and M-Pesa name check on `contributor_profiles`, unique M-Pesa number and ID, `identity_flags`, `norm_name`; clears duplicate numbers left by test data). `internal/identity` (normalise, HMAC, key). `IDENTITY_HMAC_KEY` required outside dev/test. Profile takes `national_id`; reused numbers refused and flagged; profile saves rate limited per account. Ops verify/reject (`/contributors/{id}/identity`) and M-Pesa name check (`/mpesa-name-check`). Active needs approved test + verified identity. Privacy notice and contributor terms 0.2. UI: National ID field, dashboard identity step, Ops identity panel and "Identity checks" tab. Sign-out now does a full page load (fixes a redirect race). |
 
 ## Notes for the next session
 
@@ -93,6 +95,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - SignalLattice fills its container width; size it with a wrapper div.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
 - Local databases seeded before 7a have empty qualification test `config`: re-seed a fresh volume, or run the UPDATE in the 7b PR notes.
+- Stage 9: eligible contributors are `status = active` **and** `identity_status = verified` (D-089). Stage 14: require `mpesa_name_checked_at` before a contributor's first payout (D-092). Stage 17: decide whether deletion keeps the ID fingerprint (A-053).
+- Sign-up allows 10 an hour per IP: repeated full-stack runs hit it; `docker compose restart api` resets it locally.
 - Contributor endpoints call `contributorOf(p)`: Super Admin holds every permission but has no contributor profile.
 - Qualification answers use the task templates' submission shapes; reuse `quality.Parse` and `quality.Matches` for gold in Stages 9 and 10.
 - New tables: grant `mezai_app` privileges in the same migration (no default privileges), add RLS if the table has `org_id` (a test enforces it), and revoke UPDATE/DELETE if append-only.

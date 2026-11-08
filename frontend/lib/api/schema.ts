@@ -572,10 +572,50 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** A contributor's profile, status history and attempts. */
+    /** A contributor's profile, identity checks, status history and attempts. */
     get: operations["getContributor"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/identity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Verify or reject a contributor's identity (`contributor.approve`, D-078).
+     * @description Verifying needs a confirmed M-Pesa number and a National ID number on the profile (409 `identity_incomplete`), and a note while there are possible duplicates (recorded number clashes or another account with the same name). Rejecting needs a note, which the contributor sees. Verifying makes a qualifying contributor with an approved test active.
+     */
+    post: operations["decideContributorIdentity"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/mpesa-name-check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record that the name M-Pesa shows for the number matches the profile name (`payout.create`, D-078).
+     * @description Done before the first payout. The registered name is not stored. Cleared when the contributor changes their number or name. A mismatch is recorded by rejecting the identity.
+     */
+    post: operations["recordMpesaNameCheck"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1091,6 +1131,11 @@ export interface components {
       /** @description +254 7•• ••• 678; empty when none. The full number is never returned. */
       mpesa_phone_masked: string;
       mpesa_phone_confirmed: boolean;
+      /** @description Last 3 digits; the number itself is never stored */
+      national_id_last3: string | null;
+      identity_status: components["schemas"]["IdentityStatus"];
+      /** @description Ops' note; the reason when rejected */
+      identity_note: string | null;
       languages: components["schemas"]["Language"][];
       domains: ("health" | "law" | "finance" | "education" | "software" | "agriculture" | "other")[];
       /** @description Fields still needed before the contributor can qualify */
@@ -1127,6 +1172,42 @@ export interface components {
       mpesa_phone?: string;
       /** @description Must match mpesa_phone */
       mpesa_phone_confirm?: string;
+      /** @description Kenyan National ID number, 6 to 9 digits. Empty keeps the stored one. Stored only as a keyed fingerprint and its last 3 digits. A number on another account is 422 for this field. */
+      national_id?: string;
+    };
+    /** @enum {string} */
+    IdentityStatus: "pending" | "verified" | "rejected";
+    ContributorRef: {
+      /** Format: uuid */
+      id: string;
+      public_code: string;
+      status: components["schemas"]["ContributorStatus"];
+    };
+    /** @description What Ops sees when verifying a contributor (D-078). Other accounts are named by code only. */
+    IdentityChecks: {
+      status: components["schemas"]["IdentityStatus"];
+      note: string | null;
+      /** @description Display name */
+      decided_by: string | null;
+      /** Format: date-time */
+      decided_at: string | null;
+      national_id_last3: string | null;
+      /** Format: date-time */
+      mpesa_name_checked_at: string | null;
+      /** @description Display name */
+      mpesa_name_checked_by: string | null;
+      /** @description Tries to put a number on a profile while another account held it */
+      flags: {
+        /** @enum {string} */
+        kind: "mpesa_in_use" | "national_id_in_use";
+        /** @description True: this contributor tried to use the other account's number */
+        raised_by_this: boolean;
+        other: components["schemas"]["ContributorRef"];
+        /** Format: date-time */
+        at: string;
+      }[];
+      /** @description Other accounts with the same name */
+      same_name: components["schemas"]["ContributorRef"][];
     };
     ContributorSummary: {
       /** Format: uuid */
@@ -1138,6 +1219,10 @@ export interface components {
       country: string | null;
       languages: string[];
       mpesa_phone_masked: string;
+      identity_status: components["schemas"]["IdentityStatus"];
+      national_id_last3: string | null;
+      /** @description Recorded number clashes plus other accounts with the same name */
+      possible_duplicates: number;
       /** Format: date-time */
       created_at: string;
     };
@@ -1498,6 +1583,28 @@ export interface components {
     };
   };
   responses: {
+    /** @description Contributor */
+    ContributorDetail: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": {
+          profile: components["schemas"]["ContributorProfile"];
+          identity: components["schemas"]["IdentityChecks"];
+          history: {
+            from: string | null;
+            to: string;
+            reason: string;
+            /** @description Display name; null for the system */
+            changed_by: string | null;
+            /** Format: date-time */
+            at: string;
+          }[];
+          attempts: components["schemas"]["AttemptSummary"][];
+        };
+      };
+    };
     /** @description Accepted. The same answer whether or not the email is registered. */
     Accepted: {
       headers: {
@@ -2458,6 +2565,8 @@ export interface operations {
     parameters: {
       query?: {
         status?: components["schemas"]["ContributorStatus"];
+        /** @description Identity status; `pending` is the Ops verification queue */
+        identity?: components["schemas"]["IdentityStatus"];
       };
       header?: never;
       path?: never;
@@ -2490,28 +2599,55 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Contributor */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            profile: components["schemas"]["ContributorProfile"];
-            history: {
-              from: string | null;
-              to: string;
-              reason: string;
-              /** @description Display name; null for the system */
-              changed_by: string | null;
-              /** Format: date-time */
-              at: string;
-            }[];
-            attempts: components["schemas"]["AttemptSummary"][];
-          };
+      200: components["responses"]["ContributorDetail"];
+      404: components["responses"]["Error"];
+    };
+  };
+  decideContributorIdentity: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          decision: "verify" | "reject";
+          note?: string;
         };
       };
+    };
+    responses: {
+      200: components["responses"]["ContributorDetail"];
       404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  recordMpesaNameCheck: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: components["responses"]["ContributorDetail"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
     };
   };
   setContributorStatus: {
