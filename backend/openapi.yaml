@@ -615,6 +615,7 @@ paths:
       tags: [contributors]
       parameters:
         - { name: status, in: query, schema: { $ref: "#/components/schemas/ContributorStatus" } }
+        - { name: identity, in: query, description: "Identity status; `pending` is the Ops verification queue", schema: { $ref: "#/components/schemas/IdentityStatus" } }
       responses:
         "200":
           description: Contributors
@@ -629,32 +630,55 @@ paths:
   /v1/contributors/{id}:
     get:
       operationId: getContributor
-      summary: A contributor's profile, status history and attempts.
+      summary: A contributor's profile, identity checks, status history and attempts.
       tags: [contributors]
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       responses:
-        "200":
-          description: Contributor
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [profile, history, attempts]
-                properties:
-                  profile: { $ref: "#/components/schemas/ContributorProfile" }
-                  history:
-                    type: array
-                    items:
-                      type: object
-                      required: [from, to, reason, changed_by, at]
-                      properties:
-                        from: { type: [string, "null"] }
-                        to: { type: string }
-                        reason: { type: string }
-                        changed_by: { type: [string, "null"], description: Display name; null for the system }
-                        at: { type: string, format: date-time }
-                  attempts: { type: array, items: { $ref: "#/components/schemas/AttemptSummary" } }
+        "200": { $ref: "#/components/responses/ContributorDetail" }
         "404": { $ref: "#/components/responses/Error" }
+  /v1/contributors/{id}/identity:
+    post:
+      operationId: decideContributorIdentity
+      summary: Verify or reject a contributor's identity (`contributor.approve`, D-078).
+      description: >-
+        Verifying needs a confirmed M-Pesa number and a National ID number on the profile
+        (409 `identity_incomplete`), and a note while there are possible duplicates (recorded
+        number clashes or another account with the same name). Rejecting needs a note, which
+        the contributor sees. Verifying makes a qualifying contributor with an approved test active.
+      tags: [contributors]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [verify, reject] }
+                note: { type: string, maxLength: 1000 }
+      responses:
+        "200": { $ref: "#/components/responses/ContributorDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/contributors/{id}/mpesa-name-check:
+    post:
+      operationId: recordMpesaNameCheck
+      summary: Record that the name M-Pesa shows for the number matches the profile name (`payout.create`, D-078).
+      description: >-
+        Done before the first payout. The registered name is not stored. Cleared when the
+        contributor changes their number or name. A mismatch is recorded by rejecting the identity.
+      tags: [contributors]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { $ref: "#/components/responses/ContributorDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /v1/contributors/{id}/status:
     post:
       operationId: setContributorStatus
@@ -1259,6 +1283,28 @@ components:
             properties:
               token: { type: string }
   responses:
+    ContributorDetail:
+      description: Contributor
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [profile, identity, history, attempts]
+            properties:
+              profile: { $ref: "#/components/schemas/ContributorProfile" }
+              identity: { $ref: "#/components/schemas/IdentityChecks" }
+              history:
+                type: array
+                items:
+                  type: object
+                  required: [from, to, reason, changed_by, at]
+                  properties:
+                    from: { type: [string, "null"] }
+                    to: { type: string }
+                    reason: { type: string }
+                    changed_by: { type: [string, "null"], description: Display name; null for the system }
+                    at: { type: string, format: date-time }
+              attempts: { type: array, items: { $ref: "#/components/schemas/AttemptSummary" } }
     Accepted:
       description: Accepted. The same answer whether or not the email is registered.
       content:
@@ -1434,7 +1480,8 @@ components:
     ContributorProfile:
       type: object
       required: [id, public_code, status, email, display_name, country, city, education_level, weekly_hours,
-        mpesa_phone_masked, mpesa_phone_confirmed, languages, domains, missing, consents, consent_required, qualifications, created_at]
+        mpesa_phone_masked, mpesa_phone_confirmed, national_id_last3, identity_status, identity_note,
+        languages, domains, missing, consents, consent_required, qualifications, created_at]
       properties:
         id: { type: string, format: uuid }
         public_code: { type: string, description: "C-0001; the only identifier clients ever see" }
@@ -1447,6 +1494,9 @@ components:
         weekly_hours: { type: [integer, "null"] }
         mpesa_phone_masked: { type: string, description: "+254 7•• ••• 678; empty when none. The full number is never returned." }
         mpesa_phone_confirmed: { type: boolean }
+        national_id_last3: { type: [string, "null"], description: Last 3 digits; the number itself is never stored }
+        identity_status: { $ref: "#/components/schemas/IdentityStatus" }
+        identity_note: { type: [string, "null"], description: "Ops' note; the reason when rejected" }
         languages: { type: array, items: { $ref: "#/components/schemas/Language" } }
         domains: { type: array, items: { type: string, enum: [health, law, finance, education, software, agriculture, other] } }
         missing: { type: array, items: { type: string }, description: Fields still needed before the contributor can qualify }
@@ -1485,9 +1535,47 @@ components:
         domains: { type: array, items: { type: string } }
         mpesa_phone: { type: string, description: "07XXXXXXXX, 01XXXXXXXX, 254… or +254…" }
         mpesa_phone_confirm: { type: string, description: Must match mpesa_phone }
+        national_id:
+          type: string
+          description: >-
+            Kenyan National ID number, 6 to 9 digits. Empty keeps the stored one. Stored only as a
+            keyed fingerprint and its last 3 digits. A number on another account is 422 for this field.
+    IdentityStatus: { type: string, enum: [pending, verified, rejected] }
+    ContributorRef:
+      type: object
+      required: [id, public_code, status]
+      properties:
+        id: { type: string, format: uuid }
+        public_code: { type: string }
+        status: { $ref: "#/components/schemas/ContributorStatus" }
+    IdentityChecks:
+      type: object
+      description: What Ops sees when verifying a contributor (D-078). Other accounts are named by code only.
+      required: [status, note, decided_by, decided_at, national_id_last3, mpesa_name_checked_at, mpesa_name_checked_by, flags, same_name]
+      properties:
+        status: { $ref: "#/components/schemas/IdentityStatus" }
+        note: { type: [string, "null"] }
+        decided_by: { type: [string, "null"], description: Display name }
+        decided_at: { type: [string, "null"], format: date-time }
+        national_id_last3: { type: [string, "null"] }
+        mpesa_name_checked_at: { type: [string, "null"], format: date-time }
+        mpesa_name_checked_by: { type: [string, "null"], description: Display name }
+        flags:
+          type: array
+          description: Tries to put a number on a profile while another account held it
+          items:
+            type: object
+            required: [kind, raised_by_this, other, at]
+            properties:
+              kind: { type: string, enum: [mpesa_in_use, national_id_in_use] }
+              raised_by_this: { type: boolean, description: "True: this contributor tried to use the other account's number" }
+              other: { $ref: "#/components/schemas/ContributorRef" }
+              at: { type: string, format: date-time }
+        same_name: { type: array, items: { $ref: "#/components/schemas/ContributorRef" }, description: Other accounts with the same name }
     ContributorSummary:
       type: object
-      required: [id, public_code, status, display_name, email, country, languages, mpesa_phone_masked, created_at]
+      required: [id, public_code, status, display_name, email, country, languages, mpesa_phone_masked,
+        identity_status, national_id_last3, possible_duplicates, created_at]
       properties:
         id: { type: string, format: uuid }
         public_code: { type: string }
@@ -1497,6 +1585,9 @@ components:
         country: { type: [string, "null"] }
         languages: { type: array, items: { type: string } }
         mpesa_phone_masked: { type: string }
+        identity_status: { $ref: "#/components/schemas/IdentityStatus" }
+        national_id_last3: { type: [string, "null"] }
+        possible_duplicates: { type: integer, description: Recorded number clashes plus other accounts with the same name }
         created_at: { type: string, format: date-time }
     TaskConfig:
       type: object

@@ -126,6 +126,14 @@ type ContributorProfile struct {
 	MpesaPhoneConfirmedAt *time.Time
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	NationalIDFp          []byte
+	NationalIDLast3       *string
+	IdentityStatus        string
+	IdentityNote          *string
+	IdentityDecidedBy     *uuid.UUID
+	IdentityDecidedAt     *time.Time
+	MpesaNameCheckedAt    *time.Time
+	MpesaNameCheckedBy    *uuid.UUID
 }
 
 type ContributorStatusHistory struct {
@@ -279,6 +287,14 @@ type IdempotencyKey struct {
 	ExpiresAt      time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type IdentityFlag struct {
+	ID                 uuid.UUID
+	ContributorID      uuid.UUID
+	OtherContributorID uuid.UUID
+	Kind               string
+	CreatedAt          time.Time
 }
 
 type ImportError struct {

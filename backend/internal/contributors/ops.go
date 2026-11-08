@@ -31,24 +31,39 @@ type Summary struct {
 	Country          *string   `json:"country"`
 	Languages        []string  `json:"languages"`
 	MpesaPhoneMasked string    `json:"mpesa_phone_masked"`
-	CreatedAt        time.Time `json:"created_at"`
+	IdentityStatus   string    `json:"identity_status"`
+	NationalIDLast3  *string   `json:"national_id_last3"`
+	// PossibleDuplicates counts recorded number clashes and other accounts
+	// with the same name (D-078).
+	PossibleDuplicates int32     `json:"possible_duplicates"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
-// ListContributors lists contributors, newest first, optionally by status.
-func (s *Service) ListContributors(ctx context.Context, p *auth.Principal, status string) ([]Summary, error) {
-	var filter *string
+// ListContributors lists contributors, newest first, optionally by status
+// and identity status.
+func (s *Service) ListContributors(ctx context.Context, p *auth.Principal, status, identityStatus string) ([]Summary, error) {
+	var filter store.ListContributorsParams
 	if status != "" {
 		if !validStatus(status) {
 			return nil, fieldErr("status", "unknown status")
 		}
-		filter = &status
+		filter.Status = &status
+	}
+	if identityStatus != "" {
+		switch identityStatus {
+		case IdentityPending, IdentityVerified, IdentityRejected:
+		default:
+			return nil, fieldErr("identity", "unknown identity status")
+		}
+		filter.IdentityStatus = &identityStatus
 	}
 	out := []Summary{}
 	err := s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
 		rows, err := store.New(tx).ListContributors(ctx, filter)
 		for _, r := range rows {
 			sm := Summary{ID: r.ID, PublicCode: r.PublicCode, Status: r.Status, DisplayName: r.DisplayName, Email: r.Email,
-				Country: r.Country, Languages: r.Languages, CreatedAt: r.CreatedAt}
+				Country: r.Country, Languages: r.Languages, CreatedAt: r.CreatedAt,
+				IdentityStatus: r.IdentityStatus, NationalIDLast3: r.NationalIDLast3, PossibleDuplicates: r.FlagCount + r.SameNameCount}
 			if sm.Languages == nil {
 				sm.Languages = []string{}
 			}
@@ -74,6 +89,7 @@ type StatusChange struct {
 // Detail is a contributor's profile with status history and attempts, for Ops.
 type Detail struct {
 	Profile  Profile          `json:"profile"`
+	Identity IdentityChecks   `json:"identity"`
 	History  []StatusChange   `json:"history"`
 	Attempts []AttemptSummary `json:"attempts"`
 }
@@ -85,6 +101,9 @@ func (s *Service) GetContributor(ctx context.Context, p *auth.Principal, id uuid
 		q := store.New(tx)
 		var err error
 		if out.Profile, err = loadProfile(ctx, q, id); err != nil {
+			return err
+		}
+		if out.Identity, err = loadIdentityChecks(ctx, q, id); err != nil {
 			return err
 		}
 		hist, err := q.ListContributorStatusHistory(ctx, id)
@@ -254,7 +273,8 @@ func (s *Service) ReviewAttempt(ctx context.Context, p *auth.Principal, id uuid.
 }
 
 // Decide approves or rejects a scored attempt. Only a passed attempt can be
-// approved; approving makes a qualifying contributor active. A rejection
+// approved; approving makes a qualifying contributor active once their
+// identity is verified. A rejection
 // needs a note, which the contributor sees.
 func (s *Service) Decide(ctx context.Context, p *auth.Principal, id uuid.UUID, decision, note string, m auth.Meta) (AttemptReview, error) {
 	note = strings.TrimSpace(note)
@@ -300,17 +320,13 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, id uuid.UUID, d
 			return err
 		}
 		if status == AttemptApproved {
-			cp, err := q.LockContributorProfile(ctx, a.ContributorID)
+			// Active needs a verified identity too (D-078); whichever of the
+			// two comes last makes the contributor active.
+			t, err := q.GetQualificationTest(ctx, a.TestID)
 			if err != nil {
 				return err
 			}
-			if cp.Status == StatusQualifying {
-				t, err := q.GetQualificationTest(ctx, a.TestID)
-				if err != nil {
-					return err
-				}
-				return transition(ctx, q, m, cp.ID, StatusQualifying, StatusActive, ViaApproval, &p.UserID, "Qualified: "+t.Title)
-			}
+			return activateIfQualified(ctx, q, m, a.ContributorID, &p.UserID, "Qualified: "+t.Title)
 		}
 		return nil
 	})

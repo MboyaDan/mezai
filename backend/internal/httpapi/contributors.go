@@ -62,6 +62,8 @@ func (h *contributorHandlers) fail(c *gin.Context, err error) {
 		code = "not_passed"
 	case errors.Is(err, contributors.ErrNoGold):
 		code = "no_gold"
+	case errors.Is(err, contributors.ErrIdentityIncomplete):
+		code = "identity_incomplete"
 	case errors.Is(err, contributors.ErrNotShareable):
 		status, code = http.StatusUnprocessableEntity, "content_not_confirmed"
 	default:
@@ -207,7 +209,7 @@ func (h *contributorHandlers) submitAttempt(c *gin.Context) {
 }
 
 func (h *contributorHandlers) listContributors(c *gin.Context) {
-	out, err := h.svc.ListContributors(c.Request.Context(), PrincipalFrom(c), c.Query("status"))
+	out, err := h.svc.ListContributors(c.Request.Context(), PrincipalFrom(c), c.Query("status"), c.Query("identity"))
 	if err != nil {
 		h.fail(c, err)
 		return
@@ -238,6 +240,36 @@ func (h *contributorHandlers) setContributorStatus(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.SetStatus(c.Request.Context(), PrincipalFrom(c), id, req.Status, req.Reason, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *contributorHandlers) decideIdentity(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
+	if !ok || !h.bind(c, &req) {
+		return
+	}
+	out, err := h.svc.DecideIdentity(c.Request.Context(), PrincipalFrom(c), id, req.Decision, req.Note, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *contributorHandlers) recordMpesaNameCheck(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := h.svc.RecordMpesaNameCheck(c.Request.Context(), PrincipalFrom(c), id, meta(c))
 	if err != nil {
 		h.fail(c, err)
 		return

@@ -73,6 +73,21 @@ func (q *Queries) AddContributorStatusHistory(ctx context.Context, arg AddContri
 	return err
 }
 
+const addIdentityFlag = `-- name: AddIdentityFlag :exec
+INSERT INTO identity_flags (contributor_id, other_contributor_id, kind) VALUES ($1, $2, $3)
+`
+
+type AddIdentityFlagParams struct {
+	ContributorID      uuid.UUID
+	OtherContributorID uuid.UUID
+	Kind               string
+}
+
+func (q *Queries) AddIdentityFlag(ctx context.Context, arg AddIdentityFlagParams) error {
+	_, err := q.db.Exec(ctx, addIdentityFlag, arg.ContributorID, arg.OtherContributorID, arg.Kind)
+	return err
+}
+
 const addQualificationQuestion = `-- name: AddQualificationQuestion :exec
 INSERT INTO qualification_questions (test_id, position, content, expected, tolerance)
 VALUES ($1, $2, $3, $4, $5)
@@ -115,6 +130,47 @@ func (q *Queries) ClearContributorLanguages(ctx context.Context, contributorID u
 	return err
 }
 
+const clearMpesaNameCheck = `-- name: ClearMpesaNameCheck :exec
+UPDATE contributor_profiles SET mpesa_name_checked_at = NULL, mpesa_name_checked_by = NULL WHERE id = $1
+`
+
+func (q *Queries) ClearMpesaNameCheck(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearMpesaNameCheck, id)
+	return err
+}
+
+const contributorHoldingNationalID = `-- name: ContributorHoldingNationalID :one
+SELECT id FROM contributor_profiles WHERE national_id_fp = $1 AND id <> $2
+`
+
+type ContributorHoldingNationalIDParams struct {
+	NationalIDFp []byte
+	ID           uuid.UUID
+}
+
+func (q *Queries) ContributorHoldingNationalID(ctx context.Context, arg ContributorHoldingNationalIDParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, contributorHoldingNationalID, arg.NationalIDFp, arg.ID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const contributorHoldingPhone = `-- name: ContributorHoldingPhone :one
+SELECT id FROM contributor_profiles WHERE mpesa_phone = $1 AND id <> $2
+`
+
+type ContributorHoldingPhoneParams struct {
+	MpesaPhone *string
+	ID         uuid.UUID
+}
+
+func (q *Queries) ContributorHoldingPhone(ctx context.Context, arg ContributorHoldingPhoneParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, contributorHoldingPhone, arg.MpesaPhone, arg.ID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createContributorProfile = `-- name: CreateContributorProfile :one
 INSERT INTO contributor_profiles (
   user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at
@@ -122,7 +178,7 @@ INSERT INTO contributor_profiles (
   $1, 'C-' || lpad(nextval('contributor_public_code_seq')::text, 4, '0'),
   $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at
+RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by
 `
 
 type CreateContributorProfileParams struct {
@@ -161,6 +217,14 @@ func (q *Queries) CreateContributorProfile(ctx context.Context, arg CreateContri
 		&i.MpesaPhoneConfirmedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NationalIDFp,
+		&i.NationalIDLast3,
+		&i.IdentityStatus,
+		&i.IdentityNote,
+		&i.IdentityDecidedBy,
+		&i.IdentityDecidedAt,
+		&i.MpesaNameCheckedAt,
+		&i.MpesaNameCheckedBy,
 	)
 	return i, err
 }
@@ -219,8 +283,31 @@ func (q *Queries) CreateQualificationTest(ctx context.Context, arg CreateQualifi
 	return i, err
 }
 
+const decideContributorIdentity = `-- name: DecideContributorIdentity :exec
+UPDATE contributor_profiles SET identity_status = $1, identity_note = $2,
+  identity_decided_by = $3, identity_decided_at = now()
+WHERE id = $4
+`
+
+type DecideContributorIdentityParams struct {
+	IdentityStatus string
+	IdentityNote   *string
+	DecidedBy      *uuid.UUID
+	ID             uuid.UUID
+}
+
+func (q *Queries) DecideContributorIdentity(ctx context.Context, arg DecideContributorIdentityParams) error {
+	_, err := q.db.Exec(ctx, decideContributorIdentity,
+		arg.IdentityStatus,
+		arg.IdentityNote,
+		arg.DecidedBy,
+		arg.ID,
+	)
+	return err
+}
+
 const getContributorProfile = `-- name: GetContributorProfile :one
-SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, u.email, u.display_name
+SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, u.email, u.display_name
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
 WHERE cp.id = $1
 `
@@ -238,6 +325,14 @@ type GetContributorProfileRow struct {
 	MpesaPhoneConfirmedAt *time.Time
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	NationalIDFp          []byte
+	NationalIDLast3       *string
+	IdentityStatus        string
+	IdentityNote          *string
+	IdentityDecidedBy     *uuid.UUID
+	IdentityDecidedAt     *time.Time
+	MpesaNameCheckedAt    *time.Time
+	MpesaNameCheckedBy    *uuid.UUID
 	Email                 string
 	DisplayName           string
 }
@@ -258,10 +353,29 @@ func (q *Queries) GetContributorProfile(ctx context.Context, id uuid.UUID) (GetC
 		&i.MpesaPhoneConfirmedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NationalIDFp,
+		&i.NationalIDLast3,
+		&i.IdentityStatus,
+		&i.IdentityNote,
+		&i.IdentityDecidedBy,
+		&i.IdentityDecidedAt,
+		&i.MpesaNameCheckedAt,
+		&i.MpesaNameCheckedBy,
 		&i.Email,
 		&i.DisplayName,
 	)
 	return i, err
+}
+
+const getUserDisplayNameByID = `-- name: GetUserDisplayNameByID :one
+SELECT display_name FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserDisplayNameByID(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserDisplayNameByID, id)
+	var display_name string
+	err := row.Scan(&display_name)
+	return display_name, err
 }
 
 const insertConsent = `-- name: InsertConsent :exec
@@ -382,27 +496,41 @@ func (q *Queries) ListContributorStatusHistory(ctx context.Context, contributorI
 
 const listContributors = `-- name: ListContributors :many
 SELECT cp.id, cp.public_code, cp.status, cp.country, cp.mpesa_phone, cp.created_at, u.display_name, u.email,
-  (SELECT array_agg(cl.language ORDER BY cl.language) FROM contributor_languages cl WHERE cl.contributor_id = cp.id)::text[] AS languages
+  cp.identity_status, cp.national_id_last3,
+  (SELECT array_agg(cl.language ORDER BY cl.language) FROM contributor_languages cl WHERE cl.contributor_id = cp.id)::text[] AS languages,
+  (SELECT count(*) FROM identity_flags f WHERE f.contributor_id = cp.id OR f.other_contributor_id = cp.id)::int AS flag_count,
+  (SELECT count(*) FROM contributor_profiles o JOIN users ou ON ou.id = o.user_id
+     WHERE o.id <> cp.id AND norm_name(ou.display_name) = norm_name(u.display_name))::int AS same_name_count
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
-WHERE $1::text IS NULL OR cp.status = $1::text
+WHERE ($1::text IS NULL OR cp.status = $1::text)
+  AND ($2::text IS NULL OR cp.identity_status = $2::text)
 ORDER BY cp.created_at DESC, cp.id DESC
 LIMIT 500
 `
 
-type ListContributorsRow struct {
-	ID          uuid.UUID
-	PublicCode  string
-	Status      string
-	Country     *string
-	MpesaPhone  *string
-	CreatedAt   time.Time
-	DisplayName string
-	Email       string
-	Languages   []string
+type ListContributorsParams struct {
+	Status         *string
+	IdentityStatus *string
 }
 
-func (q *Queries) ListContributors(ctx context.Context, status *string) ([]ListContributorsRow, error) {
-	rows, err := q.db.Query(ctx, listContributors, status)
+type ListContributorsRow struct {
+	ID              uuid.UUID
+	PublicCode      string
+	Status          string
+	Country         *string
+	MpesaPhone      *string
+	CreatedAt       time.Time
+	DisplayName     string
+	Email           string
+	IdentityStatus  string
+	NationalIDLast3 *string
+	Languages       []string
+	FlagCount       int32
+	SameNameCount   int32
+}
+
+func (q *Queries) ListContributors(ctx context.Context, arg ListContributorsParams) ([]ListContributorsRow, error) {
+	rows, err := q.db.Query(ctx, listContributors, arg.Status, arg.IdentityStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +547,58 @@ func (q *Queries) ListContributors(ctx context.Context, status *string) ([]ListC
 			&i.CreatedAt,
 			&i.DisplayName,
 			&i.Email,
+			&i.IdentityStatus,
+			&i.NationalIDLast3,
 			&i.Languages,
+			&i.FlagCount,
+			&i.SameNameCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIdentityFlags = `-- name: ListIdentityFlags :many
+SELECT f.kind, f.created_at, f.contributor_id = $1 AS raised_by_this,
+  o.id AS other_id, o.public_code AS other_public_code, o.status AS other_status
+FROM identity_flags f
+JOIN contributor_profiles o ON o.id = CASE WHEN f.contributor_id = $1 THEN f.other_contributor_id ELSE f.contributor_id END
+WHERE f.contributor_id = $1 OR f.other_contributor_id = $1
+ORDER BY f.created_at DESC
+LIMIT 50
+`
+
+type ListIdentityFlagsRow struct {
+	Kind            string
+	CreatedAt       time.Time
+	RaisedByThis    bool
+	OtherID         uuid.UUID
+	OtherPublicCode string
+	OtherStatus     string
+}
+
+// Flags raised by or against a contributor, with the other account's code.
+func (q *Queries) ListIdentityFlags(ctx context.Context, id uuid.UUID) ([]ListIdentityFlagsRow, error) {
+	rows, err := q.db.Query(ctx, listIdentityFlags, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListIdentityFlagsRow{}
+	for rows.Next() {
+		var i ListIdentityFlagsRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.CreatedAt,
+			&i.RaisedByThis,
+			&i.OtherID,
+			&i.OtherPublicCode,
+			&i.OtherStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -463,8 +642,47 @@ func (q *Queries) ListLatestConsents(ctx context.Context, userID uuid.UUID) ([]L
 	return items, nil
 }
 
+const listSameNameContributors = `-- name: ListSameNameContributors :many
+SELECT o.id, o.public_code, o.status
+FROM contributor_profiles o JOIN users ou ON ou.id = o.user_id
+WHERE o.id <> $1 AND norm_name(ou.display_name) = norm_name($2::text)
+ORDER BY o.created_at
+LIMIT 20
+`
+
+type ListSameNameContributorsParams struct {
+	ID          uuid.UUID
+	DisplayName string
+}
+
+type ListSameNameContributorsRow struct {
+	ID         uuid.UUID
+	PublicCode string
+	Status     string
+}
+
+func (q *Queries) ListSameNameContributors(ctx context.Context, arg ListSameNameContributorsParams) ([]ListSameNameContributorsRow, error) {
+	rows, err := q.db.Query(ctx, listSameNameContributors, arg.ID, arg.DisplayName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSameNameContributorsRow{}
+	for rows.Next() {
+		var i ListSameNameContributorsRow
+		if err := rows.Scan(&i.ID, &i.PublicCode, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockContributorProfile = `-- name: LockContributorProfile :one
-SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at FROM contributor_profiles WHERE id = $1 FOR UPDATE
+SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by FROM contributor_profiles WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (ContributorProfile, error) {
@@ -483,8 +701,59 @@ func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (Con
 		&i.MpesaPhoneConfirmedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NationalIDFp,
+		&i.NationalIDLast3,
+		&i.IdentityStatus,
+		&i.IdentityNote,
+		&i.IdentityDecidedBy,
+		&i.IdentityDecidedAt,
+		&i.MpesaNameCheckedAt,
+		&i.MpesaNameCheckedBy,
 	)
 	return i, err
+}
+
+const recordMpesaNameCheck = `-- name: RecordMpesaNameCheck :exec
+UPDATE contributor_profiles SET mpesa_name_checked_at = now(), mpesa_name_checked_by = $1 WHERE id = $2
+`
+
+type RecordMpesaNameCheckParams struct {
+	CheckedBy *uuid.UUID
+	ID        uuid.UUID
+}
+
+func (q *Queries) RecordMpesaNameCheck(ctx context.Context, arg RecordMpesaNameCheckParams) error {
+	_, err := q.db.Exec(ctx, recordMpesaNameCheck, arg.CheckedBy, arg.ID)
+	return err
+}
+
+const resetContributorIdentity = `-- name: ResetContributorIdentity :exec
+UPDATE contributor_profiles SET identity_status = 'pending', identity_note = NULL,
+  identity_decided_by = NULL, identity_decided_at = NULL
+WHERE id = $1
+`
+
+// A changed number needs checking again.
+func (q *Queries) ResetContributorIdentity(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, resetContributorIdentity, id)
+	return err
+}
+
+const setContributorNationalID = `-- name: SetContributorNationalID :exec
+
+UPDATE contributor_profiles SET national_id_fp = $1, national_id_last3 = $2 WHERE id = $3
+`
+
+type SetContributorNationalIDParams struct {
+	NationalIDFp    []byte
+	NationalIDLast3 *string
+	ID              uuid.UUID
+}
+
+// One person, one account (Stage 7c, D-078).
+func (q *Queries) SetContributorNationalID(ctx context.Context, arg SetContributorNationalIDParams) error {
+	_, err := q.db.Exec(ctx, setContributorNationalID, arg.NationalIDFp, arg.NationalIDLast3, arg.ID)
+	return err
 }
 
 const setContributorStatus = `-- name: SetContributorStatus :execrows

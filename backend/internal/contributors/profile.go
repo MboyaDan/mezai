@@ -1,6 +1,7 @@
 package contributors
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
+	"github.com/MboyaDan/mezai/backend/internal/identity"
 	"github.com/MboyaDan/mezai/backend/internal/legal"
 	"github.com/MboyaDan/mezai/backend/internal/pii"
 	"github.com/MboyaDan/mezai/backend/internal/store"
@@ -64,6 +66,9 @@ type Profile struct {
 	WeeklyHours         *int16          `json:"weekly_hours"`
 	MpesaPhoneMasked    string          `json:"mpesa_phone_masked"`
 	MpesaPhoneConfirmed bool            `json:"mpesa_phone_confirmed"`
+	NationalIDLast3     *string         `json:"national_id_last3"` // the number itself is never stored
+	IdentityStatus      string          `json:"identity_status"`   // pending, verified, rejected (D-078)
+	IdentityNote        *string         `json:"identity_note"`     // Ops' note; the reason when rejected
 	Languages           []Language      `json:"languages"`
 	Domains             []string        `json:"domains"`
 	Missing             []string        `json:"missing"` // fields still needed before qualification
@@ -74,7 +79,8 @@ type Profile struct {
 }
 
 // ProfileInput replaces the editable profile. Empty M-Pesa fields keep the
-// stored number; a new number must be entered twice.
+// stored number; a new number must be entered twice. An empty National ID
+// keeps the stored fingerprint.
 type ProfileInput struct {
 	DisplayName       string     `json:"display_name"`
 	Country           *string    `json:"country"`
@@ -85,6 +91,7 @@ type ProfileInput struct {
 	Domains           []string   `json:"domains"`
 	MpesaPhone        string     `json:"mpesa_phone"`
 	MpesaPhoneConfirm string     `json:"mpesa_phone_confirm"`
+	NationalID        string     `json:"national_id"`
 }
 
 func contributorOf(p *auth.Principal) (uuid.UUID, error) {
@@ -120,6 +127,7 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 		ID: cp.ID, PublicCode: cp.PublicCode, Status: cp.Status, Email: cp.Email, DisplayName: cp.DisplayName,
 		Country: cp.Country, City: cp.City, EducationLevel: cp.EducationLevel, WeeklyHours: cp.WeeklyHours,
 		MpesaPhoneConfirmed: cp.MpesaPhone != nil && cp.MpesaPhoneConfirmedAt != nil, CreatedAt: cp.CreatedAt,
+		NationalIDLast3: cp.NationalIDLast3, IdentityStatus: cp.IdentityStatus, IdentityNote: cp.IdentityNote,
 		Languages: []Language{}, Consents: []Consent{}, Qualifications: []Qualification{},
 	}
 	if cp.MpesaPhone != nil {
@@ -163,7 +171,7 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 	}
 	out.Missing = missing(cp.DisplayName, store.ContributorProfile{
 		Country: cp.Country, EducationLevel: cp.EducationLevel, WeeklyHours: cp.WeeklyHours,
-		MpesaPhone: cp.MpesaPhone, MpesaPhoneConfirmedAt: cp.MpesaPhoneConfirmedAt,
+		MpesaPhone: cp.MpesaPhone, MpesaPhoneConfirmedAt: cp.MpesaPhoneConfirmedAt, NationalIDLast3: cp.NationalIDLast3,
 	}, len(out.Languages), len(out.Domains))
 	return out, nil
 }
@@ -183,6 +191,7 @@ func missing(name string, cp store.ContributorProfile, langs, domains int) []str
 	add(langs > 0, "languages")
 	add(domains > 0, "domains")
 	add(cp.MpesaPhone != nil && cp.MpesaPhoneConfirmedAt != nil, "mpesa_phone")
+	add(cp.NationalIDLast3 != nil, "national_id")
 	return out
 }
 
@@ -286,7 +295,20 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		}
 		phone = &a
 	}
+	var fp []byte
+	var last3 string
+	if strings.TrimSpace(in.NationalID) != "" {
+		n, err := identity.NormaliseNationalID(in.NationalID)
+		if err != nil {
+			return Profile{}, fieldErr("national_id", "enter your National ID number: 6 to 9 digits")
+		}
+		if len(s.idKey) < identity.MinKeyBytes {
+			return Profile{}, ErrNoIdentityKey
+		}
+		fp, last3 = identity.Fingerprint(s.idKey, n), identity.Last3(n)
+	}
 	var out Profile
+	var clash error
 	err = s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		cp, err := q.LockContributorProfile(ctx, id)
@@ -296,6 +318,11 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		if cp.Status == StatusRemoved {
 			return ErrNotEligible
 		}
+		// Numbers another account holds: record the try, save nothing else.
+		if clash, err = numberClash(ctx, q, m, p.UserID, id, phone, fp); err != nil || clash != nil {
+			return err
+		}
+		idChanged := fp != nil && !bytes.Equal(fp, cp.NationalIDFp)
 		phoneChanged := false
 		confirmedAt := cp.MpesaPhoneConfirmedAt
 		if phone != nil {
@@ -312,6 +339,27 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 			MpesaPhone: phone, MpesaPhoneConfirmedAt: confirmedAt,
 		}); err != nil {
 			return err
+		}
+		if idChanged {
+			if err := q.SetContributorNationalID(ctx, store.SetContributorNationalIDParams{ID: id, NationalIDFp: fp, NationalIDLast3: &last3}); err != nil {
+				return err
+			}
+		}
+		// A new number is checked again; a new number or name needs the
+		// M-Pesa registered-name check again.
+		if (idChanged || phoneChanged) && cp.IdentityStatus != IdentityPending {
+			if err := q.ResetContributorIdentity(ctx, id); err != nil {
+				return err
+			}
+		}
+		oldName, err := q.GetUserDisplayNameByID(ctx, p.UserID)
+		if err != nil {
+			return err
+		}
+		if (phoneChanged || oldName != in.DisplayName) && cp.MpesaNameCheckedAt != nil {
+			if err := q.ClearMpesaNameCheck(ctx, id); err != nil {
+				return err
+			}
 		}
 		if err := q.SetUserDisplayName(ctx, store.SetUserDisplayNameParams{ID: p.UserID, DisplayName: in.DisplayName}); err != nil {
 			return err
@@ -336,7 +384,8 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		}
 		// The audit names what changed, never the phone number itself.
 		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: "contributor.profile_updated", EntityType: "contributor", EntityID: &id,
-			After: map[string]any{"languages": len(in.Languages), "domains": in.Domains, "mpesa_phone_changed": phoneChanged}}); err != nil {
+			After: map[string]any{"languages": len(in.Languages), "domains": in.Domains, "mpesa_phone_changed": phoneChanged,
+				"national_id_changed": idChanged, "identity_reset": (idChanged || phoneChanged) && cp.IdentityStatus != IdentityPending}}); err != nil {
 			return err
 		}
 		out, err = loadProfile(ctx, q, id)
@@ -351,7 +400,10 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		}
 		return nil
 	})
-	return out, err
+	if err == nil {
+		err = clash
+	}
+	return out, uniqueClash(err)
 }
 
 // AcceptConsents records acceptance of the current version of each listed

@@ -60,6 +60,8 @@ var expectedAccess = map[string]string{
 	"GET /v1/contributors":                          "contributor.approve|contributor.pause",
 	"GET /v1/contributors/:id":                      "contributor.approve|contributor.pause",
 	"POST /v1/contributors/:id/status":              "contributor.pause",
+	"POST /v1/contributors/:id/identity":            "contributor.approve",
+	"POST /v1/contributors/:id/mpesa-name-check":    "payout.create",
 	"GET /v1/qualification/attempts":                "contributor.approve",
 	"GET /v1/qualification/attempts/:id":            "contributor.approve",
 	"POST /v1/qualification/attempts/:id/decision":  "contributor.approve",

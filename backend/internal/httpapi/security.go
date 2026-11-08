@@ -159,6 +159,22 @@ func rateLimit(l *limiter) gin.HandlerFunc {
 	}
 }
 
+// rateLimitUser limits a signed-in route per account rather than per IP, so
+// people sharing a mobile carrier's address do not share a budget.
+func rateLimitUser(l *limiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := c.ClientIP()
+		if p := PrincipalFrom(c); p != nil {
+			key = p.UserID.String()
+		}
+		if ok, wait := l.allow(key); !ok {
+			tooMany(c, wait)
+			return
+		}
+		c.Next()
+	}
+}
+
 func tooMany(c *gin.Context, wait time.Duration) {
 	c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 	abort(c, http.StatusTooManyRequests, "too_many_requests")
