@@ -176,6 +176,15 @@ export function errorMessage(e: ApiError): string {
     storage_unavailable: "File storage is not responding. Try again in a minute.",
     file_too_large: "The file is too large.",
     no_gold: "This project has no active gold items left to copy.",
+    no_tasks: "There are no tasks left for you on this project right now.",
+    reservation_closed: "This task's time ran out, so it went back to the queue. Take the next one.",
+    already_submitted: "This task was already submitted.",
+    idempotency_key_reused: "Something went wrong with this submission. Reload the page and try again.",
+    draft_limit: "This task has too many saved drafts. Submit or skip it.",
+    project_not_live: "This project is not open for work at the moment.",
+    qa_blocked: "Fix the points below before submitting.",
+    already_resolved: "This report has already been resolved.",
+    not_a_contributor: "Only contributors can take tasks.",
     identity_incomplete:
       "The contributor has not given a confirmed M-Pesa number and National ID number yet.",
   };

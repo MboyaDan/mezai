@@ -27,6 +27,10 @@ export type GoldItem = Schemas["GoldItem"];
 export type ProjectRequest = Schemas["ProjectRequest"];
 export type ProjectRequestInput = Schemas["ProjectRequestInput"];
 export type QualificationTest = Schemas["QualificationTest"];
+export type WorkProject = Schemas["WorkProject"];
+export type Task = Schemas["Task"];
+export type QAIssue = Schemas["QAIssue"];
+export type ContentReport = Schemas["ContentReport"];
 
 /** An error answer from the API, or a network failure (status 0). */
 export class ApiError extends Error {
@@ -53,8 +57,13 @@ export function setCsrfToken(token: string | null) {
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-export async function api<T = void>(method: Method, path: `/v1/${string}`, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
+export async function api<T = void>(
+  method: Method,
+  path: `/v1/${string}`,
+  body?: unknown,
+  extra: Record<string, string> = {},
+): Promise<T> {
+  const headers: Record<string, string> = { ...extra };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   return send<T>(method, path, headers, body === undefined ? undefined : JSON.stringify(body));
 }

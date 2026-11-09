@@ -14,6 +14,12 @@ type Props = {
   content: Record<string, unknown>;
   value: Answer | undefined;
   onChange: (a: Answer) => void;
+  /** Characters pasted into a free-text field (QA warning signal, D-077). */
+  onPaste?: (chars: number) => void;
+  /** Hint under the rationale field, for example a minimum length. */
+  rationaleHint?: string;
+  /** Blocking QA messages per field, shown under that field. */
+  fieldErrors?: Partial<Record<string, string>>;
 };
 
 /** A row of 1 to 5 radio buttons, large enough to tap. */
@@ -118,7 +124,17 @@ function Chips({
   );
 }
 
-export function AnswerInput({ type, config, content, value, onChange }: Props) {
+export function AnswerInput({
+  type,
+  config,
+  content,
+  value,
+  onChange,
+  onPaste,
+  rationaleHint,
+  fieldErrors,
+}: Props) {
+  const paste = (e: React.ClipboardEvent) => onPaste?.(e.clipboardData.getData("text").length);
   const a = value ?? {};
 
   // Classification: number keys pick labels, unless typing in a field.
@@ -190,9 +206,15 @@ export function AnswerInput({ type, config, content, value, onChange }: Props) {
             ))}
           </div>
           <PreferenceChoice value={a.preference} onChange={(p) => onChange({ ...a, preference: p })} />
-          <Field label="Why?" hint="One or two sentences on what decided it." required>
+          <Field
+            label="Why?"
+            hint={rationaleHint ?? "One or two sentences on what decided it."}
+            error={fieldErrors?.rationale}
+            required
+          >
             <Textarea
               value={a.rationale ?? ""}
+              onPaste={paste}
               onChange={(e) => onChange({ ...a, rationale: e.target.value })}
               rows={3}
               maxLength={4000}
@@ -223,8 +245,10 @@ export function AnswerInput({ type, config, content, value, onChange }: Props) {
           <Field
             label="Corrected translation"
             hint="Edit the translation if it needs fixing. Leave it as it is if it is right."
+            error={fieldErrors?.corrected}
           >
             <Textarea
+              onPaste={paste}
               value={a.corrected ?? (typeof content.translation === "string" ? content.translation : "")}
               onChange={(e) => onChange({ ...a, corrected: e.target.value })}
               rows={3}
