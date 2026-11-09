@@ -56,7 +56,7 @@ services:
   # SeaweedFS stands in (D-012). `mini` runs everything in one process and
   # creates S3_BUCKET on start; the AWS_* variables become the admin key.
   storage:
-    image: chrislusf/seaweedfs:4.50
+    image: chrislusf/seaweedfs:4.52
     command: ["mini", "-dir=/data"]
     environment:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-mezai_dev_key}
