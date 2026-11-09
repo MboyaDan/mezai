@@ -183,9 +183,14 @@ export function Dashboard() {
             <h2 className="font-display text-lg font-semibold">What happens next</h2>
             <p className="mt-2 text-sm text-fg-muted">
               {step === "active"
-                ? "Projects that match your qualified skills will be listed here as they open, with the pay per task and how many tasks are left. Paid tasks are not open yet during the pilot set-up."
-                : "Once you are approved, projects that match your skills appear here with the pay per task. We pay approved work through M-Pesa."}
+                ? "Projects that match your qualified skills are on the Tasks page, with the pay per task. Approved work is paid through M-Pesa."
+                : "Once you are approved, projects that match your skills appear on the Tasks page with the pay per task. We pay approved work through M-Pesa."}
             </p>
+            {step === "active" && (
+              <ButtonLink href="/c/work" className="mt-4" arrow>
+                Go to tasks
+              </ButtonLink>
+            )}
           </Card>
           {waiting.length > 0 && (
             <Card className="flex items-center justify-between gap-4 p-5">
