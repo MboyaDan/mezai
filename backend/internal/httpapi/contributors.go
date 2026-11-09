@@ -63,6 +63,12 @@ func (h *contributorHandlers) fail(c *gin.Context, err error) {
 		code = "not_passed"
 	case errors.Is(err, contributors.ErrNoGold):
 		code = "no_gold"
+	case errors.Is(err, contributors.ErrCoreFirst):
+		code = "core_check_first"
+	case errors.Is(err, contributors.ErrWritingRating):
+		status, code = http.StatusUnprocessableEntity, "writing_rating_required"
+	case errors.Is(err, contributors.ErrCoreExists):
+		code = "core_check_exists"
 	case errors.Is(err, contributors.ErrNotShortlisted):
 		code = "not_shortlisted"
 	case errors.Is(err, contributors.ErrInterviewTooSoon):
@@ -286,6 +292,15 @@ func (h *contributorHandlers) recordMpesaNameCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+func (h *contributorHandlers) createCoreCheck(c *gin.Context) {
+	out, err := h.svc.CreateCoreCheck(c.Request.Context(), PrincipalFrom(c), meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, out)
+}
+
 func (h *contributorHandlers) uploadCV(c *gin.Context) {
 	name, data, ok := upload(c, "cv", contributors.MaxCVBytes, true)
 	if !ok {
@@ -379,13 +394,14 @@ func (h *contributorHandlers) reviewAttempt(c *gin.Context) {
 func (h *contributorHandlers) decideAttempt(c *gin.Context) {
 	id, ok := pathID(c, "id")
 	var req struct {
-		Decision string `json:"decision"`
-		Note     string `json:"note"`
+		Decision      string `json:"decision"`
+		Note          string `json:"note"`
+		WritingRating *int16 `json:"writing_rating"`
 	}
 	if !ok || !h.bind(c, &req) {
 		return
 	}
-	out, err := h.svc.Decide(c.Request.Context(), PrincipalFrom(c), id, req.Decision, req.Note, meta(c))
+	out, err := h.svc.Decide(c.Request.Context(), PrincipalFrom(c), id, req.Decision, req.Note, req.WritingRating, meta(c))
 	if err != nil {
 		h.fail(c, err)
 		return

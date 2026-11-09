@@ -21,7 +21,7 @@ func TestRunLoadsObviouslyFakeDataOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sum.Organisations != 2 || sum.Projects != 4 || sum.Contributors != 12 || sum.GoldItems == 0 || sum.QualificationTests != 3 {
+	if sum.Organisations != 2 || sum.Projects != 4 || sum.Contributors != 12 || sum.GoldItems == 0 || sum.QualificationTests != 4 { // three skill tests + the core check
 		t.Fatalf("unexpected summary %+v", sum)
 	}
 	if _, err := seed.Run(ctx, pool, seed.Options{Password: "test-password-only"}); !errors.Is(err, seed.ErrAlreadySeeded) {

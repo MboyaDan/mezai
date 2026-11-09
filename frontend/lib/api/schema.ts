@@ -941,9 +941,29 @@ export interface paths {
     put?: never;
     /**
      * Approve or reject a scored attempt (`contributor.approve`).
-     * @description Only a passed attempt can be approved (409 `not_passed`); approving moves a qualifying contributor to active. A rejection needs a note, which the contributor sees. A second decision is 409 `attempt_closed`.
+     * @description Only a passed attempt can be approved (409 `not_passed`). A test with a writing sample (the core check) needs `writing_rating` 2 or 3 to approve (422 `writing_rating_required`). Approving the core check may make a qualifying contributor active (with interview and identity). A rejection needs a note, which the contributor sees. A second decision is 409 `attempt_closed`.
      */
     post: operations["decideQualificationAttempt"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/qualification/core-check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set up the generalist core check as a draft for review (`gold.manage`, D-100).
+     * @description Seven items written for MezAI: six scored automatically (classification, spot the error, an attention check, a pairwise comparison) and a writing sample rated by Ops. Only one core check may exist outside `retired` (409 `core_check_exists`). Activate it with the test status endpoint after reading it.
+     */
+    post: operations["createCoreCheck"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1418,6 +1438,11 @@ export interface components {
         skill_value: string;
         /** Format: date-time */
         approved_at: string;
+        /**
+         * Format: date-time
+         * @description Skills count for 12 months; null for the core check
+         */
+        valid_until: string | null;
       }[];
       /** Format: date-time */
       created_at: string;
@@ -1612,7 +1637,7 @@ export interface components {
       multi_label?: boolean;
       criteria?: string[];
     };
-    /** @description Shape of the task template's submission schema. Classification: `labels` (optional `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and `scores_b` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and `fluency` 1 to 5, `corrected`, optional `error_tags`. */
+    /** @description Shape of the task template's submission schema. Classification: `labels` (optional `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and `scores_b` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and `fluency` 1 to 5, `corrected`, optional `error_tags`. Writing sample (core check): `text`, 60 to 250 words. */
     Answer: {
       [key: string]: unknown;
     };
@@ -1627,15 +1652,22 @@ export interface components {
       id: string;
       title: string;
       /** @enum {string} */
-      skill_kind: "language" | "domain" | "task_type";
+      skill_kind: "language" | "domain" | "task_type" | "core";
       skill_value: string;
       /** @enum {string} */
       task_type: "classification" | "pairwise" | "translation_review";
       pass_threshold: number;
       instructions_md: string;
       question_count: number;
-      /** @enum {string} */
-      state: "available" | "in_progress" | "awaiting_review" | "qualified" | "not_passed";
+      /**
+       * @description `expired`: a skill older than 12 months; it can be taken again. The core check never expires.
+       * @enum {string}
+       */
+      state: "available" | "in_progress" | "awaiting_review" | "qualified" | "not_passed" | "expired";
+      /** Format: date-time */
+      valid_until: string | null;
+      /** @description A skill test locked until the core check is approved */
+      core_first: boolean;
       /** Format: uuid */
       attempt_id: string | null;
       score: number | null;
@@ -1663,6 +1695,12 @@ export interface components {
         position: number;
         /** @description Item content in the task template's import shape */
         content: Record<string, never>;
+        /**
+         * @description The question's own type (the core check mixes them)
+         * @enum {string}
+         */
+        task_type: "classification" | "pairwise" | "translation_review" | "writing";
+        config: components["schemas"]["TaskConfig"];
       }[];
       answers: {
         [key: string]: components["schemas"]["Answer"];
@@ -1726,8 +1764,15 @@ export interface components {
         content: Record<string, never>;
         expected: components["schemas"]["Answer"];
         answer: components["schemas"]["Answer"] | null;
+        /** @description Null for a writing sample (rated by Ops) */
         correct: boolean | null;
+        task_type: string;
+        config: components["schemas"]["TaskConfig"];
       }[];
+      skill_kind: string;
+      /** @description Approving needs writing_rating 2 or 3 */
+      has_writing: boolean;
+      writing_rating: number | null;
     };
     QualificationTest: {
       /** Format: uuid */
@@ -3606,6 +3651,8 @@ export interface operations {
           /** @enum {string} */
           decision: "approve" | "reject";
           note?: string;
+          /** @description 1 weak, 2 adequate, 3 strong */
+          writing_rating?: number;
         };
       };
     };
@@ -3622,6 +3669,30 @@ export interface operations {
       404: components["responses"]["Error"];
       409: components["responses"]["Error"];
       422: components["responses"]["InvalidField"];
+    };
+  };
+  createCoreCheck: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Draft test */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QualificationTest"];
+        };
+      };
+      409: components["responses"]["Error"];
     };
   };
   listQualificationTests: {

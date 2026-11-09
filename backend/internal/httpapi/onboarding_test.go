@@ -218,6 +218,11 @@ func TestContributorOnboarding(t *testing.T) {
 	if w := e.do(http.MethodPost, "/v1/contributors/"+p.ID+"/screening", map[string]string{"decision": "shortlist"}, ops, nil); w.Code != http.StatusOK {
 		t.Fatalf("shortlist: %d %s", w.Code, w.Body)
 	}
+	// The core check comes first (D-100); skill tests open after it.
+	if w, _ := e.start(s, cls.ID); errorCode(w) != "core_check_first" {
+		t.Fatalf("skill test before the core check: %d %s", w.Code, w.Body)
+	}
+	e.passCore(s, ops)
 
 	// Take the classification test.
 	cls = e.tests(s)["Swahili message routing test (Sample)"]
@@ -290,7 +295,7 @@ func TestContributorOnboarding(t *testing.T) {
 	}
 	w = e.do(http.MethodGet, "/v1/me/contributor", nil, s, nil)
 	decode(t, w, &p)
-	if p.Status != "qualifying" || p.IdentityStatus != "pending" || len(p.Qualifications) != 1 {
+	if p.Status != "qualifying" || p.IdentityStatus != "pending" || len(p.Qualifications) != 2 { // core check + routing skill
 		t.Fatalf("approved but identity not verified yet: %s", w.Body)
 	}
 	// Verifying the identity is not enough on its own: the interview remains (D-100).

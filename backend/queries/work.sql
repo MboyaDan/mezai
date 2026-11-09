@@ -26,7 +26,9 @@ SELECT project_id, skill_kind, skill_value, min_proficiency FROM project_skills 
 -- Skills granted by approved qualification attempts.
 SELECT DISTINCT t.skill_kind, t.skill_value
 FROM qualification_attempts a JOIN qualification_tests t ON t.id = a.test_id
-WHERE a.contributor_id = $1 AND a.status = 'approved';
+WHERE a.contributor_id = $1 AND a.status = 'approved'
+  -- Skills count for 12 months (D-100 section 3.5); the core check never expires.
+  AND (t.skill_kind = 'core' OR a.decided_at > now() - interval '365 days');
 
 -- name: ExpireStaleReservations :exec
 UPDATE assignments SET status = 'expired', completed_at = now()

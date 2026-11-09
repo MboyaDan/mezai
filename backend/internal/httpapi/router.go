@@ -155,6 +155,7 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/qualification/attempts/:id/decision", Perm("contributor.approve"), ch.decideAttempt)
 		a.handle(http.MethodGet, "/qualification/tests", Perm("contributor.approve", "gold.manage"), ch.listTests)
 		a.handle(http.MethodPost, "/qualification/tests", Perm("gold.manage"), ch.createTest)
+		a.handle(http.MethodPost, "/qualification/core-check", Perm("gold.manage"), ch.createCoreCheck)
 		a.handle(http.MethodPost, "/qualification/tests/:id/status", Perm("gold.manage"), ch.setTestStatus)
 
 		// Task engine (Stage 9a). One task at a time; content only while reserved.

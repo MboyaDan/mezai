@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 7d-1 (screening funnel part 1). Branch `stage-07d1-screening`, PR open. 9b merged as #29.
-- **Next stage:** 7d-2 (generalist core check, 12-month skill validity; D-102). Then Stage 10 (quality engine, now including the paid project warm-up).
+- **Last stage:** 7d-2 (core check, skill validity). Branch `stage-07d2-core-check`, PR open. 7d-1 merged as #30; flaky-test fix #34.
+- **Next stage:** 10 (quality engine: gold scoring, agreement, trust score, and the paid project warm-up moved here by D-102). Not in the D-011 split list; if it is too big for one sitting, propose a split to Dan first.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -50,6 +50,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Answer checking (qualification now, gold in Stage 10) | `backend/internal/quality/answer.go` |
 | Legal document versions the API accepts | `backend/internal/legal/legal.go` (kept equal to `frontend/content/legal.ts` by `content/legal.test.ts`) |
 | Phone normalising and masking | `backend/internal/pii/phone.go` |
+| Core check content and creation | `backend/internal/contributors/corecheck.go` |
 | Screening funnel (application, CV, screening, interview) | `backend/internal/contributors/screening.go`; Ops panels `frontend/components/workspace/screening-panels.tsx`; rubric mirror `frontend/lib/screening.ts` |
 | Task workspace and reports screens | `frontend/components/contributor/{work,task-workspace}.tsx`, helpers `frontend/lib/tasks.ts`, Ops `frontend/components/workspace/reports.tsx` |
 | Task engine (eligibility, assignment, submit, reports) and QA checks | `backend/internal/tasks/`, handlers `backend/internal/httpapi/tasks.go`, checks `backend/internal/quality/qa.go` |
@@ -88,7 +89,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 7c | Merged | #27 | Migration 00011 (ID fingerprint + last 3 digits, identity status and M-Pesa name check on `contributor_profiles`, unique M-Pesa number and ID, `identity_flags`, `norm_name`; clears duplicate numbers left by test data). `internal/identity` (normalise, HMAC, key). `IDENTITY_HMAC_KEY` required outside dev/test. Profile takes `national_id`; reused numbers refused and flagged; profile saves rate limited per account. Ops verify/reject (`/contributors/{id}/identity`) and M-Pesa name check (`/mpesa-name-check`). Active needs approved test + verified identity. Privacy notice and contributor terms 0.2. UI: National ID field, dashboard identity step, Ops identity panel and "Identity checks" tab. Sign-out now does a full page load (fixes a redirect race). |
 | 9a | Merged | #28 | Migration 00012 (`reported` assignment status, one reservation per contributor and project, `submissions.qa_warnings`). `internal/tasks`: eligibility, Next (overlap k, gold mixing, SKIP LOCKED), task view (content in contributor scope), drafts, idempotent submit with QA checks (`quality/qa.go`), skip, report, Ops report queue. 10 endpoints. AC-06 (1,000 assignments) and AC-07 tests. Seed qualifies active sample contributors. |
 | 9b | Merged | #29 | Contributor Tasks list (`/c/work`), project brief (`/c/projects/[id]`), task workspace (`/c/work/[projectId]`) for all three task types: clock, autosave, keyboard, instructions drawer, skip/report dialogs, QA messages, idempotent submit. Ops content-report queue (`/w/reports`). Full-stack test creates its own projects through the API so reruns always have work. Screening funnel research and plan (D-100, Stage 7d). |
-| 7d-1 | PR open | #30 | Migration 00013 (application answers, LinkedIn, CV columns, screening status, `interviews`). Application form and optional PDF CV (deleted on decline or by an hourly sweep 90 days after the decision); Ops shortlist / waitlist / decline; structured phone interview (fixed script and rubric, no recording); tests open only once shortlisted; activation = shortlisted + test + interview + verified identity. Privacy notice and contributor terms 0.3. Ops Applications and Interviews queues. |
+| 7d-1 | Merged | #30 | Migration 00013 (application answers, LinkedIn, CV columns, screening status, `interviews`). Application form and optional PDF CV (deleted on decline or by an hourly sweep 90 days after the decision); Ops shortlist / waitlist / decline; structured phone interview (fixed script and rubric, no recording); tests open only once shortlisted; activation = shortlisted + test + interview + verified identity. Privacy notice and contributor terms 0.3. Ops Applications and Interviews queues. |
+| 7d-2 | PR open | #35 | Migration 00014 (`core` skill kind, one active core check, per-question `task_type`/`config`, `writing_rating`). Core check content in `corecheck.go` and `POST /qualification/core-check` (draft); writing answers (60–250 words) rated by Ops; core first, 30-day core retake; activation on the core check; skills valid 12 months. Screens: core check first on the tests list, mixed question types, writing input, Ops writing rating. |
 
 ## Notes for the next session
 

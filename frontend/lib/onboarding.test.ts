@@ -90,6 +90,16 @@ describe("normaliseNationalId", () => {
   });
 });
 
+describe("writing sample", () => {
+  const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
+  it("needs 60 to 250 words, like the API", () => {
+    expect(isComplete("writing", {}, { text: words(59) })).toBe(false);
+    expect(isComplete("writing", {}, { text: words(60) })).toBe(true);
+    expect(isComplete("writing", {}, { text: words(250) })).toBe(true);
+    expect(isComplete("writing", {}, { text: words(251) })).toBe(false);
+  });
+});
+
 describe("currentStep", () => {
   const p = (
     status: string,
@@ -114,8 +124,12 @@ describe("currentStep", () => {
     expect(currentStep(p("qualifying", [], [], "pending"), [])).toBe("screening");
     expect(currentStep(p("qualifying", [], [], "waitlisted"), [])).toBe("screening");
     expect(currentStep(p("qualifying", [], [], "declined"), [])).toBe("declined");
-    expect(currentStep(p("qualifying", [], [{}]), [])).toBe("interview");
-    expect(currentStep(p("qualifying", [], [{}], "shortlisted", true), [])).toBe("identity");
+    // Only the core check counts towards activation; a skill alone does not.
+    expect(currentStep(p("qualifying", [], [{ skill_kind: "language" }]), [])).toBe("qualify");
+    expect(currentStep(p("qualifying", [], [{ skill_kind: "core" }]), [])).toBe("interview");
+    expect(currentStep(p("qualifying", [], [{ skill_kind: "core" }], "shortlisted", true), [])).toBe(
+      "identity",
+    );
     expect(currentStep(p("active"), [])).toBe("active");
     expect(currentStep(p("paused"), [])).toBe("paused");
     expect(currentStep(p("removed", ["privacy_notice"]), [])).toBe("removed");

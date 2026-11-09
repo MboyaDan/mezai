@@ -6,10 +6,17 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import type { TaskConfig } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
-import { criterionLabel, type Answer, type TaskType } from "@/lib/onboarding";
+import {
+  criterionLabel,
+  MAX_WRITING_WORDS,
+  MIN_WRITING_WORDS,
+  writingWords,
+  type Answer,
+  type QuestionType,
+} from "@/lib/onboarding";
 
 type Props = {
-  type: TaskType;
+  type: QuestionType;
   config: TaskConfig;
   content: Record<string, unknown>;
   value: Answer | undefined;
@@ -221,6 +228,25 @@ export function AnswerInput({
             />
           </Field>
         </div>
+      );
+    }
+    case "writing": {
+      const n = writingWords(a.text);
+      return (
+        <Field
+          label="Your answer"
+          hint={`${MIN_WRITING_WORDS} to ${MAX_WRITING_WORDS} words. ${n} so far. Write it yourself; a person reads it.`}
+          error={fieldErrors?.text}
+          required
+        >
+          <Textarea
+            value={a.text ?? ""}
+            onPaste={paste}
+            onChange={(e) => onChange({ ...a, text: e.target.value })}
+            rows={8}
+            maxLength={4000}
+          />
+        </Field>
       );
     }
     case "translation_review":

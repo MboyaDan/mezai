@@ -12,8 +12,47 @@ import (
 	"github.com/google/uuid"
 )
 
+const addQualificationQuestionTyped = `-- name: AddQualificationQuestionTyped :exec
+
+INSERT INTO qualification_questions (test_id, position, content, expected, tolerance, task_type, config)
+VALUES ($1, $2, $3, $4, '{}', $5, $6)
+`
+
+type AddQualificationQuestionTypedParams struct {
+	TestID   uuid.UUID
+	Position int32
+	Content  []byte
+	Expected []byte
+	TaskType *string
+	Config   []byte
+}
+
+// Core check (Stage 7d-2, D-100 section 3.3).
+func (q *Queries) AddQualificationQuestionTyped(ctx context.Context, arg AddQualificationQuestionTypedParams) error {
+	_, err := q.db.Exec(ctx, addQualificationQuestionTyped,
+		arg.TestID,
+		arg.Position,
+		arg.Content,
+		arg.Expected,
+		arg.TaskType,
+		arg.Config,
+	)
+	return err
+}
+
+const countCoreTests = `-- name: CountCoreTests :one
+SELECT count(*)::int FROM qualification_tests WHERE skill_kind = 'core' AND status <> 'retired'
+`
+
+func (q *Queries) CountCoreTests(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countCoreTests)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createQualificationAttempt = `-- name: CreateQualificationAttempt :one
-INSERT INTO qualification_attempts (test_id, contributor_id) VALUES ($1, $2) RETURNING id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results
+INSERT INTO qualification_attempts (test_id, contributor_id) VALUES ($1, $2) RETURNING id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results, writing_rating
 `
 
 type CreateQualificationAttemptParams struct {
@@ -40,21 +79,24 @@ func (q *Queries) CreateQualificationAttempt(ctx context.Context, arg CreateQual
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Results,
+		&i.WritingRating,
 	)
 	return i, err
 }
 
 const decideAttempt = `-- name: DecideAttempt :execrows
 UPDATE qualification_attempts
-SET status = $1, decided_by = $2, decided_at = now(), decision_note = $3
-WHERE id = $4 AND status = 'scored'
+SET status = $1, decided_by = $2, decided_at = now(), decision_note = $3,
+  writing_rating = $4
+WHERE id = $5 AND status = 'scored'
 `
 
 type DecideAttemptParams struct {
-	Status       string
-	DecidedBy    *uuid.UUID
-	DecisionNote *string
-	ID           uuid.UUID
+	Status        string
+	DecidedBy     *uuid.UUID
+	DecisionNote  *string
+	WritingRating *int16
+	ID            uuid.UUID
 }
 
 func (q *Queries) DecideAttempt(ctx context.Context, arg DecideAttemptParams) (int64, error) {
@@ -62,6 +104,7 @@ func (q *Queries) DecideAttempt(ctx context.Context, arg DecideAttemptParams) (i
 		arg.Status,
 		arg.DecidedBy,
 		arg.DecisionNote,
+		arg.WritingRating,
 		arg.ID,
 	)
 	if err != nil {
@@ -71,7 +114,7 @@ func (q *Queries) DecideAttempt(ctx context.Context, arg DecideAttemptParams) (i
 }
 
 const getOpenAttempt = `-- name: GetOpenAttempt :one
-SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results FROM qualification_attempts
+SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results, writing_rating FROM qualification_attempts
 WHERE contributor_id = $1 AND test_id = $2 AND status IN ('in_progress', 'scored')
 `
 
@@ -99,12 +142,13 @@ func (q *Queries) GetOpenAttempt(ctx context.Context, arg GetOpenAttemptParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Results,
+		&i.WritingRating,
 	)
 	return i, err
 }
 
 const getQualificationAttempt = `-- name: GetQualificationAttempt :one
-SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results FROM qualification_attempts WHERE id = $1
+SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results, writing_rating FROM qualification_attempts WHERE id = $1
 `
 
 func (q *Queries) GetQualificationAttempt(ctx context.Context, id uuid.UUID) (QualificationAttempt, error) {
@@ -126,6 +170,7 @@ func (q *Queries) GetQualificationAttempt(ctx context.Context, id uuid.UUID) (Qu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Results,
+		&i.WritingRating,
 	)
 	return i, err
 }
@@ -175,7 +220,7 @@ func (q *Queries) GetQualificationTest(ctx context.Context, id uuid.UUID) (GetQu
 }
 
 const listAttemptsByContributor = `-- name: ListAttemptsByContributor :many
-SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results FROM qualification_attempts WHERE contributor_id = $1 ORDER BY started_at DESC, id DESC
+SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results, writing_rating FROM qualification_attempts WHERE contributor_id = $1 ORDER BY started_at DESC, id DESC
 `
 
 func (q *Queries) ListAttemptsByContributor(ctx context.Context, contributorID uuid.UUID) ([]QualificationAttempt, error) {
@@ -203,6 +248,7 @@ func (q *Queries) ListAttemptsByContributor(ctx context.Context, contributorID u
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Results,
+			&i.WritingRating,
 		); err != nil {
 			return nil, err
 		}
@@ -331,7 +377,7 @@ func (q *Queries) ListGoldForQualification(ctx context.Context, arg ListGoldForQ
 }
 
 const listQualificationQuestions = `-- name: ListQualificationQuestions :many
-SELECT id, test_id, position, content, expected, tolerance, created_at, updated_at FROM qualification_questions WHERE test_id = $1 ORDER BY position
+SELECT id, test_id, position, content, expected, tolerance, created_at, updated_at, task_type, config FROM qualification_questions WHERE test_id = $1 ORDER BY position
 `
 
 func (q *Queries) ListQualificationQuestions(ctx context.Context, testID uuid.UUID) ([]QualificationQuestion, error) {
@@ -352,6 +398,8 @@ func (q *Queries) ListQualificationQuestions(ctx context.Context, testID uuid.UU
 			&i.Tolerance,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.TaskType,
+			&i.Config,
 		); err != nil {
 			return nil, err
 		}
@@ -425,7 +473,7 @@ func (q *Queries) ListQualificationTests(ctx context.Context, status *string) ([
 }
 
 const lockQualificationAttempt = `-- name: LockQualificationAttempt :one
-SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results FROM qualification_attempts WHERE id = $1 FOR UPDATE
+SELECT id, test_id, contributor_id, status, answers, score, passed, started_at, submitted_at, decided_by, decided_at, decision_note, created_at, updated_at, results, writing_rating FROM qualification_attempts WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockQualificationAttempt(ctx context.Context, id uuid.UUID) (QualificationAttempt, error) {
@@ -447,6 +495,7 @@ func (q *Queries) LockQualificationAttempt(ctx context.Context, id uuid.UUID) (Q
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Results,
+		&i.WritingRating,
 	)
 	return i, err
 }

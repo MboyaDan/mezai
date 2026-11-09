@@ -10,7 +10,9 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { ApiError, api, type AttemptReview as Review } from "@/lib/api/client";
-import { errorMessage, type Answer, type TaskType } from "@/lib/onboarding";
+import { errorMessage, type Answer, type QuestionType } from "@/lib/onboarding";
+import { ChoiceGroup, Radio } from "@/components/ui/choice";
+import { cn } from "@/lib/cn";
 import { useLoad } from "@/lib/use-load";
 import { pct, shortDate } from "./contributors";
 import { PageTitle } from "./workspace";
@@ -19,6 +21,7 @@ export function AttemptReview() {
   const { id } = useParams<{ id: string }>();
   const r = useLoad(() => api<Review>("GET", `/v1/qualification/attempts/${id}`), id);
   const [note, setNote] = useState("");
+  const [rating, setRating] = useState<number | null>(null);
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const toast = useToast();
@@ -26,7 +29,7 @@ export function AttemptReview() {
   if (r.status === "loading") return <Skeleton className="h-80 w-full" />;
   if (r.status === "error") return <Alert tone="danger" title={errorMessage(r.error)} />;
   const a = r.data;
-  const type = a.task_type as TaskType;
+  const typeOf = (q: Review["questions"][number]) => (q.task_type || a.task_type) as QuestionType;
   const open = a.status === "scored";
 
   async function decide(decision: "approve" | "reject") {
@@ -36,12 +39,17 @@ export function AttemptReview() {
       );
       return;
     }
+    if (decision === "approve" && a.has_writing && (rating ?? 0) < 2) {
+      setError(new ApiError(422, "writing_rating_required"));
+      return;
+    }
     setBusy(decision);
     setError(null);
     try {
       const next = await api<Review>("POST", `/v1/qualification/attempts/${a.id}/decision`, {
         decision,
         note: note.trim(),
+        ...(a.has_writing && rating ? { writing_rating: rating } : {}),
       });
       if (r.status === "ready") r.set(next);
       toast({ tone: "success", title: decision === "approve" ? "Attempt approved" : "Attempt rejected" });
@@ -74,26 +82,30 @@ export function AttemptReview() {
               <Card className="grid gap-4 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="font-display font-semibold">Question {q.position}</h2>
-                  {q.correct == null ? null : (
+                  {typeOf(q) === "writing" ? (
+                    <StatusPill status="info">Read and rate</StatusPill>
+                  ) : q.correct == null ? null : (
                     <StatusPill status={q.correct ? "success" : "danger"}>
                       {q.correct ? "Matches" : "Does not match"}
                     </StatusPill>
                   )}
                 </div>
-                <QuestionContent type={type} content={q.content as Record<string, unknown>} />
-                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <QuestionContent type={typeOf(q)} content={q.content as Record<string, unknown>} />
+                <dl className={cn("grid gap-3 text-sm", typeOf(q) !== "writing" && "sm:grid-cols-2")}>
                   <div className="grid gap-1">
                     <dt className="font-mono text-xs text-fg-muted uppercase">Contributor</dt>
                     <dd>
-                      <AnswerSummary type={type} answer={q.answer as Answer | null} />
+                      <AnswerSummary type={typeOf(q)} answer={q.answer as Answer | null} />
                     </dd>
                   </div>
-                  <div className="grid gap-1">
-                    <dt className="font-mono text-xs text-fg-muted uppercase">Expected</dt>
-                    <dd>
-                      <AnswerSummary type={type} answer={q.expected as Answer} />
-                    </dd>
-                  </div>
+                  {typeOf(q) !== "writing" && (
+                    <div className="grid gap-1">
+                      <dt className="font-mono text-xs text-fg-muted uppercase">Expected</dt>
+                      <dd>
+                        <AnswerSummary type={typeOf(q)} answer={q.expected as Answer} />
+                      </dd>
+                    </div>
+                  )}
                 </dl>
               </Card>
             </li>
@@ -114,6 +126,26 @@ export function AttemptReview() {
             <Card className="grid gap-4 p-5">
               <h2 className="font-display font-semibold">Decision</h2>
               {error && !error.field && <Alert tone="danger" title={errorMessage(error)} />}
+              {a.has_writing && (
+                <ChoiceGroup
+                  legend="Writing sample"
+                  hint="Clear, relevant and their own words? Approving needs adequate or strong."
+                >
+                  {[
+                    { v: 3, l: "Strong" },
+                    { v: 2, l: "Adequate" },
+                    { v: 1, l: "Weak (reject with a note)" },
+                  ].map((o) => (
+                    <Radio
+                      key={o.v}
+                      name="writing-rating"
+                      checked={rating === o.v}
+                      onChange={() => setRating(o.v)}
+                      label={o.l}
+                    />
+                  ))}
+                </ChoiceGroup>
+              )}
               <Field
                 label="Note to the contributor"
                 hint="Required to reject. The contributor sees it."
@@ -154,6 +186,9 @@ export function AttemptReview() {
               }
             >
               {a.decided_at && <>Decided {shortDate(a.decided_at)}. </>}
+              {a.writing_rating != null && (
+                <>Writing rated {["", "weak", "adequate", "strong"][a.writing_rating]}. </>
+              )}
               {a.decision_note}
             </Alert>
           )}

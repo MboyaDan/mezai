@@ -46,11 +46,12 @@ type Consent struct {
 
 // Qualification is a skill granted by an approved attempt.
 type Qualification struct {
-	TestID     uuid.UUID `json:"test_id"`
-	Title      string    `json:"title"`
-	SkillKind  string    `json:"skill_kind"`
-	SkillValue string    `json:"skill_value"`
-	ApprovedAt time.Time `json:"approved_at"`
+	TestID     uuid.UUID  `json:"test_id"`
+	Title      string     `json:"title"`
+	SkillKind  string     `json:"skill_kind"`
+	SkillValue string     `json:"skill_value"`
+	ApprovedAt time.Time  `json:"approved_at"`
+	ValidUntil *time.Time `json:"valid_until"` // skills count for 12 months; null for the core check
 }
 
 // Profile is a contributor's profile as they (or Ops) see it. The M-Pesa
@@ -180,9 +181,15 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 		if err != nil {
 			return Profile{}, err
 		}
-		out.Qualifications = append(out.Qualifications, Qualification{
-			TestID: t.ID, Title: t.Title, SkillKind: t.SkillKind, SkillValue: t.SkillValue, ApprovedAt: *a.DecidedAt,
-		})
+		qual := Qualification{TestID: t.ID, Title: t.Title, SkillKind: t.SkillKind, SkillValue: t.SkillValue, ApprovedAt: *a.DecidedAt}
+		if t.SkillKind != SkillCore {
+			until := a.DecidedAt.Add(SkillValidity)
+			if time.Now().After(until) {
+				continue // lapsed: take the test again (D-100 section 3.5)
+			}
+			qual.ValidUntil = &until
+		}
+		out.Qualifications = append(out.Qualifications, qual)
 	}
 	out.Missing = missing(cp.DisplayName, store.ContributorProfile{
 		Country: cp.Country, EducationLevel: cp.EducationLevel, WeeklyHours: cp.WeeklyHours,

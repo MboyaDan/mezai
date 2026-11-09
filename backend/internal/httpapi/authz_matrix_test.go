@@ -62,6 +62,7 @@ var expectedAccess = map[string]string{
 	"POST /v1/contributors/:id/status":              "contributor.pause",
 	"POST /v1/contributors/:id/identity":            "contributor.approve",
 	"PUT /v1/me/contributor/cv":                     "profile.manage",
+	"POST /v1/qualification/core-check":             "gold.manage",
 	"DELETE /v1/me/contributor/cv":                  "profile.manage",
 	"GET /v1/contributors/:id/cv":                   "contributor.approve",
 	"POST /v1/contributors/:id/screening":           "contributor.approve",

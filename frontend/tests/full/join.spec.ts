@@ -8,7 +8,7 @@ import { mkdirSync } from "node:fs";
 
 const mailpit = process.env.MAILPIT_URL ?? "http://localhost:8025";
 const seedPassword = process.env.SEED_PASSWORD ?? "sample-password-only";
-const shots = "../docs/screenshots/stage-07d1";
+const shots = "../docs/screenshots/stage-07d2";
 const stamp = String(Date.now()).slice(-8);
 const email = `e2e.${stamp}@sample.invalid`;
 // One account per number (D-078), so each run uses fresh numbers.
@@ -16,14 +16,6 @@ const phone = `07${stamp}`;
 const nationalId = `3${stamp.slice(1)}`;
 const password = "an end to end test passphrase";
 const name = `Sample Joiner ${stamp.slice(-4)}`;
-
-// Seed sample text → correct label (backend/seed/content.go).
-const routing: Record<string, string> = {
-  "Nimeongeza salio lakini bado halijaonekana.": "Billing",
-  "Mtandao uko chini sana leo asubuhi.": "Network",
-  "Nimesahau nenosiri la akaunti yangu.": "Account",
-  "Asante kwa huduma nzuri jana.": "Other",
-};
 
 async function axe(page: Page, label: string) {
   const r = await new AxeBuilder({ page })
@@ -71,8 +63,9 @@ async function verificationLink(to: string): Promise<string> {
 
 async function signIn(page: Page, who: string, pw: string) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(who);
-  await page.getByLabel("Password").fill(pw);
+  // During a transition the old and new pages can both be in the DOM.
+  await page.getByLabel("Email").filter({ visible: true }).fill(who);
+  await page.getByLabel("Password").filter({ visible: true }).fill(pw);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
@@ -183,32 +176,57 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await signIn(page, email, password);
   await expect(page).toHaveURL(/\/c$/);
 
-  // 5. Take the classification test.
+  // 5. Take the core check (D-100): mixed question types and a writing sample.
   await page.goto("/c/qualify");
   await expect(page.getByRole("heading", { name: "Qualification", exact: true })).toBeVisible();
+  await expect(page.getByText("Opens once your core check is approved.").first()).toBeVisible();
   await axe(page, "/c/qualify");
   await shot(page, "qualify");
-  const card = page.getByRole("listitem").filter({ hasText: "Swahili message routing test (Sample)" });
+  const card = page.getByRole("listitem").filter({ hasText: "MezAI core check (Sample)" });
   await card.getByRole("link", { name: "Start" }).click();
   await page.getByRole("button", { name: "Begin the test" }).click();
-  for (let i = 1; i <= 4; i++) {
-    await expect(page.getByRole("heading", { name: `Question ${i} of 4` })).toBeVisible();
-    const text = (await page.locator("section [class*=whitespace-pre-wrap]").first().innerText()).trim();
-    const label = routing[text];
-    expect(label, `unknown sample text: ${text}`).toBeTruthy();
-    if (i === 2) {
-      // Keyboard: number keys pick labels (Network is the second label).
-      await page.keyboard.press("2");
-      await expect(page.getByRole("radio", { name: /Network/ })).toBeChecked();
-    } else {
-      await page.getByRole("radio", { name: new RegExp(label) }).check();
-    }
-    if (i === 1) {
-      await axe(page, "test question");
-      await shot(page, "test-question");
-    }
-    if (i < 4) await page.getByRole("button", { name: "Next", exact: true }).click();
-  }
+  const next = () => page.getByRole("button", { name: "Next", exact: true }).click();
+  const q = async (i: number) =>
+    expect(page.getByRole("heading", { name: `Question ${i} of 7` })).toBeVisible();
+  await q(1);
+  await page.getByRole("radio", { name: /Complaint/ }).check();
+  await axe(page, "test question");
+  await shot(page, "test-question");
+  await next();
+  await q(2);
+  await page.keyboard.press("1"); // number keys pick labels: 1 is Question
+  await expect(page.getByRole("radio", { name: /Question/ })).toBeChecked();
+  await next();
+  await q(3);
+  await page.getByRole("radio", { name: /Other/ }).check();
+  await next();
+  await q(4);
+  await page.getByRole("radio", { name: /Sentence C/ }).check();
+  await next();
+  await q(5);
+  await page.getByRole("radio", { name: /Sentence B/ }).check();
+  await next();
+  await q(6);
+  for (const side of ["A", "B"])
+    for (const c of ["Accuracy", "Helpfulness", "Safety", "Language quality"])
+      await page
+        .getByRole("group", { name: `${c}, response ${side}` })
+        .getByRole("radio", { name: "4" })
+        .check();
+  await page.getByRole("radio", { name: "Response A", exact: true }).check();
+  await page.getByLabel("Why?").fill("Response A gives a safe and correct time; B is simply wrong.");
+  await next();
+  await q(7);
+  await page
+    .getByRole("textbox", { name: "Your answer", exact: true })
+    .fill(
+      Array.from(
+        { length: 7 },
+        () => "I read the instructions again and check each answer against them before I submit.",
+      ).join(" "),
+    );
+  await axe(page, "writing question");
+  await shot(page, "test-writing");
   await expect(page.getByText("All answers saved")).toBeVisible();
   await page.getByRole("button", { name: "Review and submit" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Submit" }).click();
@@ -217,7 +235,7 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await shot(page, "test-result");
   await signOut(page);
 
-  // 6. Ops reviews and approves.
+  // 6. Ops reviews: six items match, the writing needs a rating to approve.
   await signIn(page, "ops@sample.invalid", seedPassword);
   await expect(page).toHaveURL(/\/w$/);
   await page.getByRole("link", { name: "Contributors" }).first().click();
@@ -229,12 +247,17 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await shot(page, "ops-queue");
   const row = page.getByRole("row").filter({ hasText: name });
   await row.getByRole("link", { name: /Review/ }).click();
-  await expect(page.getByRole("heading", { name: "Swahili message routing test (Sample)" })).toBeVisible();
-  await expect(page.getByText("Matches")).toHaveCount(4);
+  await expect(page.getByRole("heading", { name: "MezAI core check (Sample)" })).toBeVisible();
+  await expect(page.getByText("Matches")).toHaveCount(6);
+  await expect(page.getByText("Read and rate")).toBeVisible();
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect(page.getByText(/Rate the writing sample adequate or strong/)).toBeVisible();
+  await page.getByLabel("Strong").check();
   await axe(page, "attempt review");
   await shot(page, "ops-review");
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Writing rated strong/)).toBeVisible();
   await page.getByRole("link", { name: /C-\d+ Sample Joiner/ }).click();
   // Approved but still qualifying: the identity check is outstanding (D-078).
   await expect(page.getByText("applied → ")).toBeVisible();

@@ -16,6 +16,15 @@ const (
 	Classification    = "classification"
 	Pairwise          = "pairwise"
 	TranslationReview = "translation_review"
+	// Writing is a short free-text sample (the core check, D-100). A person
+	// rates it; it is never auto-scored.
+	Writing = "writing"
+)
+
+// Writing samples are 60 to 250 words (the prompt asks for 80 to 150).
+const (
+	MinWritingWords = 60
+	MaxWritingWords = 250
 )
 
 // ErrInvalidAnswer wraps every shape or range problem in an answer.
@@ -43,6 +52,7 @@ type Answer struct {
 	Fluency    int            `json:"fluency,omitempty"`    // translation review, 1 to 5
 	Corrected  string         `json:"corrected,omitempty"`  // translation review
 	ErrorTags  []string       `json:"error_tags,omitempty"` // translation review, optional
+	Text       string         `json:"text,omitempty"`       // writing sample
 }
 
 const maxText = 4000
@@ -106,11 +116,20 @@ func Parse(taskType string, cfg Config, raw json.RawMessage) (Answer, error) {
 		if len(a.Corrected) > maxText || len(a.ErrorTags) > 20 {
 			return Answer{}, invalid("correction or tags too long")
 		}
+	case Writing:
+		n := len(strings.Fields(a.Text))
+		if n < MinWritingWords || n > MaxWritingWords || len(a.Text) > maxText {
+			return Answer{}, invalid("write %d to %d words", MinWritingWords, MaxWritingWords)
+		}
 	default:
 		return Answer{}, invalid("unknown task type %q", taskType)
 	}
 	return a, nil
 }
+
+// AutoScored reports whether answers of this type are checked against an
+// expected answer (everything except writing samples).
+func AutoScored(taskType string) bool { return taskType != Writing }
 
 // Tolerance loosens a match. Translation scores default to ±1 point.
 type Tolerance struct {

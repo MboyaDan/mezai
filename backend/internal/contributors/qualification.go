@@ -39,8 +39,12 @@ type TestSummary struct {
 	PassThreshold  float64   `json:"pass_threshold"`
 	InstructionsMd string    `json:"instructions_md"`
 	QuestionCount  int32     `json:"question_count"`
-	// State: available, in_progress, awaiting_review, qualified or not_passed.
-	State        string     `json:"state"`
+	// State: available, in_progress, awaiting_review, qualified, not_passed
+	// or expired (a skill older than 12 months; it can be taken again).
+	State      string     `json:"state"`
+	ValidUntil *time.Time `json:"valid_until"` // skills only, once qualified
+	// CoreFirst: a skill test locked until the core check is approved.
+	CoreFirst    bool       `json:"core_first"`
 	AttemptID    *uuid.UUID `json:"attempt_id"`
 	Score        *float64   `json:"score"`
 	DecisionNote *string    `json:"decision_note"`
@@ -53,6 +57,35 @@ type Question struct {
 	ID       uuid.UUID       `json:"id"`
 	Position int32           `json:"position"`
 	Content  json.RawMessage `json:"content"`
+	TaskType string          `json:"task_type"` // the question's own type (the core check mixes them)
+	Config   json.RawMessage `json:"config"`    // settings for that type
+}
+
+// questionType returns a question's task type and settings, falling back to the test's.
+func questionType(t store.GetQualificationTestRow, qq store.QualificationQuestion) (string, json.RawMessage) {
+	tt, cfg := t.TaskType, json.RawMessage(t.Config)
+	if qq.TaskType != nil {
+		tt = *qq.TaskType
+	}
+	if len(qq.Config) > 0 {
+		cfg = qq.Config
+	}
+	return tt, cfg
+}
+
+// SkillValidity is how long a skill qualification counts (D-100 section
+// 3.5). The core check does not expire.
+const SkillValidity = 365 * 24 * time.Hour
+
+func cooldownFor(skillKind string) time.Duration {
+	if skillKind == SkillCore {
+		return CoreRetakeCooldown
+	}
+	return RetakeCooldown
+}
+
+func (s *Service) expired(skillKind string, decidedAt *time.Time) bool {
+	return skillKind != SkillCore && decidedAt != nil && s.now().Sub(*decidedAt) > SkillValidity
 }
 
 // Attempt is a contributor's attempt with its questions.
@@ -105,6 +138,10 @@ func (s *Service) ListMyTests(ctx context.Context, p *auth.Principal) ([]TestSum
 		}
 		// Tests open after screening (D-100); active contributors add skills freely.
 		eligible := (cp.Status == StatusQualifying && cp.ScreeningStatus == ScreeningShortlisted) || cp.Status == StatusActive
+		coreDone, err := hasApprovedCore(ctx, q, id)
+		if err != nil {
+			return err
+		}
 		for _, t := range tests {
 			if t.QuestionCount == 0 {
 				continue
@@ -117,8 +154,10 @@ func (s *Service) ListMyTests(ctx context.Context, p *auth.Principal) ([]TestSum
 					mine = append(mine, a) // newest first
 				}
 			}
-			s.applyAttempts(&ts, mine)
-			ts.CanStart = eligible && (ts.State == "available" || ts.State == "in_progress" ||
+			s.applyAttempts(&ts, t.SkillKind, mine)
+			// A shortlisted applicant takes the core check before any skill test.
+			ts.CoreFirst = t.SkillKind != SkillCore && cp.Status == StatusQualifying && !coreDone
+			ts.CanStart = eligible && !ts.CoreFirst && (ts.State == "available" || ts.State == "in_progress" || ts.State == "expired" ||
 				(ts.State == "not_passed" && ts.RetakeAfter != nil && !s.now().Before(*ts.RetakeAfter)))
 			out = append(out, ts)
 		}
@@ -128,10 +167,21 @@ func (s *Service) ListMyTests(ctx context.Context, p *auth.Principal) ([]TestSum
 }
 
 // applyAttempts sets the state from the caller's attempts on one test, newest first.
-func (s *Service) applyAttempts(ts *TestSummary, attempts []store.QualificationAttempt) {
+func (s *Service) applyAttempts(ts *TestSummary, skillKind string, attempts []store.QualificationAttempt) {
 	for _, a := range attempts {
 		if a.Status == AttemptApproved {
+			if s.expired(skillKind, a.DecidedAt) {
+				if attempts[0].Status == AttemptApproved || attempts[0].Status == AttemptRejected {
+					ts.State, ts.AttemptID, ts.Score = "expired", &a.ID, a.Score
+					return
+				}
+				break // a newer attempt is open: show that
+			}
 			ts.State, ts.AttemptID, ts.Score, ts.DecisionNote = "qualified", &a.ID, a.Score, a.DecisionNote
+			if skillKind != SkillCore && a.DecidedAt != nil {
+				until := a.DecidedAt.Add(SkillValidity)
+				ts.ValidUntil = &until
+			}
 			return
 		}
 	}
@@ -147,7 +197,7 @@ func (s *Service) applyAttempts(ts *TestSummary, attempts []store.QualificationA
 		ts.State = "awaiting_review"
 	case AttemptRejected:
 		ts.State, ts.DecisionNote = "not_passed", a.DecisionNote
-		after := a.DecidedAt.Add(RetakeCooldown)
+		after := a.DecidedAt.Add(cooldownFor(skillKind))
 		ts.RetakeAfter = &after
 	}
 }
@@ -196,6 +246,11 @@ func (s *Service) StartAttempt(ctx context.Context, p *auth.Principal, testID uu
 		if t.Status != "active" || t.QuestionCount == 0 {
 			return ErrTestUnavailable
 		}
+		if t.SkillKind != SkillCore && cp.Status == StatusQualifying {
+			if done, err := hasApprovedCore(ctx, q, id); err != nil || !done {
+				return errors.Join(err, ErrCoreFirst)
+			}
+		}
 		if open, err := q.GetOpenAttempt(ctx, store.GetOpenAttemptParams{ContributorID: id, TestID: testID}); err == nil {
 			if open.Status != AttemptInProgress {
 				return ErrAttemptClosed // submitted and waiting for Ops
@@ -213,10 +268,10 @@ func (s *Service) StartAttempt(ctx context.Context, p *auth.Principal, testID uu
 			if a.TestID != testID {
 				continue
 			}
-			if a.Status == AttemptApproved {
+			if a.Status == AttemptApproved && !s.expired(t.SkillKind, a.DecidedAt) {
 				return ErrAlreadyQualified
 			}
-			if a.Status == AttemptRejected && a.DecidedAt != nil && s.now().Before(a.DecidedAt.Add(RetakeCooldown)) {
+			if a.Status == AttemptRejected && a.DecidedAt != nil && s.now().Before(a.DecidedAt.Add(cooldownFor(t.SkillKind))) {
 				return ErrRetakeTooSoon
 			}
 		}
@@ -279,7 +334,8 @@ func attemptView(ctx context.Context, q *store.Queries, a store.QualificationAtt
 	var results map[string]bool
 	_ = json.Unmarshal(a.Results, &results)
 	for i, qq := range qs {
-		out.Questions[i] = Question{ID: qq.ID, Position: qq.Position, Content: qq.Content}
+		tt, cfg := questionType(t, qq)
+		out.Questions[i] = Question{ID: qq.ID, Position: qq.Position, Content: qq.Content, TaskType: tt, Config: cfg}
 		rd := reviewQuestionData{expected: qq.Expected}
 		if c, ok := results[qq.ID.String()]; ok {
 			rd.correct = &c
@@ -379,33 +435,41 @@ func (s *Service) Submit(ctx context.Context, p *auth.Principal, attemptID uuid.
 		if err := checkAnswerKeys(qs, answers); err != nil {
 			return err
 		}
-		var cfg quality.Config
-		if err := json.Unmarshal(t.Config, &cfg); err != nil {
-			return err
-		}
 		results := map[string]bool{}
-		correct := 0
+		correct, scored := 0, 0
 		for _, qq := range qs {
 			key := qq.ID.String()
 			raw, ok := answers[key]
 			if !ok {
 				return fieldErr("answers."+key, "answer question %d", qq.Position)
 			}
-			ans, err := quality.Parse(t.TaskType, cfg, raw)
+			tt, rawCfg := questionType(t, qq)
+			var cfg quality.Config
+			if err := json.Unmarshal(rawCfg, &cfg); err != nil {
+				return err
+			}
+			ans, err := quality.Parse(tt, cfg, raw)
 			if err != nil {
 				return fieldErr("answers."+key, "question %d: %s", qq.Position, strings.TrimPrefix(err.Error(), quality.ErrInvalidAnswer.Error()+": "))
 			}
-			ok, err = quality.Matches(t.TaskType, qq.Expected, qq.Tolerance, ans)
+			if !quality.AutoScored(tt) {
+				continue // a person rates writing samples when deciding
+			}
+			ok, err = quality.Matches(tt, qq.Expected, qq.Tolerance, ans)
 			if err != nil {
 				return err
 			}
 			results[key] = ok
+			scored++
 			if ok {
 				correct++
 			}
 		}
-		score := float64(correct) / float64(len(qs))
-		passed := correct >= int(math.Ceil(t.PassThreshold*float64(len(qs))-1e-9))
+		if scored == 0 {
+			return ErrTestUnavailable
+		}
+		score := float64(correct) / float64(scored)
+		passed := correct >= int(math.Ceil(t.PassThreshold*float64(scored)-1e-9))
 		ab, err := json.Marshal(answers)
 		if err != nil {
 			return err
@@ -430,4 +494,15 @@ func (s *Service) Submit(ctx context.Context, p *auth.Principal, attemptID uuid.
 		return err
 	})
 	return out, err
+}
+
+// hasApprovedCore reports whether the contributor passed the core check.
+func hasApprovedCore(ctx context.Context, q *store.Queries, id uuid.UUID) (bool, error) {
+	held, err := q.ContributorSkillsHeld(ctx, id)
+	for _, h := range held {
+		if h.SkillKind == SkillCore {
+			return true, err
+		}
+	}
+	return false, err
 }
