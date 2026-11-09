@@ -14,7 +14,16 @@ import { StatusBadge } from "./status";
 
 type Row = { id: string; title: string; body: ReactNode; action?: ReactNode };
 
-const order: Step[] = ["consent", "profile", "qualify", "review", "identity", "active"];
+const order: Step[] = [
+  "consent",
+  "profile",
+  "screening",
+  "qualify",
+  "review",
+  "interview",
+  "identity",
+  "active",
+];
 
 export function Dashboard() {
   const { profile } = useProfile();
@@ -43,13 +52,26 @@ export function Dashboard() {
         profile.missing.length > 0 ? (
           <>Still needed: {profile.missing.map((f) => fieldLabels[f] ?? f).join(", ")}.</>
         ) : (
-          "Languages, domains, availability, your M-Pesa number and National ID number."
+          "Languages, domains, availability, a few questions about your experience, your M-Pesa number and National ID number."
         ),
       action: (
         <ButtonLink href="/c/profile" arrow>
           Complete profile
         </ButtonLink>
       ),
+    },
+    {
+      id: "screening",
+      title: "Application review",
+      body:
+        profile.screening_status === "waitlisted" ? (
+          <>
+            You are on our waiting list: {profile.screening_note ?? "no project needs your skills right now."}{" "}
+            We will open the next step when one does.
+          </>
+        ) : (
+          "A person on the MezAI team reads your answers and decides on the next step."
+        ),
     },
     {
       id: "qualify",
@@ -76,6 +98,11 @@ export function Dashboard() {
           : "A person checks every passed test before you can take paid tasks.",
     },
     {
+      id: "interview",
+      title: "Short phone interview",
+      body: "We call the M-Pesa number on your profile for 10 to 15 minutes: a few questions in your languages and about how you would handle the work. Nothing is recorded.",
+    },
+    {
       id: "identity",
       title: "Identity check",
       body:
@@ -92,7 +119,7 @@ export function Dashboard() {
         ) : undefined,
     },
   ];
-  const at = order.indexOf(step);
+  const at = order.indexOf(step === "declined" ? "screening" : step);
 
   return (
     <div className="grid gap-10">
@@ -113,6 +140,11 @@ export function Dashboard() {
         <Alert tone="warning" title="Your account is paused">
           You cannot take tests or tasks while paused. The MezAI team will contact you by email about next
           steps.
+        </Alert>
+      )}
+      {step === "declined" && (
+        <Alert tone="warning" title="We are not going ahead with your application">
+          {profile.screening_note} Thank you for your interest in MezAI.
         </Alert>
       )}
       {step === "removed" && (

@@ -85,6 +85,79 @@ function Queue() {
   );
 }
 
+/** A contributor list for one Ops queue, oldest first. */
+function ContributorQueue({
+  query,
+  keep,
+  caption,
+  empty,
+  action,
+}: {
+  query: string;
+  keep: (c: ContributorSummary) => boolean;
+  caption: string;
+  empty: string;
+  action: string;
+}) {
+  const list = useLoad(
+    () =>
+      api<{ contributors: ContributorSummary[] }>("GET", `/v1/contributors?${query}`).then((r) =>
+        r.contributors.filter(keep).reverse(),
+      ),
+    query,
+  );
+  if (list.status === "loading") return <Skeleton className="h-40 w-full" />;
+  if (list.status === "error") return <Alert tone="danger" title={errorMessage(list.error)} />;
+  return (
+    <Table
+      caption={caption}
+      hideCaption
+      rows={list.data}
+      rowKey={(c) => c.id}
+      empty={empty}
+      columns={[
+        {
+          key: "who",
+          header: "Contributor",
+          cell: (c) => (
+            <span className="grid">
+              <span className="font-mono text-xs text-fg-muted">{c.public_code}</span>
+              <span>{c.display_name}</span>
+            </span>
+          ),
+          sortValue: (c) => c.public_code,
+        },
+        { key: "langs", header: "Languages", cell: (c) => c.languages.map(labelFor).join(", ") || "–" },
+        {
+          key: "identity",
+          header: "Identity",
+          cell: (c) => (
+            <StatusPill status={identityPill(c.identity_status)}>
+              {identityLabel[c.identity_status]}
+            </StatusPill>
+          ),
+        },
+        {
+          key: "joined",
+          header: "Applied",
+          cell: (c) => shortDate(c.created_at),
+          sortValue: (c) => c.created_at,
+        },
+        {
+          key: "go",
+          header: <span className="sr-only">Action</span>,
+          cell: (c) => (
+            <Link href={`/w/contributors/${c.id}`} className="font-medium underline underline-offset-4">
+              {action}
+              <span className="sr-only"> {c.public_code}</span>
+            </Link>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
 /** Identities waiting for Ops: numbers given, not yet verified (D-078). */
 function IdentityQueue() {
   const list = useLoad(() =>
@@ -232,6 +305,32 @@ export function Contributors() {
     ...(approve
       ? [
           { id: "queue", label: "Waiting for review", content: <Queue /> },
+          {
+            id: "applications",
+            label: "Applications",
+            content: (
+              <ContributorQueue
+                query="status=qualifying&screening=pending"
+                keep={() => true}
+                caption="Applications waiting for screening, oldest first"
+                empty="No applications are waiting. Complete applications appear here."
+                action="Review"
+              />
+            ),
+          },
+          {
+            id: "interviews",
+            label: "Interviews",
+            content: (
+              <ContributorQueue
+                query="status=qualifying&screening=shortlisted"
+                keep={(c) => c.qualified && !c.interview_passed}
+                caption="Shortlisted contributors who passed a test and need the phone interview"
+                empty="Nobody is waiting for an interview. People appear here once they pass a qualification test."
+                action="Interview"
+              />
+            ),
+          },
           { id: "identity", label: "Identity checks", content: <IdentityQueue /> },
         ]
       : []),
@@ -246,7 +345,7 @@ export function Contributors() {
         defaultTab={
           !approve
             ? "all"
-            : params.get("tab") === "all" || params.get("tab") === "identity"
+            : ["all", "identity", "applications", "interviews"].includes(params.get("tab") ?? "")
               ? params.get("tab")!
               : "queue"
         }

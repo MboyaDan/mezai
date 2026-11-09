@@ -6,7 +6,7 @@ import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Checkbox, ChoiceGroup } from "@/components/ui/choice";
 import { Alert, Card } from "@/components/ui/display";
 import { Field } from "@/components/ui/field";
-import { Input, Select } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
   countryOptions,
@@ -15,7 +15,14 @@ import {
   languageOptions,
   proficiencyOptions,
 } from "@/content/profile";
-import { ApiError, api, type ContributorProfile, type ProfileInput } from "@/lib/api/client";
+import {
+  ApiError,
+  api,
+  upload,
+  type ContributorProfile,
+  type Experience,
+  type ProfileInput,
+} from "@/lib/api/client";
 import { errorMessage, maskedPreview, normaliseKenyanMobile, normaliseNationalId } from "@/lib/onboarding";
 import { useProfile } from "./portal";
 
@@ -48,6 +55,13 @@ export function ProfileForm() {
       : [{ language: "", proficiency: "", dialects: "" }],
   );
   const [domains, setDomains] = useState<string[]>(profile.domains);
+  const [exp, setExp] = useState<Required<Experience>>({
+    highest_study: profile.experience.highest_study ?? "",
+    relevant_experience: profile.experience.relevant_experience ?? "",
+    ai_data_experience: profile.experience.ai_data_experience ?? "",
+    why: profile.experience.why ?? "",
+  });
+  const [linkedIn, setLinkedIn] = useState(profile.linkedin_url ?? "");
   const [phone, setPhone] = useState("");
   const [phone2, setPhone2] = useState("");
   const [nationalId, setNationalId] = useState("");
@@ -106,6 +120,8 @@ export function ProfileForm() {
       mpesa_phone: phone,
       mpesa_phone_confirm: phone2,
       national_id: nationalId,
+      experience: exp,
+      linkedin_url: linkedIn.trim() || null,
     };
     setBusy(true);
     try {
@@ -143,14 +159,14 @@ export function ProfileForm() {
       {becameQualifying && (
         <Alert
           tone="success"
-          title="Profile complete"
+          title="Application complete"
           action={
-            <ButtonLink href="/c/qualify" arrow>
-              Choose a qualification test
+            <ButtonLink href="/c" arrow>
+              Back to dashboard
             </ButtonLink>
           }
         >
-          Next, pass a short qualification test for one of your skills.
+          A person on the MezAI team reads it next. Qualification tests open once you are shortlisted.
         </Alert>
       )}
       {removed && <Alert tone="danger" title="This account is closed, so the profile cannot be changed." />}
@@ -310,6 +326,70 @@ export function ProfileForm() {
         </Section>
 
         <Section
+          title="Your experience"
+          hint="A person on the MezAI team reads these answers. Short and specific is best."
+        >
+          <Field
+            label="Highest study or training that matters for this work"
+            error={errors["experience.highest_study"]}
+            required
+          >
+            <Input
+              value={exp.highest_study}
+              onChange={(e) => setExp({ ...exp, highest_study: e.target.value })}
+              maxLength={200}
+            />
+          </Field>
+          <Field
+            label="Relevant experience"
+            hint="For example writing, translation, editing, teaching, customer support, or work in health, law or finance."
+            error={errors["experience.relevant_experience"]}
+            required
+          >
+            <Textarea
+              value={exp.relevant_experience}
+              onChange={(e) => setExp({ ...exp, relevant_experience: e.target.value })}
+              rows={4}
+              maxLength={1000}
+            />
+          </Field>
+          <Field label="Any earlier work on AI data" error={errors["experience.ai_data_experience"]}>
+            <Textarea
+              value={exp.ai_data_experience}
+              onChange={(e) => setExp({ ...exp, ai_data_experience: e.target.value })}
+              rows={2}
+              maxLength={500}
+            />
+          </Field>
+          <Field
+            label="Why do you want to do this work?"
+            hint={`About 100 words. ${800 - exp.why.length} characters left.`}
+            error={errors["experience.why"]}
+            required
+          >
+            <Textarea
+              value={exp.why}
+              onChange={(e) => setExp({ ...exp, why: e.target.value })}
+              rows={4}
+              maxLength={800}
+            />
+          </Field>
+          <Field
+            label="LinkedIn profile"
+            hint="Optional. For example https://www.linkedin.com/in/your-name"
+            error={errors.linkedin_url}
+          >
+            <Input
+              type="url"
+              value={linkedIn}
+              onChange={(e) => setLinkedIn(e.target.value)}
+              autoComplete="url"
+            />
+          </Field>
+          <CvUpload />
+        </Section>
+
+        <Section
           title="M-Pesa number"
           hint="Where approved work is paid. Enter it twice so a typo cannot send money to someone else."
         >
@@ -412,4 +492,69 @@ export function IdentityNotice({
       </Alert>
     );
   return null;
+}
+
+/** Optional CV: uploads on choosing a file, separate from Save (D-100). */
+function CvUpload() {
+  const { profile, setProfile } = useProfile();
+  const toast = useToast();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function send(file: File) {
+    setError(null);
+    if (!file.name.toLowerCase().endsWith(".pdf")) return setError("Upload your CV as a PDF.");
+    if (file.size > 2 * 1024 * 1024) return setError("The file is larger than 2 MB.");
+    const form = new FormData();
+    form.append("cv", file);
+    setBusy(true);
+    try {
+      setProfile(await upload<ContributorProfile>("/v1/me/contributor/cv", form, "PUT"));
+      toast({ tone: "success", title: "CV uploaded" });
+    } catch (e) {
+      setError(errorMessage(e instanceof ApiError ? e : new ApiError(0, "network")));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    try {
+      setProfile(await api<ContributorProfile>("DELETE", "/v1/me/contributor/cv"));
+      toast({ tone: "success", title: "CV deleted" });
+    } catch (e) {
+      setError(errorMessage(e instanceof ApiError ? e : new ApiError(0, "network")));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="grid gap-2">
+      {profile.cv_file_name ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span>
+            CV on file: <span className="font-mono">{profile.cv_file_name}</span>
+          </span>
+          <Button variant="ghost" size="sm" onClick={remove} loading={busy}>
+            Delete CV
+          </Button>
+        </div>
+      ) : null}
+      <Field
+        label={profile.cv_file_name ? "Replace CV" : "CV"}
+        hint="Optional. PDF, up to 2 MB. Leave out your address, date of birth and photo: we do not need them. We delete it 90 days after we decide on your application, or at once if we decline it."
+        error={error ?? undefined}
+      >
+        <Input
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void send(f);
+            e.target.value = "";
+          }}
+        />
+      </Field>
+    </div>
+  );
 }

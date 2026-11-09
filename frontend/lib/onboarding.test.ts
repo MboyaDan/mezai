@@ -91,15 +91,31 @@ describe("normaliseNationalId", () => {
 });
 
 describe("currentStep", () => {
-  const p = (status: string, consent: string[] = [], qualifications: unknown[] = []) =>
-    ({ status, consent_required: consent, qualifications }) as Parameters<typeof currentStep>[0];
+  const p = (
+    status: string,
+    consent: string[] = [],
+    qualifications: unknown[] = [],
+    screening = "shortlisted",
+    interview = false,
+  ) =>
+    ({
+      status,
+      consent_required: consent,
+      qualifications,
+      screening_status: screening,
+      interview_passed: interview,
+    }) as Parameters<typeof currentStep>[0];
   it("orders the onboarding steps", () => {
     expect(currentStep(p("applied", ["privacy_notice"]), [])).toBe("consent");
     expect(currentStep(p("applied"), [])).toBe("profile");
     expect(currentStep(p("qualifying"), [])).toBe("qualify");
     expect(currentStep(p("qualifying"), [{ state: "awaiting_review" } as never])).toBe("review");
-    // Qualified but identity not verified yet (D-078).
-    expect(currentStep(p("qualifying", [], [{}]), [])).toBe("identity");
+    // Screening first (D-100), then test, interview, identity.
+    expect(currentStep(p("qualifying", [], [], "pending"), [])).toBe("screening");
+    expect(currentStep(p("qualifying", [], [], "waitlisted"), [])).toBe("screening");
+    expect(currentStep(p("qualifying", [], [], "declined"), [])).toBe("declined");
+    expect(currentStep(p("qualifying", [], [{}]), [])).toBe("interview");
+    expect(currentStep(p("qualifying", [], [{}], "shortlisted", true), [])).toBe("identity");
     expect(currentStep(p("active"), [])).toBe("active");
     expect(currentStep(p("paused"), [])).toBe("paused");
     expect(currentStep(p("removed", ["privacy_notice"]), [])).toBe("removed");

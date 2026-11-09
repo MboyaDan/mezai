@@ -15,7 +15,9 @@ import { labelFor } from "@/content/profile";
 import {
   ApiError,
   api,
+  type Application,
   type AttemptSummary,
+  type Interview,
   type ContributorProfile,
   type ContributorStatus,
 } from "@/lib/api/client";
@@ -23,11 +25,14 @@ import { errorMessage } from "@/lib/onboarding";
 import { useLoad } from "@/lib/use-load";
 import { pct, shortDate } from "./contributors";
 import { IdentityPanel, type IdentityChecks } from "./identity-panel";
+import { ApplicationPanel, InterviewPanel } from "./screening-panels";
 import { PageTitle, useCan } from "./workspace";
 
 type Detail = {
   profile: ContributorProfile;
   identity: IdentityChecks;
+  application: Application;
+  interviews: Interview[];
   history: Array<{ from: string | null; to: string; reason: string; changed_by: string | null; at: string }>;
   attempts: AttemptSummary[];
 };
@@ -53,7 +58,7 @@ export function ContributorDetail() {
 
   if (d.status === "loading") return <Skeleton className="h-80 w-full" />;
   if (d.status === "error") return <Alert tone="danger" title={errorMessage(d.error)} />;
-  const { profile: p, identity, history, attempts } = d.data;
+  const { profile: p, identity, application, interviews, history, attempts } = d.data;
 
   async function change() {
     if (!target) return;
@@ -158,6 +163,16 @@ export function ContributorDetail() {
         </div>
 
         <div className="grid content-start gap-6 lg:col-span-2">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <ApplicationPanel profile={p} application={application} onChange={d.reload} />
+            <InterviewPanel
+              profile={p}
+              application={application}
+              interviews={interviews}
+              nationalIdLast3={identity.national_id_last3}
+              onChange={d.reload}
+            />
+          </div>
           <section aria-labelledby="attempts-h">
             <h2 id="attempts-h" className="mb-3 font-display font-semibold">
               Qualification attempts
