@@ -227,6 +227,31 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 				return err
 			}
 		}
+		// Application (D-100): everyone past "applied" has filled it in;
+		// people already working were shortlisted and passed the interview.
+		if status != "applied" {
+			exp := mustJSON(map[string]string{
+				"highest_study":       "Sample diploma in communication",
+				"relevant_experience": "Sample experience: two years answering customer messages in Kiswahili and English.",
+				"ai_data_experience":  "",
+				"why":                 "Sample answer: I enjoy careful reading and want flexible work.",
+			})
+			if err := s.q.UpdateContributorApplication(s.ctx, store.UpdateContributorApplicationParams{ID: cp.ID, Experience: exp}); err != nil {
+				return err
+			}
+		}
+		if status == "active" || status == "paused" {
+			note := "Sample data"
+			if err := s.q.DecideScreening(s.ctx, store.DecideScreeningParams{ID: cp.ID, ScreeningStatus: "shortlisted", ScreeningNote: &note, DecidedBy: &admin}); err != nil {
+				return err
+			}
+			scenario, ok := int16(4), true
+			if _, err := s.q.AddInterview(s.ctx, store.AddInterviewParams{ContributorID: cp.ID, InterviewerID: admin, Outcome: "passed",
+				IdentityConfirmed: true, LanguageScores: mustJSON(map[string]int{"sw": 4, "en": 4}), ScenarioScore: &scenario,
+				ConfidentialityOk: &ok, Note: &note}); err != nil {
+				return err
+			}
+		}
 		if status != "applied" && status != "qualifying" {
 			note := "Sample data"
 			if err := s.q.DecideContributorIdentity(s.ctx, store.DecideContributorIdentityParams{

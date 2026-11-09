@@ -103,7 +103,8 @@ func (s *Service) ListMyTests(ctx context.Context, p *auth.Principal) ([]TestSum
 		if err != nil {
 			return err
 		}
-		eligible := cp.Status == StatusQualifying || cp.Status == StatusActive
+		// Tests open after screening (D-100); active contributors add skills freely.
+		eligible := (cp.Status == StatusQualifying && cp.ScreeningStatus == ScreeningShortlisted) || cp.Status == StatusActive
 		for _, t := range tests {
 			if t.QuestionCount == 0 {
 				continue
@@ -169,6 +170,10 @@ func (s *Service) StartAttempt(ctx context.Context, p *auth.Principal, testID uu
 			return ErrProfileIncomplete
 		case StatusPaused, StatusRemoved:
 			return ErrNotEligible
+		case StatusQualifying:
+			if cp.ScreeningStatus != ScreeningShortlisted {
+				return ErrNotShortlisted
+			}
 		}
 		consents, err := q.ListLatestConsents(ctx, p.UserID)
 		if err != nil {

@@ -57,7 +57,7 @@ type testResp struct {
 	RetakeAfter  *string `json:"retake_after"`
 }
 
-var currentConsents = map[string]string{"privacy_notice": "0.2", "contributor_terms": "0.2"}
+var currentConsents = map[string]string{"privacy_notice": "0.3", "contributor_terms": "0.3"}
 
 const newEmail = "new.contributor@sample.invalid"
 
@@ -85,6 +85,11 @@ var completeProfile = map[string]any{
 	"weekly_hours": 15, "domains": []string{"health", "education"},
 	"languages":   []map[string]any{{"language": "sw", "proficiency": "native", "dialects": []string{"Sheng"}}, {"language": "en", "proficiency": "fluent"}},
 	"mpesa_phone": "0712 345 678", "mpesa_phone_confirm": "+254712345678", "national_id": "2468 1357",
+	"experience": map[string]string{
+		"highest_study":       "Sample diploma in journalism",
+		"relevant_experience": "Sample: two years writing and editing radio news in Kiswahili.",
+		"why":                 "Sample: I like careful reading and flexible hours.",
+	},
 }
 
 func (e *env) tests(s *session) map[string]testResp {
@@ -149,7 +154,7 @@ func TestContributorOnboarding(t *testing.T) {
 		t.Fatalf("login before verification: %d %s", w.Code, w.Body)
 	}
 	if n := e.count(`SELECT count(*) FROM consents c JOIN users u ON u.id = c.user_id
-		WHERE u.email = $1 AND c.version = '0.2' AND c.accepted_at IS NOT NULL
+		WHERE u.email = $1 AND c.version = '0.3' AND c.accepted_at IS NOT NULL
 		  AND c.document IN ('privacy_notice', 'contributor_terms')`, newEmail); n != 2 {
 		t.Fatalf("consent rows with version and time: %d", n)
 	}
@@ -199,6 +204,19 @@ func TestContributorOnboarding(t *testing.T) {
 	}
 	if n := e.count(`SELECT count(*) FROM audit_log WHERE coalesce(after::text, '') LIKE '%712345678%' OR coalesce(before::text, '') LIKE '%712345678%'`); n != 0 {
 		t.Fatal("phone number written to the audit log")
+	}
+
+	// Tests open only after Ops shortlists the application (D-100).
+	cls = e.tests(s)["Swahili message routing test (Sample)"]
+	if cls.CanStart {
+		t.Fatal("tests open before screening")
+	}
+	if w, _ := e.start(s, cls.ID); errorCode(w) != "not_shortlisted" {
+		t.Fatalf("start before screening: %d %s", w.Code, w.Body)
+	}
+	_, ops := e.login("ops@sample.invalid", pw)
+	if w := e.do(http.MethodPost, "/v1/contributors/"+p.ID+"/screening", map[string]string{"decision": "shortlist"}, ops, nil); w.Code != http.StatusOK {
+		t.Fatalf("shortlist: %d %s", w.Code, w.Body)
 	}
 
 	// Take the classification test.
@@ -252,8 +270,7 @@ func TestContributorOnboarding(t *testing.T) {
 		t.Fatalf("other contributor reads attempt: %d", w.Code)
 	}
 
-	// Ops approves; the contributor becomes active.
-	_, ops := e.login("ops@sample.invalid", pw)
+	// Ops approves; the contributor becomes active after the identity check and interview.
 	w = e.do(http.MethodGet, "/v1/qualification/attempts", nil, ops, nil)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), att.ID) {
 		t.Fatalf("queue: %d %s", w.Code, w.Body)
@@ -276,14 +293,22 @@ func TestContributorOnboarding(t *testing.T) {
 	if p.Status != "qualifying" || p.IdentityStatus != "pending" || len(p.Qualifications) != 1 {
 		t.Fatalf("approved but identity not verified yet: %s", w.Body)
 	}
-	// Verifying the identity completes activation (D-078).
+	// Verifying the identity is not enough on its own: the interview remains (D-100).
 	if w := e.do(http.MethodPost, "/v1/contributors/"+p.ID+"/identity", map[string]string{"decision": "verify"}, ops, nil); w.Code != http.StatusOK {
 		t.Fatalf("verify identity: %d %s", w.Code, w.Body)
 	}
 	w = e.do(http.MethodGet, "/v1/me/contributor", nil, s, nil)
 	decode(t, w, &p)
-	if p.Status != "active" || p.IdentityStatus != "verified" {
-		t.Fatalf("after approval and verification: %s", w.Body)
+	if p.Status != "qualifying" || p.IdentityStatus != "verified" {
+		t.Fatalf("verified but not interviewed: %s", w.Body)
+	}
+	if w := e.do(http.MethodPost, "/v1/contributors/"+p.ID+"/interviews", passingInterview, ops, nil); w.Code != http.StatusOK {
+		t.Fatalf("interview: %d %s", w.Code, w.Body)
+	}
+	w = e.do(http.MethodGet, "/v1/me/contributor", nil, s, nil)
+	decode(t, w, &p)
+	if p.Status != "active" {
+		t.Fatalf("after approval, verification and interview: %s", w.Body)
 	}
 	if n := e.count(`SELECT count(*) FROM contributor_status_history WHERE contributor_id = $1`, p.ID); n != 3 {
 		t.Fatalf("status history rows (applied, qualifying, active): %d", n)

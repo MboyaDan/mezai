@@ -233,15 +233,20 @@ func (s *Service) DecideIdentity(ctx context.Context, p *auth.Principal, id uuid
 	return s.GetContributor(ctx, p, id)
 }
 
-// activateIfQualified makes a qualifying contributor active once they hold
-// an approved qualification and a verified identity, whichever came last.
+// activateIfQualified makes a qualifying contributor active once they are
+// shortlisted, have passed the interview, hold an approved qualification and
+// a verified identity, whichever came last.
 func activateIfQualified(ctx context.Context, q *store.Queries, m auth.Meta, id uuid.UUID, by *uuid.UUID, reason string) error {
 	cp, err := q.LockContributorProfile(ctx, id)
 	if err != nil {
 		return err
 	}
-	if cp.Status != StatusQualifying || cp.IdentityStatus != IdentityVerified {
+	// D-100: shortlisted, interview passed, identity verified and a test approved.
+	if cp.Status != StatusQualifying || cp.IdentityStatus != IdentityVerified || cp.ScreeningStatus != ScreeningShortlisted {
 		return nil
+	}
+	if passed, err := q.HasPassedInterview(ctx, id); err != nil || !passed {
+		return err
 	}
 	attempts, err := q.ListAttemptsByContributor(ctx, id)
 	if err != nil {

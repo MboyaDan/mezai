@@ -512,6 +512,36 @@ paths:
         "200": { description: Updated profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/contributor/cv:
+    put:
+      operationId: uploadMyCV
+      summary: Upload an optional CV (PDF, at most 2 MB), replacing any earlier one (`profile.manage`).
+      description: >-
+        Stored under a key built from IDs only. Deleted at once if the application is declined,
+        otherwise 90 days after the screening decision (D-100). Limited to 10 uploads an hour.
+      tags: [contributors]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [cv]
+              properties:
+                cv: { type: string, format: binary }
+      responses:
+        "200": { description: Profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+    delete:
+      operationId: deleteMyCV
+      summary: Delete the caller's CV now.
+      tags: [contributors]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200": { description: Profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
   /v1/me/contributor/consents:
     post:
       operationId: acceptConsents
@@ -837,6 +867,7 @@ paths:
       parameters:
         - { name: status, in: query, schema: { $ref: "#/components/schemas/ContributorStatus" } }
         - { name: identity, in: query, description: "Identity status; `pending` is the Ops verification queue", schema: { $ref: "#/components/schemas/IdentityStatus" } }
+        - { name: screening, in: query, schema: { $ref: "#/components/schemas/ScreeningStatus" } }
       responses:
         "200":
           description: Contributors
@@ -900,6 +931,74 @@ paths:
         "200": { $ref: "#/components/responses/ContributorDetail" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /v1/contributors/{id}/cv:
+    get:
+      operationId: downloadContributorCV
+      summary: The applicant's CV, as an attachment (`contributor.approve`).
+      tags: [contributors]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "404": { description: "`not_found` or `no_cv`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/contributors/{id}/screening:
+    post:
+      operationId: decideScreening
+      summary: Shortlist, waitlist or decline a complete application (`contributor.approve`, D-100).
+      description: >-
+        A decline needs a note, which the applicant sees, and deletes any CV at once. Other
+        decisions keep a CV for 90 days. Tests open only once shortlisted.
+      tags: [contributors]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [shortlist, waitlist, decline] }
+                note: { type: string, maxLength: 1000 }
+      responses:
+        "200": { $ref: "#/components/responses/ContributorDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/contributors/{id}/interviews:
+    post:
+      operationId: recordInterview
+      summary: Record one structured phone interview for a shortlisted applicant (`contributor.approve`).
+      description: >-
+        `completed` calls are scored with the fixed rubric: pass needs identity and
+        confidentiality confirmed and the scenario and every language at 3 or 4. A pass may
+        make the contributor active. A failed interview can be repeated after 30 days
+        (409 `interview_too_soon`); a second pass is 409 `already_passed`. No recording is kept.
+      tags: [contributors]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [completed, no_answer] }
+                identity_confirmed: { type: boolean }
+                language_scores: { type: object, additionalProperties: { type: integer, minimum: 1, maximum: 4 } }
+                scenario_score: { type: integer, minimum: 1, maximum: 4 }
+                confidentiality_ok: { type: boolean }
+                availability: { type: string, maxLength: 300 }
+                note: { type: string, maxLength: 1000 }
+      responses:
+        "200": { $ref: "#/components/responses/ContributorDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/contributors/{id}/status:
     post:
       operationId: setContributorStatus
@@ -1510,10 +1609,12 @@ components:
         application/json:
           schema:
             type: object
-            required: [profile, identity, history, attempts]
+            required: [profile, identity, application, interviews, history, attempts]
             properties:
               profile: { $ref: "#/components/schemas/ContributorProfile" }
               identity: { $ref: "#/components/schemas/IdentityChecks" }
+              application: { $ref: "#/components/schemas/Application" }
+              interviews: { type: array, items: { $ref: "#/components/schemas/Interview" } }
               history:
                 type: array
                 items:
@@ -1702,6 +1803,7 @@ components:
       type: object
       required: [id, public_code, status, email, display_name, country, city, education_level, weekly_hours,
         mpesa_phone_masked, mpesa_phone_confirmed, national_id_last3, identity_status, identity_note,
+        experience, linkedin_url, cv_file_name, screening_status, screening_note, interview_passed,
         languages, domains, missing, consents, consent_required, qualifications, created_at]
       properties:
         id: { type: string, format: uuid }
@@ -1718,6 +1820,12 @@ components:
         national_id_last3: { type: [string, "null"], description: Last 3 digits; the number itself is never stored }
         identity_status: { $ref: "#/components/schemas/IdentityStatus" }
         identity_note: { type: [string, "null"], description: "Ops' note; the reason when rejected" }
+        experience: { $ref: "#/components/schemas/Experience" }
+        linkedin_url: { type: [string, "null"] }
+        cv_file_name: { type: [string, "null"], description: Null when no CV is on file }
+        screening_status: { $ref: "#/components/schemas/ScreeningStatus" }
+        screening_note: { type: [string, "null"], description: The reason for a waitlist or decline }
+        interview_passed: { type: boolean }
         languages: { type: array, items: { $ref: "#/components/schemas/Language" } }
         domains: { type: array, items: { type: string, enum: [health, law, finance, education, software, agriculture, other] } }
         missing: { type: array, items: { type: string }, description: Fields still needed before the contributor can qualify }
@@ -1761,7 +1869,44 @@ components:
           description: >-
             Kenyan National ID number, 6 to 9 digits. Empty keeps the stored one. Stored only as a
             keyed fingerprint and its last 3 digits. A number on another account is 422 for this field.
+        experience: { $ref: "#/components/schemas/Experience" }
+        linkedin_url: { type: [string, "null"], description: "https://www.linkedin.com/in/…" }
     IdentityStatus: { type: string, enum: [pending, verified, rejected] }
+    ScreeningStatus: { type: string, enum: [pending, shortlisted, waitlisted, declined] }
+    Experience:
+      type: object
+      description: The short application form (D-100). highest_study, relevant_experience and why are required for a complete application.
+      properties:
+        highest_study: { type: string, maxLength: 200 }
+        relevant_experience: { type: string, maxLength: 1000 }
+        ai_data_experience: { type: string, maxLength: 500 }
+        why: { type: string, maxLength: 800 }
+    Application:
+      type: object
+      required: [experience, linkedin_url, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_at]
+      properties:
+        experience: { $ref: "#/components/schemas/Experience" }
+        linkedin_url: { type: [string, "null"] }
+        cv_file_name: { type: [string, "null"] }
+        cv_uploaded_at: { type: [string, "null"], format: date-time }
+        cv_delete_after: { type: [string, "null"], format: date-time }
+        screening_status: { $ref: "#/components/schemas/ScreeningStatus" }
+        screening_note: { type: [string, "null"] }
+        screening_decided_at: { type: [string, "null"], format: date-time }
+    Interview:
+      type: object
+      required: [id, outcome, identity_confirmed, language_scores, scenario_score, confidentiality_ok, availability, note, interviewer, at]
+      properties:
+        id: { type: string, format: uuid }
+        outcome: { type: string, enum: [passed, failed, no_answer] }
+        identity_confirmed: { type: boolean }
+        language_scores: { type: object, additionalProperties: { type: integer } }
+        scenario_score: { type: [integer, "null"] }
+        confidentiality_ok: { type: [boolean, "null"] }
+        availability: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        interviewer: { type: string }
+        at: { type: string, format: date-time }
     ContributorRef:
       type: object
       required: [id, public_code, status]
@@ -1861,7 +2006,7 @@ components:
     ContributorSummary:
       type: object
       required: [id, public_code, status, display_name, email, country, languages, mpesa_phone_masked,
-        identity_status, national_id_last3, possible_duplicates, created_at]
+        identity_status, national_id_last3, possible_duplicates, screening_status, interview_passed, qualified, created_at]
       properties:
         id: { type: string, format: uuid }
         public_code: { type: string }
@@ -1874,6 +2019,9 @@ components:
         identity_status: { $ref: "#/components/schemas/IdentityStatus" }
         national_id_last3: { type: [string, "null"] }
         possible_duplicates: { type: integer, description: Recorded number clashes plus other accounts with the same name }
+        screening_status: { $ref: "#/components/schemas/ScreeningStatus" }
+        interview_passed: { type: boolean }
+        qualified: { type: boolean, description: Holds an approved qualification test }
         created_at: { type: string, format: date-time }
     TaskConfig:
       type: object

@@ -62,6 +62,14 @@ func (s *Store) Put(ctx context.Context, key, contentType string, data []byte) e
 }
 
 // Get reads an object, refusing anything larger than max bytes.
+// Delete removes an object. S3 answers success for a missing key.
+func (s *Store) Delete(ctx context.Context, key string) error {
+	if _, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)}); err != nil {
+		return fmt.Errorf("delete %q: %w", key, err)
+	}
+	return nil
+}
+
 func (s *Store) Get(ctx context.Context, key string, max int64) ([]byte, error) {
 	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
@@ -82,6 +90,8 @@ func (s *Store) Get(ctx context.Context, key string, max int64) ([]byte, error) 
 type Blobs interface {
 	Put(ctx context.Context, key, contentType string, data []byte) error
 	Get(ctx context.Context, key string, max int64) ([]byte, error)
+	// Delete removes an object; a missing object is not an error.
+	Delete(ctx context.Context, key string) error
 }
 
 // Memory is an in-process Blobs for tests and for running without storage.
@@ -110,6 +120,21 @@ func (m *Memory) Get(_ context.Context, key string, max int64) ([]byte, error) {
 		return nil, fmt.Errorf("get %q: larger than %d bytes", key, max)
 	}
 	return bytes.Clone(d), nil
+}
+
+func (m *Memory) Delete(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.m, key)
+	return nil
+}
+
+// Has reports whether an object exists (tests).
+func (m *Memory) Has(key string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.m[key]
+	return ok
 }
 
 // Corrupt replaces an object, for tests that prove digests are checked.

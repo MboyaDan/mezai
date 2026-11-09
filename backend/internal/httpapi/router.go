@@ -126,13 +126,15 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 
 		// Contributor onboarding (Stage 7). Sign-up is public and answers the
 		// same way for new and registered emails.
-		ch := &contributorHandlers{auth: d.Auth.Service, svc: contributors.NewService(d.Auth.Pool, d.Auth.IdentityKey), log: d.Log, perEmail: newLimiter(5, time.Hour)}
+		ch := &contributorHandlers{auth: d.Auth.Service, svc: contributors.NewService(d.Auth.Pool, d.Auth.IdentityKey, d.Auth.Files), log: d.Log, perEmail: newLimiter(5, time.Hour)}
 		a.handle(http.MethodPost, "/contributors/signup", Public(), rateLimit(newLimiter(10, time.Hour)), ch.signUp)
 		a.handle(http.MethodGet, "/me/contributor", Perm("profile.manage"), ch.myProfile)
 		// Rate limited: a number already on another account is refused, so
 		// saves must not become a way to test many numbers (D-078).
 		a.handle(http.MethodPut, "/me/contributor/profile", Perm("profile.manage"), rateLimitUser(newLimiter(30, time.Hour)), ch.updateMyProfile)
 		a.handle(http.MethodPost, "/me/contributor/consents", Perm("profile.manage"), ch.acceptConsents)
+		a.handle(http.MethodPut, "/me/contributor/cv", Perm("profile.manage"), rateLimitUser(newLimiter(10, time.Hour)), ch.uploadCV)
+		a.handle(http.MethodDelete, "/me/contributor/cv", Perm("profile.manage"), ch.deleteCV)
 		a.handle(http.MethodGet, "/me/qualification/tests", Perm("qualification.take"), ch.myTests)
 		a.handle(http.MethodPost, "/me/qualification/tests/:id/attempts", Perm("qualification.take"), ch.startAttempt)
 		a.handle(http.MethodGet, "/me/qualification/attempts/:id", Perm("qualification.take"), ch.myAttempt)
@@ -145,6 +147,9 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/contributors/:id/status", Perm("contributor.pause"), ch.setContributorStatus)
 		a.handle(http.MethodPost, "/contributors/:id/identity", Perm("contributor.approve"), ch.decideIdentity)
 		a.handle(http.MethodPost, "/contributors/:id/mpesa-name-check", Perm("payout.create"), ch.recordMpesaNameCheck)
+		a.handle(http.MethodGet, "/contributors/:id/cv", Perm("contributor.approve"), ch.downloadCV)
+		a.handle(http.MethodPost, "/contributors/:id/screening", Perm("contributor.approve"), ch.decideScreening)
+		a.handle(http.MethodPost, "/contributors/:id/interviews", Perm("contributor.approve"), ch.recordInterview)
 		a.handle(http.MethodGet, "/qualification/attempts", Perm("contributor.approve"), ch.listAttempts)
 		a.handle(http.MethodGet, "/qualification/attempts/:id", Perm("contributor.approve"), ch.reviewAttempt)
 		a.handle(http.MethodPost, "/qualification/attempts/:id/decision", Perm("contributor.approve"), ch.decideAttempt)

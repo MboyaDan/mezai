@@ -134,6 +134,16 @@ type ContributorProfile struct {
 	IdentityDecidedAt     *time.Time
 	MpesaNameCheckedAt    *time.Time
 	MpesaNameCheckedBy    *uuid.UUID
+	Experience            []byte
+	LinkedinUrl           *string
+	CvFileKey             *string
+	CvFileName            *string
+	CvUploadedAt          *time.Time
+	CvDeleteAfter         *time.Time
+	ScreeningStatus       string
+	ScreeningNote         *string
+	ScreeningDecidedBy    *uuid.UUID
+	ScreeningDecidedAt    *time.Time
 }
 
 type ContributorStatusHistory struct {
@@ -326,6 +336,20 @@ type ImportJob struct {
 	SizeBytes   int64
 	Sha256      string
 	CommittedAt *time.Time
+}
+
+type Interview struct {
+	ID                uuid.UUID
+	ContributorID     uuid.UUID
+	InterviewerID     uuid.UUID
+	Outcome           string
+	IdentityConfirmed bool
+	LanguageScores    []byte
+	ScenarioScore     *int16
+	ConfidentialityOk *bool
+	Availability      *string
+	Note              *string
+	CreatedAt         time.Time
 }
 
 type Invitation struct {

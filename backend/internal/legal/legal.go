@@ -15,10 +15,11 @@ const (
 // and in legal.ts together; contributors are then asked to accept again.
 // 0.2 (2026-11-08): the privacy notice adds the National ID fingerprint and
 // the contributor terms add one account per person (D-078).
+// 0.3 (2026-11-09): screening (experience form, optional CV, interview), D-100.
 var Current = map[string]string{
-	PrivacyNotice:    "0.2",
+	PrivacyNotice:    "0.3",
 	TermsOfUse:       "0.1",
-	ContributorTerms: "0.2",
+	ContributorTerms: "0.3",
 	AcceptableUse:    "0.1",
 }
 

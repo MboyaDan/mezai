@@ -34,8 +34,8 @@ export const legalDocs: LegalDoc[] = [
     slug: "privacy",
     title: "Privacy notice",
     short: "Privacy notice",
-    version: "0.2",
-    updated: "2026-11-08",
+    version: "0.3",
+    updated: "2026-11-09",
     approved: false,
     summary: `How ${entity} collects, uses and protects personal data on ${brand.name}, under Kenya's Data Protection Act, 2019.`,
     sections: [
@@ -53,6 +53,7 @@ export const legalDocs: LegalDoc[] = [
             list: [
               "If you send a project enquiry: your name, organisation, email address and what you tell us about the project.",
               "If you apply as a contributor: your name, email address, a password (stored only as a one-way hash), languages and how well you know them, dialects, subject areas, education level, weekly availability, an M-Pesa phone number for payments, and your National ID number. We do not keep the ID number itself: we store only a one-way code made from it with a secret key, and its last 3 digits.",
+              "When you apply: short answers about your studies and relevant experience and why you want the work, and, if you choose to add them, a LinkedIn link and a CV as a PDF. If we invite you to a short phone interview, we keep the interviewer's scores and brief notes. We do not record the call.",
               "If you work as a contributor: the tasks you are assigned, your answers and their revisions, time spent on tasks, review decisions and feedback, gold-question results, your quality and trust scores, and your earnings and payouts.",
               "If you use the workspace for a client: your name, work email, organisation and role.",
               "For everyone who signs in: the date and version of the documents you accepted, your session, and a security record of important actions (who did what and when, with an IP address).",
@@ -68,6 +69,7 @@ export const legalDocs: LegalDoc[] = [
             list: [
               "To reply to enquiries and plan projects (our legitimate interest in answering people who contact us).",
               "To run the contributor relationship: qualification, assigning tasks, measuring quality, paying for approved work (performing our agreement with you).",
+              "To decide whether to offer you work: a person on our team reads your application, your test results and the interview scores and makes every decision; no decision is made by software alone (steps you ask us to take before an agreement, and our legitimate interest in choosing contributors).",
               "To make sure each person has only one contributor account and is paid under their own name: we compare the code made from your National ID number, and your M-Pesa number, with other accounts, and before your first payment our operations team checks that the name M-Pesa shows for your number matches your profile name. We do not store the name M-Pesa shows (legitimate interest in preventing fraud, and performing our agreement with you).",
               "To keep the platform secure: sign-in protection, rate limits and audit records (legitimate interest and legal obligation).",
               "To keep payment and tax records (legal obligation).",
@@ -106,6 +108,8 @@ export const legalDocs: LegalDoc[] = [
               "Payment, ledger and audit records: at least 7 years, for tax purposes. If you ask us to delete your data, we anonymise your identity in these records where the law allows.",
               "Enquiries that do not become a project: 24 months after the last contact.",
               "Contributor accounts: until you close the account, then as above for payment records.",
+              "A CV you upload: deleted as soon as an application is declined, otherwise 90 days after the screening decision. You can delete it yourself at any time.",
+              "Application answers and interview scores and notes: while your account exists, then deleted with it.",
               "The code made from your National ID number and its last 3 digits: while your account exists, and after it closes only for as long as needed to stop the same person opening a second account.",
             ],
           },
@@ -138,7 +142,8 @@ export const legalDocs: LegalDoc[] = [
       "Confirm the lawful basis for each purpose and whether contributor processing needs consent as well as contract.",
       "Confirm the 24-month retention for enquiries that do not proceed (an assumption, A-032).",
       "Add a dedicated data protection contact address once one exists (Q2).",
-      "New in this draft: the National ID number (D-078). The brief said “M-Pesa number only”: confirm the lawful basis for collecting it, the retention period for the code after an account closes, and whether a DPIA is needed.",
+      "New in this draft: screening data (application answers, optional CV, interview scores and notes; D-100). Confirm the lawful basis and the 90-day CV retention.",
+      "Added in 0.2: the National ID number (D-078). The brief said “M-Pesa number only”: confirm the lawful basis for collecting it, the retention period for the code after an account closes, and whether a DPIA is needed.",
     ],
   },
   {
@@ -198,8 +203,8 @@ export const legalDocs: LegalDoc[] = [
     slug: "contributor-terms",
     title: "Contributor terms",
     short: "Contributor terms",
-    version: "0.2",
-    updated: "2026-11-08",
+    version: "0.3",
+    updated: "2026-11-09",
     approved: false,
     summary: `The agreement between ${entity} and each person who does paid task work on ${brand.name}.`,
     sections: [
@@ -212,7 +217,7 @@ export const legalDocs: LegalDoc[] = [
       {
         heading: "Joining and qualifying",
         body: [
-          "You must be at least 18 and give true details. You take a qualification test for each skill. We decide whether to approve an application and which projects you are eligible for.",
+          "You must be at least 18 and give true details. Joining has four steps: a short application, which our team reads; a qualification test; a short phone interview to the M-Pesa number on your profile; and a check of your details. Each is done once. A project that needs a new skill asks only for a short test in that skill. We decide whether to approve an application and which projects you are eligible for, and we tell you the reason if we do not go ahead.",
           "One person, one account. You give your own National ID number and an M-Pesa number registered in your name. A number that is already on another account cannot be used, and we may remove duplicate accounts. Your account becomes active only after we have checked these details.",
         ],
       },
@@ -265,7 +270,8 @@ export const legalDocs: LegalDoc[] = [
       "Confirm the transfer of rights in submitted work and the confidentiality wording.",
       "Payout schedule and minimum payout amount, once Stage 14 sets them.",
       "Whether contributors outside Kenya can join, and what changes for them.",
-      "New in this draft: the one-account rule and the M-Pesa name check (D-078).",
+      "New in this draft: the screening steps (D-100).",
+      "Added in 0.2: the one-account rule and the M-Pesa name check (D-078).",
     ],
   },
   {
