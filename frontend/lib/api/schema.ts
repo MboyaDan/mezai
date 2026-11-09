@@ -548,6 +548,182 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/projects": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Live projects the caller may work on (`task.submit`). Needs active status, a verified identity and every required skill. */
+    get: operations["listMyProjects"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/projects/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One live project the caller may work on. */
+    get: operations["getMyProject"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/projects/{id}/next": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * The caller's current task in the project, or a newly reserved one (one at a time).
+     * @description 409 `no_tasks` when nothing is left for the caller. Gold items are mixed in at the project's rate and look exactly like other tasks (AC-06).
+     */
+    post: operations["nextTask"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/tasks/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One of the caller's tasks. Content only while the reservation is live. */
+    get: operations["getTask"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/tasks/{id}/draft": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Autosave an unfinished answer (a new revision when it changed). */
+    put: operations["saveTaskDraft"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/tasks/{id}/submit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Submit the final answer once (AC-07).
+     * @description A retry with the same `Idempotency-Key` returns the first result and writes nothing. Another key on a submitted task is 409 `already_submitted`; a key already used on another task is 422 `idempotency_key_reused`. Blocking QA checks answer 422 `qa_blocked` with `issues`; warnings are returned and stored for reviewers (D-077). The result is the same for gold and other items.
+     */
+    post: operations["submitTask"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/tasks/{id}/skip": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Give a task back with a reason; the item never returns to the caller. */
+    post: operations["skipTask"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/tasks/{id}/report": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Report an item's content. It leaves the caller's queue at once and nobody gets it while the report is open. */
+    post: operations["reportTaskContent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/content-reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Content reports, oldest first (`project.manage`). Default status `open`. */
+    get: operations["listContentReports"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/content-reports/{id}/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Dismiss (the item returns to the queue) or withdraw (the item is removed for good, gold retired). */
+    post: operations["resolveContentReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/contributors": {
     parameters: {
       query?: never;
@@ -1208,6 +1384,78 @@ export interface components {
       }[];
       /** @description Other accounts with the same name */
       same_name: components["schemas"]["ContributorRef"][];
+    };
+    /** @description A live project as a contributor sees it. No gold, overlap or other contributors. */
+    WorkProject: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** @enum {string} */
+      task_type: "classification" | "pairwise" | "translation_review";
+      instructions_md: string;
+      config: components["schemas"]["TaskConfig"];
+      /** Format: int64 */
+      pay_per_task_cents: number;
+      currency: string;
+      /** Format: date-time */
+      deadline: string | null;
+      reservation_minutes: number;
+      skills: {
+        kind: string;
+        value: string;
+        min_proficiency: string | null;
+      }[];
+      qa_checks: components["schemas"]["QAChecks"];
+      min_rationale_chars: number;
+      my_submitted: number;
+    };
+    /** @description One reserved item. The ID is the assignment's; gold and other items look the same. */
+    Task: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      project_id: string;
+      /** @enum {string} */
+      task_type: "classification" | "pairwise" | "translation_review";
+      /** @enum {string} */
+      status: "reserved" | "submitted" | "skipped" | "expired" | "reported";
+      /** Format: date-time */
+      expires_at: string;
+      /** @description Item fields for the task type; null once the reservation has ended */
+      content: {
+        [key: string]: string;
+      } | null;
+      draft: components["schemas"]["Answer"] | null;
+      /** Format: int64 */
+      time_on_task_ms: number;
+    };
+    QAIssue: {
+      /** @enum {string} */
+      code:
+        "rationale_too_short" | "translation_unchanged" | "rationale_mismatch" | "too_fast" | "mostly_pasted";
+      field?: string;
+      message: string;
+    };
+    ContentReport: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      category: "harmful" | "personal_data" | "broken" | "other";
+      note: string | null;
+      /** @enum {string} */
+      status: "open" | "actioned" | "dismissed";
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      resolved_at: string | null;
+      /** Format: uuid */
+      item_id: string;
+      external_id: string | null;
+      /** Format: uuid */
+      project_id: string;
+      project_name: string;
+      /** @description Contributor code */
+      reported_by: string;
     };
     ContributorSummary: {
       /** Format: uuid */
@@ -2558,6 +2806,328 @@ export interface operations {
         };
       };
       404: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  listMyProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Projects */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            projects: components["schemas"]["WorkProject"][];
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  getMyProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Project */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkProject"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+    };
+  };
+  nextTask: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Task */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Task"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+    };
+  };
+  getTask: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Task */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Task"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  saveTaskDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          answer: components["schemas"]["Answer"];
+          time_on_task_ms?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Saved */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      410: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  submitTask: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+        "Idempotency-Key": string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          answer: components["schemas"]["Answer"];
+          /** @description What the task screen saw; used only for warnings. */
+          signals?: {
+            time_on_task_ms?: number;
+            pasted_chars?: number;
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Submitted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            submission_id: string;
+            status: string;
+            warnings: components["schemas"]["QAIssue"][];
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      410: components["responses"]["Error"];
+      /** @description Invalid answer, key problem, or blocked by QA checks */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            field?: string;
+            message?: string;
+            issues?: components["schemas"]["QAIssue"][];
+          };
+        };
+      };
+    };
+  };
+  skipTask: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          reason: "unclear" | "language" | "expertise" | "technical" | "other";
+          /** @description Required for `other` */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Skipped */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      410: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  reportTaskContent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          category: "harmful" | "personal_data" | "broken" | "other";
+          /** @description Required for `other` */
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Reported */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Error"];
+      410: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  listContentReports: {
+    parameters: {
+      query?: {
+        status?: "open" | "actioned" | "dismissed";
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reports */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            reports: components["schemas"]["ContentReport"][];
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  resolveContentReport: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          action: "dismiss" | "withdraw";
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Resolved */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
       422: components["responses"]["InvalidField"];
     };
   };
