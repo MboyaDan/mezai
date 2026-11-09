@@ -75,17 +75,18 @@ export function Dashboard() {
     },
     {
       id: "qualify",
-      title: "Pass a qualification test",
+      title: "Take the core check",
       body: (
         <>
-          A short test for one skill, built from items with known answers. It is scored automatically.
+          About 20 minutes, taken once: following instructions, comparing two answers and a short piece of
+          writing. Most of it is scored automatically; a person reads the writing.
           {rejected.length > 0 &&
             " One of your attempts was not passed; the reviewer's note is on the Qualification page."}
         </>
       ),
       action: (
         <ButtonLink href="/c/qualify" arrow>
-          Choose a test
+          Start the core check
         </ButtonLink>
       ),
     },

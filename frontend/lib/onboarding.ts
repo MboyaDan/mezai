@@ -103,7 +103,8 @@ export function currentStep(
   if (p.status === "active") return "active";
   if (p.screening_status === "declined") return "declined";
   if (p.screening_status !== "shortlisted") return "screening";
-  if (p.qualifications.length === 0)
+  // The core check (D-100) is the test that counts towards activation.
+  if (!p.qualifications.some((q) => q.skill_kind === "core"))
     return tests.some((t) => t.state === "awaiting_review") ? "review" : "qualify";
   // Qualified: the interview, then the identity check (D-078) remain.
   return p.interview_passed ? "identity" : "interview";
@@ -115,9 +116,18 @@ export const testStateLabel: Record<MyTest["state"], string> = {
   awaiting_review: "Waiting for review",
   qualified: "Qualified",
   not_passed: "Not passed",
+  expired: "Expired: take it again",
 };
 
 export type TaskType = "classification" | "pairwise" | "translation_review";
+/** A qualification question's type: a project task type, or a writing sample (core check). */
+export type QuestionType = TaskType | "writing";
+
+/** Writing samples (core check): 60 to 250 words, as the API checks. */
+export const writingWords = (text: string | undefined) =>
+  (text ?? "").trim().split(/\s+/).filter(Boolean).length;
+export const MIN_WRITING_WORDS = 60;
+export const MAX_WRITING_WORDS = 250;
 
 /** Draft answer as the screens build it; the API's Answer shape. */
 export type Answer = {
@@ -129,12 +139,13 @@ export type Answer = {
   adequacy?: number;
   fluency?: number;
   corrected?: string;
+  text?: string;
 };
 
 const score = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 5;
 
 /** Mirrors quality.Parse: true when the API will accept the answer on submit. */
-export function isComplete(type: TaskType, config: TaskConfig, a: Answer | undefined): boolean {
+export function isComplete(type: QuestionType, config: TaskConfig, a: Answer | undefined): boolean {
   if (!a) return false;
   switch (type) {
     case "classification": {
@@ -151,6 +162,10 @@ export function isComplete(type: TaskType, config: TaskConfig, a: Answer | undef
     }
     case "translation_review":
       return score(a.adequacy) && score(a.fluency);
+    case "writing": {
+      const n = writingWords(a.text);
+      return n >= MIN_WRITING_WORDS && n <= MAX_WRITING_WORDS;
+    }
   }
 }
 
@@ -204,6 +219,9 @@ export function errorMessage(e: ApiError): string {
     already_resolved: "This report has already been resolved.",
     not_a_contributor: "Only contributors can take tasks.",
     not_shortlisted: "Tests open once the MezAI team has reviewed your application.",
+    core_check_first: "Take the core check first. Skill tests open once it is approved.",
+    writing_rating_required: "Rate the writing sample adequate or strong to approve, or reject with a note.",
+    core_check_exists: "A core check is already set up.",
     interview_too_soon: "A new interview can be held 30 days after the last one.",
     already_passed: "This person has already passed the interview.",
     no_cv: "No CV is on file.",

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { criterionLabel, type Answer, type TaskType } from "@/lib/onboarding";
+import { criterionLabel, type Answer, type QuestionType } from "@/lib/onboarding";
 
 type Content = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -29,7 +29,7 @@ function Panel({
 }
 
 /** The item a question asks about, in the task template's import shape. */
-export function QuestionContent({ type, content }: { type: TaskType; content: Content }) {
+export function QuestionContent({ type, content }: { type: QuestionType; content: Content }) {
   switch (type) {
     case "classification":
       return <Panel label="Text">{str(content.text)}</Panel>;
@@ -43,6 +43,8 @@ export function QuestionContent({ type, content }: { type: TaskType; content: Co
           </div>
         </div>
       );
+    case "writing":
+      return <Panel label="Writing prompt">{str(content.prompt)}</Panel>;
     case "translation_review":
       return (
         <div className="grid gap-4 md:grid-cols-2">
@@ -61,7 +63,7 @@ export function QuestionContent({ type, content }: { type: TaskType; content: Co
 }
 
 /** A submitted or expected answer, read-only (Ops review). */
-export function AnswerSummary({ type, answer }: { type: TaskType; answer: Answer | null | undefined }) {
+export function AnswerSummary({ type, answer }: { type: QuestionType; answer: Answer | null | undefined }) {
   if (!answer) return <span className="text-fg-muted">No answer</span>;
   switch (type) {
     case "classification":
@@ -85,6 +87,8 @@ export function AnswerSummary({ type, answer }: { type: TaskType; answer: Answer
           {answer.rationale && <span className="text-sm text-fg-muted">“{answer.rationale}”</span>}
         </span>
       );
+    case "writing":
+      return <span className="whitespace-pre-wrap">{answer.text || "No answer"}</span>;
     case "translation_review":
       return (
         <span className="grid gap-1">

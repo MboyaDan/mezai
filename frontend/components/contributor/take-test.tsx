@@ -10,7 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Alert, Breadcrumb, Card, KeyboardHint, Skeleton, StatusPill } from "@/components/ui/display";
 import { ProgressBar } from "@/components/ui/data";
 import { ApiError, api, type Attempt, type MyTest } from "@/lib/api/client";
-import { errorMessage, isComplete, type Answer, type TaskType } from "@/lib/onboarding";
+import { errorMessage, isComplete, type Answer, type QuestionType } from "@/lib/onboarding";
 import { cn } from "@/lib/cn";
 import { useLoad } from "@/lib/use-load";
 import { useProfile } from "./portal";
@@ -142,11 +142,13 @@ function AttemptView({
   crumbs: React.ReactNode;
   onSubmitted: (a: Attempt) => void;
 }) {
-  const type = attempt.task_type as TaskType;
+  // Each question carries its own type and settings (the core check mixes them).
+  const typeOf = (q: Attempt["questions"][number]) => (q.task_type ?? attempt.task_type) as QuestionType;
+  const cfgOf = (q: Attempt["questions"][number]) => q.config ?? attempt.config;
   const [answers, setAnswers] = useState<Answers>(() => attempt.answers as Answers);
   const [i, setI] = useState(() => {
     const first = attempt.questions.findIndex(
-      (q) => !isComplete(type, attempt.config, (attempt.answers as Answers)[q.id]),
+      (q) => !isComplete(typeOf(q), cfgOf(q), (attempt.answers as Answers)[q.id]),
     );
     return first === -1 ? attempt.questions.length - 1 : first;
   });
@@ -158,7 +160,7 @@ function AttemptView({
   const heading = useRef<HTMLHeadingElement>(null);
   const q = attempt.questions[i];
   const total = attempt.questions.length;
-  const done = attempt.questions.filter((x) => isComplete(type, attempt.config, answers[x.id])).length;
+  const done = attempt.questions.filter((x) => isComplete(typeOf(x), cfgOf(x), answers[x.id])).length;
   const last = i === total - 1;
 
   // Autosave 800 ms after the last change.
@@ -254,11 +256,11 @@ function AttemptView({
       {error && <Alert tone="danger" title={errorMessage(error)} />}
 
       <section aria-label={`Question ${i + 1}`} className="grid gap-8">
-        <QuestionContent type={type} content={q.content as Record<string, unknown>} />
+        <QuestionContent type={typeOf(q)} content={q.content as Record<string, unknown>} />
         <AnswerInput
           key={q.id}
-          type={type}
-          config={attempt.config}
+          type={typeOf(q)}
+          config={cfgOf(q)}
           content={q.content as Record<string, unknown>}
           value={answers[q.id]}
           onChange={onChange}
@@ -288,7 +290,7 @@ function AttemptView({
         />
         <ol className="flex w-full flex-wrap gap-1.5 pt-2" aria-label="Jump to question">
           {attempt.questions.map((x, j) => {
-            const ok = isComplete(type, attempt.config, answers[x.id]);
+            const ok = isComplete(typeOf(x), cfgOf(x), answers[x.id]);
             return (
               <li key={x.id}>
                 <button

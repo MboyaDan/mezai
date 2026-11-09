@@ -20,12 +20,15 @@ const tone = {
   awaiting_review: "info",
   qualified: "success",
   not_passed: "warning",
+  expired: "warning",
 } as const;
 
 export const skillLabel = (t: Pick<MyTest, "skill_kind" | "skill_value">) =>
-  t.skill_kind === "task_type"
-    ? (taskLabel[t.skill_value as keyof typeof taskLabel] ?? t.skill_value)
-    : labelFor(t.skill_value);
+  t.skill_kind === "core"
+    ? "Core check, taken once"
+    : t.skill_kind === "task_type"
+      ? (taskLabel[t.skill_value as keyof typeof taskLabel] ?? t.skill_value)
+      : labelFor(t.skill_value);
 
 const date = (iso: string) => new Date(iso).toLocaleDateString("en-KE", { day: "numeric", month: "long" });
 
@@ -68,9 +71,9 @@ export function TestsList() {
           Qualification
         </h1>
         <p className="text-fg-muted">
-          Each test checks one skill with a few items whose answers we already know. It is scored as soon as
-          you submit; then a person on the MezAI team reviews it. Take the tests that match your languages and
-          strengths.
+          Start with the core check: about 20 minutes, taken once. After it is approved, each skill test
+          checks one language or task type with a few items whose answers we already know. Tests are scored as
+          soon as you submit; then a person on the MezAI team reviews them.
         </p>
       </header>
 
@@ -101,50 +104,72 @@ export function TestsList() {
       {tests.status === "ready" &&
         (tests.data.length === 0 ? (
           <EmptyState title="No tests are open right now">
-            New tests open as projects start. Check back soon; we will also email you.
+            New tests open as projects start. Check back soon.
           </EmptyState>
         ) : (
           <ul className="grid gap-4">
-            {tests.data.map((t, i) => (
-              <li key={t.id}>
-                <Card className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
-                  <div className="grid gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-display text-lg font-semibold">{t.title}</h2>
-                      <StatusPill status={tone[t.state]}>{testStateLabel[t.state]}</StatusPill>
-                    </div>
-                    <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
-                      <Tag>{skillLabel(t)}</Tag>
-                      {t.skill_kind !== "task_type" && (
-                        <>
-                          <span>{taskLabel[t.task_type]}</span>
-                          <span aria-hidden="true">·</span>
-                        </>
-                      )}
-                      <span>{t.question_count} questions</span>
-                      <span aria-hidden="true">·</span>
-                      <span>
-                        Pass mark <span className="font-mono">{Math.round(t.pass_threshold * 100)}%</span>
-                      </span>
-                      {t.score != null && t.state !== "in_progress" && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span>
-                            Your score <span className="font-mono">{Math.round(t.score * 100)}%</span>
-                          </span>
-                        </>
-                      )}
-                    </p>
-                    {t.state === "not_passed" && t.decision_note && (
-                      <p className="border-l-2 border-warning pl-3 text-sm">
-                        <span className="font-medium">Reviewer&apos;s note:</span> {t.decision_note}
+            {/* The core check first (D-100): it is the step that counts for joining. */}
+            {[...tests.data]
+              .sort((a, b) => Number(b.skill_kind === "core") - Number(a.skill_kind === "core"))
+              .map((t, i, sorted) => (
+                <li key={t.id}>
+                  <Card className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center">
+                    <div className="grid gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-display text-lg font-semibold">{t.title}</h2>
+                        <StatusPill status={tone[t.state]}>{testStateLabel[t.state]}</StatusPill>
+                      </div>
+                      <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+                        <Tag>{skillLabel(t)}</Tag>
+                        {t.skill_kind !== "task_type" && t.skill_kind !== "core" && (
+                          <>
+                            <span>{taskLabel[t.task_type]}</span>
+                            <span aria-hidden="true">·</span>
+                          </>
+                        )}
+                        <span>{t.question_count} questions</span>
+                        <span aria-hidden="true">·</span>
+                        <span>
+                          Pass mark <span className="font-mono">{Math.round(t.pass_threshold * 100)}%</span>
+                        </span>
+                        {t.score != null && t.state !== "in_progress" && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              Your score <span className="font-mono">{Math.round(t.score * 100)}%</span>
+                            </span>
+                          </>
+                        )}
                       </p>
-                    )}
-                  </div>
-                  <Action t={t} primary={i === tests.data.findIndex((x) => x.can_start)} />
-                </Card>
-              </li>
-            ))}
+                      {t.core_first && (
+                        <p className="text-sm text-fg-muted">Opens once your core check is approved.</p>
+                      )}
+                      {t.state === "qualified" && t.valid_until && (
+                        <p className="text-sm text-fg-muted">
+                          Counts until{" "}
+                          {new Date(t.valid_until).toLocaleDateString("en-KE", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                          , then take it again.
+                        </p>
+                      )}
+                      {t.state === "expired" && (
+                        <p className="text-sm text-fg-muted">
+                          Skills count for 12 months. Take the test again to keep this skill.
+                        </p>
+                      )}
+                      {t.state === "not_passed" && t.decision_note && (
+                        <p className="border-l-2 border-warning pl-3 text-sm">
+                          <span className="font-medium">Reviewer&apos;s note:</span> {t.decision_note}
+                        </p>
+                      )}
+                    </div>
+                    <Action t={t} primary={i === sorted.findIndex((x) => x.can_start)} />
+                  </Card>
+                </li>
+              ))}
           </ul>
         ))}
       <p className="text-sm text-fg-muted">
