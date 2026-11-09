@@ -5,7 +5,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 ## Current state
 
 - **Last stage:** 9a (task engine API). Branch `stage-09a-task-engine`, PR open. 7c merged as #27.
-- **Next stage:** 9b (contributor task workspace UI for the three task types; split already approved, D-094).
+- **Next stage:** 9b (contributor task workspace UI for the three task types; split already approved, D-094). Then 7d, the screening funnel (D-100, `docs/design/screening-funnel.md`), before any real candidate applies.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
