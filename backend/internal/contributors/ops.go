@@ -36,12 +36,15 @@ type Summary struct {
 	// PossibleDuplicates counts recorded number clashes and other accounts
 	// with the same name (D-078).
 	PossibleDuplicates int32     `json:"possible_duplicates"`
+	ScreeningStatus    string    `json:"screening_status"`
+	InterviewPassed    bool      `json:"interview_passed"`
+	Qualified          bool      `json:"qualified"` // holds an approved qualification test
 	CreatedAt          time.Time `json:"created_at"`
 }
 
 // ListContributors lists contributors, newest first, optionally by status
 // and identity status.
-func (s *Service) ListContributors(ctx context.Context, p *auth.Principal, status, identityStatus string) ([]Summary, error) {
+func (s *Service) ListContributors(ctx context.Context, p *auth.Principal, status, identityStatus, screening string) ([]Summary, error) {
 	var filter store.ListContributorsParams
 	if status != "" {
 		if !validStatus(status) {
@@ -57,13 +60,22 @@ func (s *Service) ListContributors(ctx context.Context, p *auth.Principal, statu
 		}
 		filter.IdentityStatus = &identityStatus
 	}
+	if screening != "" {
+		switch screening {
+		case ScreeningPending, ScreeningShortlisted, ScreeningWaitlisted, ScreeningDeclined:
+		default:
+			return nil, fieldErr("screening", "unknown screening status")
+		}
+		filter.ScreeningStatus = &screening
+	}
 	out := []Summary{}
 	err := s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
 		rows, err := store.New(tx).ListContributors(ctx, filter)
 		for _, r := range rows {
 			sm := Summary{ID: r.ID, PublicCode: r.PublicCode, Status: r.Status, DisplayName: r.DisplayName, Email: r.Email,
 				Country: r.Country, Languages: r.Languages, CreatedAt: r.CreatedAt,
-				IdentityStatus: r.IdentityStatus, NationalIDLast3: r.NationalIDLast3, PossibleDuplicates: r.FlagCount + r.SameNameCount}
+				IdentityStatus: r.IdentityStatus, NationalIDLast3: r.NationalIDLast3, PossibleDuplicates: r.FlagCount + r.SameNameCount,
+				ScreeningStatus: r.ScreeningStatus, InterviewPassed: r.InterviewPassed, Qualified: r.Qualified}
 			if sm.Languages == nil {
 				sm.Languages = []string{}
 			}
@@ -88,10 +100,12 @@ type StatusChange struct {
 
 // Detail is a contributor's profile with status history and attempts, for Ops.
 type Detail struct {
-	Profile  Profile          `json:"profile"`
-	Identity IdentityChecks   `json:"identity"`
-	History  []StatusChange   `json:"history"`
-	Attempts []AttemptSummary `json:"attempts"`
+	Profile     Profile          `json:"profile"`
+	Identity    IdentityChecks   `json:"identity"`
+	Application Application      `json:"application"`
+	Interviews  []Interview      `json:"interviews"`
+	History     []StatusChange   `json:"history"`
+	Attempts    []AttemptSummary `json:"attempts"`
 }
 
 // GetContributor returns one contributor's detail.
@@ -104,6 +118,14 @@ func (s *Service) GetContributor(ctx context.Context, p *auth.Principal, id uuid
 			return err
 		}
 		if out.Identity, err = loadIdentityChecks(ctx, q, id); err != nil {
+			return err
+		}
+		cp, err := q.GetContributorProfile(ctx, id)
+		if err != nil {
+			return err
+		}
+		out.Application = applicationOf(cp)
+		if out.Interviews, err = loadInterviews(ctx, q, id); err != nil {
 			return err
 		}
 		hist, err := q.ListContributorStatusHistory(ctx, id)

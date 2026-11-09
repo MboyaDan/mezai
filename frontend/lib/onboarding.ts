@@ -71,14 +71,29 @@ export const fieldLabels: Record<string, string> = {
   domains: "Domains",
   mpesa_phone: "M-Pesa number",
   national_id: "National ID number",
+  experience: "Your application answers",
 };
 
 /** The onboarding step a contributor is on, for the dashboard and redirects. */
 export type Step =
-  "consent" | "profile" | "qualify" | "review" | "identity" | "active" | "paused" | "removed";
+  | "consent"
+  | "profile"
+  | "screening"
+  | "declined"
+  | "qualify"
+  | "review"
+  | "interview"
+  | "identity"
+  | "active"
+  | "paused"
+  | "removed";
 
+/** Where the contributor is in the funnel (D-100): apply, screen, test, interview, identity. */
 export function currentStep(
-  p: Pick<ContributorProfile, "status" | "consent_required" | "qualifications">,
+  p: Pick<
+    ContributorProfile,
+    "status" | "consent_required" | "qualifications" | "screening_status" | "interview_passed"
+  >,
   tests: MyTest[],
 ): Step {
   if (p.status === "removed") return "removed";
@@ -86,9 +101,12 @@ export function currentStep(
   if (p.consent_required.length > 0) return "consent";
   if (p.status === "applied") return "profile";
   if (p.status === "active") return "active";
-  // Qualified but not active yet: the identity check is what remains (D-078).
-  if (p.qualifications.length > 0) return "identity";
-  return tests.some((t) => t.state === "awaiting_review") ? "review" : "qualify";
+  if (p.screening_status === "declined") return "declined";
+  if (p.screening_status !== "shortlisted") return "screening";
+  if (p.qualifications.length === 0)
+    return tests.some((t) => t.state === "awaiting_review") ? "review" : "qualify";
+  // Qualified: the interview, then the identity check (D-078) remain.
+  return p.interview_passed ? "identity" : "interview";
 }
 
 export const testStateLabel: Record<MyTest["state"], string> = {
@@ -185,6 +203,10 @@ export function errorMessage(e: ApiError): string {
     qa_blocked: "Fix the points below before submitting.",
     already_resolved: "This report has already been resolved.",
     not_a_contributor: "Only contributors can take tasks.",
+    not_shortlisted: "Tests open once the MezAI team has reviewed your application.",
+    interview_too_soon: "A new interview can be held 30 days after the last one.",
+    already_passed: "This person has already passed the interview.",
+    no_cv: "No CV is on file.",
     identity_incomplete:
       "The contributor has not given a confirmed M-Pesa number and National ID number yet.",
   };

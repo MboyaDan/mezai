@@ -440,6 +440,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/contributor/cv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Upload an optional CV (PDF, at most 2 MB), replacing any earlier one (`profile.manage`).
+     * @description Stored under a key built from IDs only. Deleted at once if the application is declined, otherwise 90 days after the screening decision (D-100). Limited to 10 uploads an hour.
+     */
+    put: operations["uploadMyCV"];
+    post?: never;
+    /** Delete the caller's CV now. */
+    delete: operations["deleteMyCV"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/me/contributor/consents": {
     parameters: {
       query?: never;
@@ -792,6 +813,63 @@ export interface paths {
      * @description Done before the first payout. The registered name is not stored. Cleared when the contributor changes their number or name. A mismatch is recorded by rejecting the identity.
      */
     post: operations["recordMpesaNameCheck"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/cv": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The applicant's CV, as an attachment (`contributor.approve`). */
+    get: operations["downloadContributorCV"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/screening": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Shortlist, waitlist or decline a complete application (`contributor.approve`, D-100).
+     * @description A decline needs a note, which the applicant sees, and deletes any CV at once. Other decisions keep a CV for 90 days. Tests open only once shortlisted.
+     */
+    post: operations["decideScreening"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/interviews": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record one structured phone interview for a shortlisted applicant (`contributor.approve`).
+     * @description `completed` calls are scored with the fixed rubric: pass needs identity and confidentiality confirmed and the scenario and every language at 3 or 4. A pass may make the contributor active. A failed interview can be repeated after 30 days (409 `interview_too_soon`); a second pass is 409 `already_passed`. No recording is kept.
+     */
+    post: operations["recordInterview"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1312,6 +1390,14 @@ export interface components {
       identity_status: components["schemas"]["IdentityStatus"];
       /** @description Ops' note; the reason when rejected */
       identity_note: string | null;
+      experience: components["schemas"]["Experience"];
+      linkedin_url: string | null;
+      /** @description Null when no CV is on file */
+      cv_file_name: string | null;
+      screening_status: components["schemas"]["ScreeningStatus"];
+      /** @description The reason for a waitlist or decline */
+      screening_note: string | null;
+      interview_passed: boolean;
       languages: components["schemas"]["Language"][];
       domains: ("health" | "law" | "finance" | "education" | "software" | "agriculture" | "other")[];
       /** @description Fields still needed before the contributor can qualify */
@@ -1350,9 +1436,51 @@ export interface components {
       mpesa_phone_confirm?: string;
       /** @description Kenyan National ID number, 6 to 9 digits. Empty keeps the stored one. Stored only as a keyed fingerprint and its last 3 digits. A number on another account is 422 for this field. */
       national_id?: string;
+      experience?: components["schemas"]["Experience"];
+      /** @description https://www.linkedin.com/in/… */
+      linkedin_url?: string | null;
     };
     /** @enum {string} */
     IdentityStatus: "pending" | "verified" | "rejected";
+    /** @enum {string} */
+    ScreeningStatus: "pending" | "shortlisted" | "waitlisted" | "declined";
+    /** @description The short application form (D-100). highest_study, relevant_experience and why are required for a complete application. */
+    Experience: {
+      highest_study?: string;
+      relevant_experience?: string;
+      ai_data_experience?: string;
+      why?: string;
+    };
+    Application: {
+      experience: components["schemas"]["Experience"];
+      linkedin_url: string | null;
+      cv_file_name: string | null;
+      /** Format: date-time */
+      cv_uploaded_at: string | null;
+      /** Format: date-time */
+      cv_delete_after: string | null;
+      screening_status: components["schemas"]["ScreeningStatus"];
+      screening_note: string | null;
+      /** Format: date-time */
+      screening_decided_at: string | null;
+    };
+    Interview: {
+      /** Format: uuid */
+      id: string;
+      /** @enum {string} */
+      outcome: "passed" | "failed" | "no_answer";
+      identity_confirmed: boolean;
+      language_scores: {
+        [key: string]: number;
+      };
+      scenario_score: number | null;
+      confidentiality_ok: boolean | null;
+      availability: string | null;
+      note: string | null;
+      interviewer: string;
+      /** Format: date-time */
+      at: string;
+    };
     ContributorRef: {
       /** Format: uuid */
       id: string;
@@ -1471,6 +1599,10 @@ export interface components {
       national_id_last3: string | null;
       /** @description Recorded number clashes plus other accounts with the same name */
       possible_duplicates: number;
+      screening_status: components["schemas"]["ScreeningStatus"];
+      interview_passed: boolean;
+      /** @description Holds an approved qualification test */
+      qualified: boolean;
       /** Format: date-time */
       created_at: string;
     };
@@ -1840,6 +1972,8 @@ export interface components {
         "application/json": {
           profile: components["schemas"]["ContributorProfile"];
           identity: components["schemas"]["IdentityChecks"];
+          application: components["schemas"]["Application"];
+          interviews: components["schemas"]["Interview"][];
           history: {
             from: string | null;
             to: string;
@@ -2625,6 +2759,62 @@ export interface operations {
       422: components["responses"]["InvalidField"];
     };
   };
+  uploadMyCV: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": {
+          /** Format: binary */
+          cv: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Profile */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ContributorProfile"];
+        };
+      };
+      403: components["responses"]["Error"];
+      413: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  deleteMyCV: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Profile */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ContributorProfile"];
+        };
+      };
+    };
+  };
   acceptConsents: {
     parameters: {
       query?: never;
@@ -3137,6 +3327,7 @@ export interface operations {
         status?: components["schemas"]["ContributorStatus"];
         /** @description Identity status; `pending` is the Ops verification queue */
         identity?: components["schemas"]["IdentityStatus"];
+        screening?: components["schemas"]["ScreeningStatus"];
       };
       header?: never;
       path?: never;
@@ -3218,6 +3409,100 @@ export interface operations {
       200: components["responses"]["ContributorDetail"];
       404: components["responses"]["Error"];
       409: components["responses"]["Error"];
+    };
+  };
+  downloadContributorCV: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description PDF */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/pdf": string;
+        };
+      };
+      /** @description `not_found` or `no_cv` */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  decideScreening: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          decision: "shortlist" | "waitlist" | "decline";
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      200: components["responses"]["ContributorDetail"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  recordInterview: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          outcome: "completed" | "no_answer";
+          identity_confirmed?: boolean;
+          language_scores?: {
+            [key: string]: number;
+          };
+          scenario_score?: number;
+          confidentiality_ok?: boolean;
+          availability?: string;
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      200: components["responses"]["ContributorDetail"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
     };
   };
   setContributorStatus: {

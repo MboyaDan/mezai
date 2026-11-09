@@ -3,6 +3,7 @@ package contributors
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"slices"
@@ -69,6 +70,12 @@ type Profile struct {
 	NationalIDLast3     *string         `json:"national_id_last3"` // the number itself is never stored
 	IdentityStatus      string          `json:"identity_status"`   // pending, verified, rejected (D-078)
 	IdentityNote        *string         `json:"identity_note"`     // Ops' note; the reason when rejected
+	Experience          Experience      `json:"experience"`
+	LinkedInURL         *string         `json:"linkedin_url"`
+	CVFileName          *string         `json:"cv_file_name"` // null when no CV is on file
+	ScreeningStatus     string          `json:"screening_status"`
+	ScreeningNote       *string         `json:"screening_note"` // shown for waitlist and decline
+	InterviewPassed     bool            `json:"interview_passed"`
 	Languages           []Language      `json:"languages"`
 	Domains             []string        `json:"domains"`
 	Missing             []string        `json:"missing"` // fields still needed before qualification
@@ -92,6 +99,9 @@ type ProfileInput struct {
 	MpesaPhone        string     `json:"mpesa_phone"`
 	MpesaPhoneConfirm string     `json:"mpesa_phone_confirm"`
 	NationalID        string     `json:"national_id"`
+	// Experience replaces the application answers when present.
+	Experience  *Experience `json:"experience"`
+	LinkedInURL *string     `json:"linkedin_url"`
 }
 
 func contributorOf(p *auth.Principal) (uuid.UUID, error) {
@@ -128,10 +138,15 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 		Country: cp.Country, City: cp.City, EducationLevel: cp.EducationLevel, WeeklyHours: cp.WeeklyHours,
 		MpesaPhoneConfirmed: cp.MpesaPhone != nil && cp.MpesaPhoneConfirmedAt != nil, CreatedAt: cp.CreatedAt,
 		NationalIDLast3: cp.NationalIDLast3, IdentityStatus: cp.IdentityStatus, IdentityNote: cp.IdentityNote,
+		LinkedInURL: cp.LinkedinUrl, CVFileName: cp.CvFileName, ScreeningStatus: cp.ScreeningStatus, ScreeningNote: cp.ScreeningNote,
 		Languages: []Language{}, Consents: []Consent{}, Qualifications: []Qualification{},
 	}
 	if cp.MpesaPhone != nil {
 		out.MpesaPhoneMasked = pii.MaskPhone(*cp.MpesaPhone)
+	}
+	_ = json.Unmarshal(cp.Experience, &out.Experience)
+	if out.InterviewPassed, err = q.HasPassedInterview(ctx, id); err != nil {
+		return Profile{}, err
 	}
 	langs, err := q.ListContributorLanguages(ctx, id)
 	if err != nil {
@@ -173,6 +188,9 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 		Country: cp.Country, EducationLevel: cp.EducationLevel, WeeklyHours: cp.WeeklyHours,
 		MpesaPhone: cp.MpesaPhone, MpesaPhoneConfirmedAt: cp.MpesaPhoneConfirmedAt, NationalIDLast3: cp.NationalIDLast3,
 	}, len(out.Languages), len(out.Domains))
+	if !out.Experience.complete() {
+		out.Missing = append(out.Missing, "experience")
+	}
 	return out, nil
 }
 
@@ -283,6 +301,15 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 	if err := in.validate(); err != nil {
 		return Profile{}, err
 	}
+	if in.Experience != nil {
+		if err := in.Experience.validate(); err != nil {
+			return Profile{}, err
+		}
+	}
+	linkedIn, err := normLinkedIn(in.LinkedInURL)
+	if err != nil {
+		return Profile{}, err
+	}
 	var phone *string
 	if in.MpesaPhone != "" || in.MpesaPhoneConfirm != "" {
 		a, err := pii.NormaliseKenyanMobile(in.MpesaPhone)
@@ -339,6 +366,12 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 			MpesaPhone: phone, MpesaPhoneConfirmedAt: confirmedAt,
 		}); err != nil {
 			return err
+		}
+		if in.Experience != nil {
+			ej, _ := json.Marshal(in.Experience)
+			if err := q.UpdateContributorApplication(ctx, store.UpdateContributorApplicationParams{ID: id, Experience: ej, LinkedinUrl: linkedIn}); err != nil {
+				return err
+			}
 		}
 		if idChanged {
 			if err := q.SetContributorNationalID(ctx, store.SetContributorNationalIDParams{ID: id, NationalIDFp: fp, NationalIDLast3: &last3}); err != nil {

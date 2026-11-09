@@ -15,6 +15,7 @@ import (
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/config"
+	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
 	"github.com/MboyaDan/mezai/backend/internal/mail"
@@ -71,6 +72,8 @@ func run() error {
 		Addr: cfg.SMTPAddr, From: cfg.MailFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
 	}}
 	go mailer.Run(ctx, 5*time.Second)
+	// CVs are deleted 90 days after the screening decision (D-100).
+	go contributors.NewService(pool, cfg.IdentityKey, store).RunCVSweep(ctx, time.Hour, log)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,

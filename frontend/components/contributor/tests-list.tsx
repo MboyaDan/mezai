@@ -74,6 +74,14 @@ export function TestsList() {
         </p>
       </header>
 
+      {profile.status === "qualifying" && profile.screening_status !== "shortlisted" && (
+        <Alert tone="info" title="Tests open after we review your application">
+          {profile.screening_status === "declined"
+            ? "We are not going ahead with your application. The reason is on your dashboard."
+            : "A person on the MezAI team reads every application. Your dashboard shows the decision, and tests appear here once you are shortlisted."}
+        </Alert>
+      )}
+
       {profile.status === "applied" && (
         <Alert
           tone="info"

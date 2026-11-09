@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"mime"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -62,6 +63,14 @@ func (h *contributorHandlers) fail(c *gin.Context, err error) {
 		code = "not_passed"
 	case errors.Is(err, contributors.ErrNoGold):
 		code = "no_gold"
+	case errors.Is(err, contributors.ErrNotShortlisted):
+		code = "not_shortlisted"
+	case errors.Is(err, contributors.ErrInterviewTooSoon):
+		code = "interview_too_soon"
+	case errors.Is(err, contributors.ErrAlreadyPassed):
+		code = "already_passed"
+	case errors.Is(err, contributors.ErrNoCV):
+		status, code = http.StatusNotFound, "no_cv"
 	case errors.Is(err, contributors.ErrIdentityIncomplete):
 		code = "identity_incomplete"
 	case errors.Is(err, contributors.ErrNotShareable):
@@ -209,7 +218,7 @@ func (h *contributorHandlers) submitAttempt(c *gin.Context) {
 }
 
 func (h *contributorHandlers) listContributors(c *gin.Context) {
-	out, err := h.svc.ListContributors(c.Request.Context(), PrincipalFrom(c), c.Query("status"), c.Query("identity"))
+	out, err := h.svc.ListContributors(c.Request.Context(), PrincipalFrom(c), c.Query("status"), c.Query("identity"), c.Query("screening"))
 	if err != nil {
 		h.fail(c, err)
 		return
@@ -270,6 +279,74 @@ func (h *contributorHandlers) recordMpesaNameCheck(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.RecordMpesaNameCheck(c.Request.Context(), PrincipalFrom(c), id, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *contributorHandlers) uploadCV(c *gin.Context) {
+	name, data, ok := upload(c, "cv", contributors.MaxCVBytes, true)
+	if !ok {
+		return
+	}
+	out, err := h.svc.UploadCV(c.Request.Context(), PrincipalFrom(c), name, data, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *contributorHandlers) deleteCV(c *gin.Context) {
+	out, err := h.svc.DeleteMyCV(c.Request.Context(), PrincipalFrom(c), meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// downloadCV always sends the CV as an attachment that the browser may not
+// sniff or cache.
+func (h *contributorHandlers) downloadCV(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	name, data, err := h.svc.GetCV(c.Request.Context(), PrincipalFrom(c), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "application/pdf", data)
+}
+
+func (h *contributorHandlers) decideScreening(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req struct{ Decision, Note string }
+	if !ok || !h.bind(c, &req) {
+		return
+	}
+	out, err := h.svc.DecideScreening(c.Request.Context(), PrincipalFrom(c), id, req.Decision, req.Note, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *contributorHandlers) recordInterview(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req contributors.InterviewInput
+	if !ok || !h.bind(c, &req) {
+		return
+	}
+	out, err := h.svc.RecordInterview(c.Request.Context(), PrincipalFrom(c), id, req, meta(c))
 	if err != nil {
 		h.fail(c, err)
 		return

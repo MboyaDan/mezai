@@ -88,6 +88,55 @@ func (q *Queries) AddIdentityFlag(ctx context.Context, arg AddIdentityFlagParams
 	return err
 }
 
+const addInterview = `-- name: AddInterview :one
+INSERT INTO interviews (contributor_id, interviewer_id, outcome, identity_confirmed, language_scores, scenario_score,
+  confidentiality_ok, availability, note)
+VALUES ($1, $2, $3, $4, $5, $6,
+  $7, $8, $9)
+RETURNING id, contributor_id, interviewer_id, outcome, identity_confirmed, language_scores, scenario_score, confidentiality_ok, availability, note, created_at
+`
+
+type AddInterviewParams struct {
+	ContributorID     uuid.UUID
+	InterviewerID     uuid.UUID
+	Outcome           string
+	IdentityConfirmed bool
+	LanguageScores    []byte
+	ScenarioScore     *int16
+	ConfidentialityOk *bool
+	Availability      *string
+	Note              *string
+}
+
+func (q *Queries) AddInterview(ctx context.Context, arg AddInterviewParams) (Interview, error) {
+	row := q.db.QueryRow(ctx, addInterview,
+		arg.ContributorID,
+		arg.InterviewerID,
+		arg.Outcome,
+		arg.IdentityConfirmed,
+		arg.LanguageScores,
+		arg.ScenarioScore,
+		arg.ConfidentialityOk,
+		arg.Availability,
+		arg.Note,
+	)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.ContributorID,
+		&i.InterviewerID,
+		&i.Outcome,
+		&i.IdentityConfirmed,
+		&i.LanguageScores,
+		&i.ScenarioScore,
+		&i.ConfidentialityOk,
+		&i.Availability,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const addQualificationQuestion = `-- name: AddQualificationQuestion :exec
 INSERT INTO qualification_questions (test_id, position, content, expected, tolerance)
 VALUES ($1, $2, $3, $4, $5)
@@ -109,6 +158,15 @@ func (q *Queries) AddQualificationQuestion(ctx context.Context, arg AddQualifica
 		arg.Expected,
 		arg.Tolerance,
 	)
+	return err
+}
+
+const clearContributorCV = `-- name: ClearContributorCV :exec
+UPDATE contributor_profiles SET cv_file_key = NULL, cv_file_name = NULL, cv_uploaded_at = NULL, cv_delete_after = NULL WHERE id = $1
+`
+
+func (q *Queries) ClearContributorCV(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearContributorCV, id)
 	return err
 }
 
@@ -178,7 +236,7 @@ INSERT INTO contributor_profiles (
   $1, 'C-' || lpad(nextval('contributor_public_code_seq')::text, 4, '0'),
   $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by
+RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at
 `
 
 type CreateContributorProfileParams struct {
@@ -225,6 +283,16 @@ func (q *Queries) CreateContributorProfile(ctx context.Context, arg CreateContri
 		&i.IdentityDecidedAt,
 		&i.MpesaNameCheckedAt,
 		&i.MpesaNameCheckedBy,
+		&i.Experience,
+		&i.LinkedinUrl,
+		&i.CvFileKey,
+		&i.CvFileName,
+		&i.CvUploadedAt,
+		&i.CvDeleteAfter,
+		&i.ScreeningStatus,
+		&i.ScreeningNote,
+		&i.ScreeningDecidedBy,
+		&i.ScreeningDecidedAt,
 	)
 	return i, err
 }
@@ -306,8 +374,33 @@ func (q *Queries) DecideContributorIdentity(ctx context.Context, arg DecideContr
 	return err
 }
 
+const decideScreening = `-- name: DecideScreening :exec
+UPDATE contributor_profiles SET screening_status = $1, screening_note = $2,
+  screening_decided_by = $3, screening_decided_at = now(),
+  cv_delete_after = CASE WHEN cv_file_key IS NULL THEN NULL ELSE now() + interval '90 days' END
+WHERE id = $4
+`
+
+type DecideScreeningParams struct {
+	ScreeningStatus string
+	ScreeningNote   *string
+	DecidedBy       *uuid.UUID
+	ID              uuid.UUID
+}
+
+// A decision starts the 90-day clock on any CV (declines delete it at once in the service).
+func (q *Queries) DecideScreening(ctx context.Context, arg DecideScreeningParams) error {
+	_, err := q.db.Exec(ctx, decideScreening,
+		arg.ScreeningStatus,
+		arg.ScreeningNote,
+		arg.DecidedBy,
+		arg.ID,
+	)
+	return err
+}
+
 const getContributorProfile = `-- name: GetContributorProfile :one
-SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, u.email, u.display_name
+SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, cp.experience, cp.linkedin_url, cp.cv_file_key, cp.cv_file_name, cp.cv_uploaded_at, cp.cv_delete_after, cp.screening_status, cp.screening_note, cp.screening_decided_by, cp.screening_decided_at, u.email, u.display_name
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
 WHERE cp.id = $1
 `
@@ -333,6 +426,16 @@ type GetContributorProfileRow struct {
 	IdentityDecidedAt     *time.Time
 	MpesaNameCheckedAt    *time.Time
 	MpesaNameCheckedBy    *uuid.UUID
+	Experience            []byte
+	LinkedinUrl           *string
+	CvFileKey             *string
+	CvFileName            *string
+	CvUploadedAt          *time.Time
+	CvDeleteAfter         *time.Time
+	ScreeningStatus       string
+	ScreeningNote         *string
+	ScreeningDecidedBy    *uuid.UUID
+	ScreeningDecidedAt    *time.Time
 	Email                 string
 	DisplayName           string
 }
@@ -361,6 +464,16 @@ func (q *Queries) GetContributorProfile(ctx context.Context, id uuid.UUID) (GetC
 		&i.IdentityDecidedAt,
 		&i.MpesaNameCheckedAt,
 		&i.MpesaNameCheckedBy,
+		&i.Experience,
+		&i.LinkedinUrl,
+		&i.CvFileKey,
+		&i.CvFileName,
+		&i.CvUploadedAt,
+		&i.CvDeleteAfter,
+		&i.ScreeningStatus,
+		&i.ScreeningNote,
+		&i.ScreeningDecidedBy,
+		&i.ScreeningDecidedAt,
 		&i.Email,
 		&i.DisplayName,
 	)
@@ -376,6 +489,17 @@ func (q *Queries) GetUserDisplayNameByID(ctx context.Context, id uuid.UUID) (str
 	var display_name string
 	err := row.Scan(&display_name)
 	return display_name, err
+}
+
+const hasPassedInterview = `-- name: HasPassedInterview :one
+SELECT EXISTS (SELECT 1 FROM interviews WHERE contributor_id = $1 AND outcome = 'passed')::bool
+`
+
+func (q *Queries) HasPassedInterview(ctx context.Context, contributorID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPassedInterview, contributorID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const insertConsent = `-- name: InsertConsent :exec
@@ -496,7 +620,9 @@ func (q *Queries) ListContributorStatusHistory(ctx context.Context, contributorI
 
 const listContributors = `-- name: ListContributors :many
 SELECT cp.id, cp.public_code, cp.status, cp.country, cp.mpesa_phone, cp.created_at, u.display_name, u.email,
-  cp.identity_status, cp.national_id_last3,
+  cp.identity_status, cp.national_id_last3, cp.screening_status,
+  EXISTS (SELECT 1 FROM interviews iv WHERE iv.contributor_id = cp.id AND iv.outcome = 'passed')::bool AS interview_passed,
+  EXISTS (SELECT 1 FROM qualification_attempts qa WHERE qa.contributor_id = cp.id AND qa.status = 'approved')::bool AS qualified,
   (SELECT array_agg(cl.language ORDER BY cl.language) FROM contributor_languages cl WHERE cl.contributor_id = cp.id)::text[] AS languages,
   (SELECT count(*) FROM identity_flags f WHERE f.contributor_id = cp.id OR f.other_contributor_id = cp.id)::int AS flag_count,
   (SELECT count(*) FROM contributor_profiles o JOIN users ou ON ou.id = o.user_id
@@ -504,13 +630,15 @@ SELECT cp.id, cp.public_code, cp.status, cp.country, cp.mpesa_phone, cp.created_
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
 WHERE ($1::text IS NULL OR cp.status = $1::text)
   AND ($2::text IS NULL OR cp.identity_status = $2::text)
+  AND ($3::text IS NULL OR cp.screening_status = $3::text)
 ORDER BY cp.created_at DESC, cp.id DESC
 LIMIT 500
 `
 
 type ListContributorsParams struct {
-	Status         *string
-	IdentityStatus *string
+	Status          *string
+	IdentityStatus  *string
+	ScreeningStatus *string
 }
 
 type ListContributorsRow struct {
@@ -524,13 +652,16 @@ type ListContributorsRow struct {
 	Email           string
 	IdentityStatus  string
 	NationalIDLast3 *string
+	ScreeningStatus string
+	InterviewPassed bool
+	Qualified       bool
 	Languages       []string
 	FlagCount       int32
 	SameNameCount   int32
 }
 
 func (q *Queries) ListContributors(ctx context.Context, arg ListContributorsParams) ([]ListContributorsRow, error) {
-	rows, err := q.db.Query(ctx, listContributors, arg.Status, arg.IdentityStatus)
+	rows, err := q.db.Query(ctx, listContributors, arg.Status, arg.IdentityStatus, arg.ScreeningStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -549,10 +680,42 @@ func (q *Queries) ListContributors(ctx context.Context, arg ListContributorsPara
 			&i.Email,
 			&i.IdentityStatus,
 			&i.NationalIDLast3,
+			&i.ScreeningStatus,
+			&i.InterviewPassed,
+			&i.Qualified,
 			&i.Languages,
 			&i.FlagCount,
 			&i.SameNameCount,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExpiredCVs = `-- name: ListExpiredCVs :many
+SELECT id, cv_file_key FROM contributor_profiles WHERE cv_file_key IS NOT NULL AND cv_delete_after <= now() LIMIT 100
+`
+
+type ListExpiredCVsRow struct {
+	ID        uuid.UUID
+	CvFileKey *string
+}
+
+func (q *Queries) ListExpiredCVs(ctx context.Context) ([]ListExpiredCVsRow, error) {
+	rows, err := q.db.Query(ctx, listExpiredCVs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExpiredCVsRow{}
+	for rows.Next() {
+		var i ListExpiredCVsRow
+		if err := rows.Scan(&i.ID, &i.CvFileKey); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -599,6 +762,61 @@ func (q *Queries) ListIdentityFlags(ctx context.Context, id uuid.UUID) ([]ListId
 			&i.OtherID,
 			&i.OtherPublicCode,
 			&i.OtherStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInterviews = `-- name: ListInterviews :many
+SELECT i.id, i.contributor_id, i.interviewer_id, i.outcome, i.identity_confirmed, i.language_scores, i.scenario_score, i.confidentiality_ok, i.availability, i.note, i.created_at, u.display_name AS interviewer_name
+FROM interviews i JOIN users u ON u.id = i.interviewer_id
+WHERE i.contributor_id = $1
+ORDER BY i.created_at DESC
+`
+
+type ListInterviewsRow struct {
+	ID                uuid.UUID
+	ContributorID     uuid.UUID
+	InterviewerID     uuid.UUID
+	Outcome           string
+	IdentityConfirmed bool
+	LanguageScores    []byte
+	ScenarioScore     *int16
+	ConfidentialityOk *bool
+	Availability      *string
+	Note              *string
+	CreatedAt         time.Time
+	InterviewerName   string
+}
+
+func (q *Queries) ListInterviews(ctx context.Context, contributorID uuid.UUID) ([]ListInterviewsRow, error) {
+	rows, err := q.db.Query(ctx, listInterviews, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInterviewsRow{}
+	for rows.Next() {
+		var i ListInterviewsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ContributorID,
+			&i.InterviewerID,
+			&i.Outcome,
+			&i.IdentityConfirmed,
+			&i.LanguageScores,
+			&i.ScenarioScore,
+			&i.ConfidentialityOk,
+			&i.Availability,
+			&i.Note,
+			&i.CreatedAt,
+			&i.InterviewerName,
 		); err != nil {
 			return nil, err
 		}
@@ -682,7 +900,7 @@ func (q *Queries) ListSameNameContributors(ctx context.Context, arg ListSameName
 }
 
 const lockContributorProfile = `-- name: LockContributorProfile :one
-SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by FROM contributor_profiles WHERE id = $1 FOR UPDATE
+SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at FROM contributor_profiles WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (ContributorProfile, error) {
@@ -709,6 +927,16 @@ func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (Con
 		&i.IdentityDecidedAt,
 		&i.MpesaNameCheckedAt,
 		&i.MpesaNameCheckedBy,
+		&i.Experience,
+		&i.LinkedinUrl,
+		&i.CvFileKey,
+		&i.CvFileName,
+		&i.CvUploadedAt,
+		&i.CvDeleteAfter,
+		&i.ScreeningStatus,
+		&i.ScreeningNote,
+		&i.ScreeningDecidedBy,
+		&i.ScreeningDecidedAt,
 	)
 	return i, err
 }
@@ -736,6 +964,23 @@ WHERE id = $1
 // A changed number needs checking again.
 func (q *Queries) ResetContributorIdentity(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, resetContributorIdentity, id)
+	return err
+}
+
+const setContributorCV = `-- name: SetContributorCV :exec
+UPDATE contributor_profiles SET cv_file_key = $1, cv_file_name = $2, cv_uploaded_at = now(),
+  cv_delete_after = CASE WHEN screening_status = 'pending' THEN NULL ELSE now() + interval '90 days' END
+WHERE id = $3
+`
+
+type SetContributorCVParams struct {
+	CvFileKey  *string
+	CvFileName *string
+	ID         uuid.UUID
+}
+
+func (q *Queries) SetContributorCV(ctx context.Context, arg SetContributorCVParams) error {
+	_, err := q.db.Exec(ctx, setContributorCV, arg.CvFileKey, arg.CvFileName, arg.ID)
 	return err
 }
 
@@ -786,6 +1031,23 @@ type SetUserDisplayNameParams struct {
 
 func (q *Queries) SetUserDisplayName(ctx context.Context, arg SetUserDisplayNameParams) error {
 	_, err := q.db.Exec(ctx, setUserDisplayName, arg.DisplayName, arg.ID)
+	return err
+}
+
+const updateContributorApplication = `-- name: UpdateContributorApplication :exec
+
+UPDATE contributor_profiles SET experience = $1, linkedin_url = $2 WHERE id = $3
+`
+
+type UpdateContributorApplicationParams struct {
+	Experience  []byte
+	LinkedinUrl *string
+	ID          uuid.UUID
+}
+
+// Screening funnel, part 1 (Stage 7d-1, D-100).
+func (q *Queries) UpdateContributorApplication(ctx context.Context, arg UpdateContributorApplicationParams) error {
+	_, err := q.db.Exec(ctx, updateContributorApplication, arg.Experience, arg.LinkedinUrl, arg.ID)
 	return err
 }
 

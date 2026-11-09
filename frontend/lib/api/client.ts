@@ -31,6 +31,10 @@ export type WorkProject = Schemas["WorkProject"];
 export type Task = Schemas["Task"];
 export type QAIssue = Schemas["QAIssue"];
 export type ContentReport = Schemas["ContentReport"];
+export type Experience = Schemas["Experience"];
+export type Application = Schemas["Application"];
+export type Interview = Schemas["Interview"];
+export type ScreeningStatus = Schemas["ScreeningStatus"];
 
 /** An error answer from the API, or a network failure (status 0). */
 export class ApiError extends Error {
@@ -69,8 +73,12 @@ export async function api<T = void>(
 }
 
 /** POST a multipart form (file uploads). The browser sets the boundary header. */
-export function upload<T>(path: `/v1/${string}`, form: FormData): Promise<T> {
-  return send<T>("POST", path, {}, form);
+export function upload<T>(
+  path: `/v1/${string}`,
+  form: FormData,
+  method: "POST" | "PUT" = "POST",
+): Promise<T> {
+  return send<T>(method, path, {}, form);
 }
 
 async function send<T>(

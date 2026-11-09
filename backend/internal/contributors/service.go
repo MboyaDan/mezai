@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/storage"
 )
 
 // Errors returned to handlers, which map them to HTTP codes.
@@ -50,9 +51,10 @@ const RetakeCooldown = 7 * 24 * time.Hour
 type Service struct {
 	pool  *db.Pool
 	now   func() time.Time
-	idKey []byte // National ID fingerprint key (config.IdentityKey)
+	idKey []byte        // National ID fingerprint key (config.IdentityKey)
+	blobs storage.Blobs // CV files (Stage 7d-1); nil disables uploads
 }
 
-func NewService(pool *db.Pool, idKey []byte) *Service {
-	return &Service{pool: pool, now: time.Now, idKey: idKey}
+func NewService(pool *db.Pool, idKey []byte, blobs storage.Blobs) *Service {
+	return &Service{pool: pool, now: time.Now, idKey: idKey, blobs: blobs}
 }
