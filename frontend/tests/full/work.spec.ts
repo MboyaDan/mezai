@@ -164,9 +164,14 @@ test("9b: work a project one task at a time; Ops resolves a report", async ({ pa
 
   // 1. The contributor finds the project.
   await signIn(page, "contributor001@sample.invalid", /\/c$/);
-  // Databases seeded before the 0.2 legal documents ask for consent again first.
+  // The seed records no consents, so sample contributors are asked to accept
+  // the current legal documents first. Wait until the portal has settled on
+  // either the dashboard or that prompt: isVisible() does not wait.
   const review = page.getByRole("heading", { name: "Please review the updated documents" });
-  if (await review.isVisible({ timeout: 3000 }).catch(() => false)) {
+  await expect(
+    page.getByRole("heading", { name: /^(Welcome, |Please review the updated documents)/ }),
+  ).toBeVisible();
+  if (await review.isVisible()) {
     for (const box of await page.getByRole("checkbox", { name: /I have read and accept/ }).all())
       await box.check();
     await page.getByRole("button", { name: "Accept and continue" }).click();
