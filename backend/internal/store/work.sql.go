@@ -322,7 +322,7 @@ func (q *Queries) CurrentReservation(ctx context.Context, arg CurrentReservation
 
 const expireStaleReservations = `-- name: ExpireStaleReservations :exec
 UPDATE assignments SET status = 'expired', completed_at = now()
-WHERE status = 'reserved' AND expires_at <= now() AND (project_id = $1 OR contributor_id = $2)
+WHERE status = 'reserved' AND expires_at <= now() AND project_id = $1 AND contributor_id = $2
 `
 
 type ExpireStaleReservationsParams struct {
@@ -330,6 +330,9 @@ type ExpireStaleReservationsParams struct {
 	ContributorID uuid.UUID
 }
 
+// The caller's own lapsed reservation in this project (it would block the
+// one-reservation index). Everyone else's are swept in the background, so
+// many people asking for work do not queue on the same rows (D-105).
 func (q *Queries) ExpireStaleReservations(ctx context.Context, arg ExpireStaleReservationsParams) error {
 	_, err := q.db.Exec(ctx, expireStaleReservations, arg.ProjectID, arg.ContributorID)
 	return err
@@ -505,6 +508,21 @@ func (q *Queries) IsGoldItem(ctx context.Context, itemID uuid.UUID) (bool, error
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const itemLoad = `-- name: ItemLoad :one
+SELECT (i.submission_count + (SELECT count(*) FROM assignments a
+  WHERE a.item_id = i.id AND a.status = 'reserved' AND a.expires_at > now()))::int AS load
+FROM items i WHERE i.id = $1
+`
+
+// Submissions plus live reservations on an item, counted in a fresh
+// statement while the caller holds the item's row lock.
+func (q *Queries) ItemLoad(ctx context.Context, id uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, itemLoad, id)
+	var load int32
+	err := row.Scan(&load)
+	return load, err
 }
 
 const listContentReports = `-- name: ListContentReports :many
@@ -775,11 +793,12 @@ func (q *Queries) PickGoldItem(ctx context.Context, arg PickGoldItemParams) (Pic
 const pickRegularItem = `-- name: PickRegularItem :one
 SELECT i.id, i.org_id FROM items i
 WHERE i.project_id = $1 AND i.status IN ('pending', 'in_progress')
+  AND NOT (i.id = ANY($2::uuid[]))
   AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
-  AND NOT EXISTS (SELECT 1 FROM assignments a WHERE a.item_id = i.id AND a.contributor_id = $2)
+  AND NOT EXISTS (SELECT 1 FROM assignments a WHERE a.item_id = i.id AND a.contributor_id = $3)
   AND NOT EXISTS (SELECT 1 FROM content_reports r WHERE r.item_id = i.id AND r.status = 'open')
   AND i.submission_count + (SELECT count(*) FROM assignments a
-        WHERE a.item_id = i.id AND a.status = 'reserved' AND a.expires_at > now()) < $3::int
+        WHERE a.item_id = i.id AND a.status = 'reserved' AND a.expires_at > now()) < $4::int
 ORDER BY i.submission_count DESC, i.created_at, i.id
 LIMIT 1
 FOR UPDATE OF i SKIP LOCKED
@@ -787,6 +806,7 @@ FOR UPDATE OF i SKIP LOCKED
 
 type PickRegularItemParams struct {
 	ProjectID     uuid.UUID
+	Skip          []uuid.UUID
 	ContributorID uuid.UUID
 	OverlapK      int32
 }
@@ -798,9 +818,16 @@ type PickRegularItemRow struct {
 
 // An item still short of k submissions (counting live reservations), never
 // seen by this contributor, not gold and not under an open content report.
-// Items closest to complete first, so whole items finish sooner.
+// Items closest to complete first, so whole items finish sooner. The count
+// here can be stale under load (it comes from the statement's snapshot), so
+// the caller recounts with ItemLoad after the lock is held (D-105).
 func (q *Queries) PickRegularItem(ctx context.Context, arg PickRegularItemParams) (PickRegularItemRow, error) {
-	row := q.db.QueryRow(ctx, pickRegularItem, arg.ProjectID, arg.ContributorID, arg.OverlapK)
+	row := q.db.QueryRow(ctx, pickRegularItem,
+		arg.ProjectID,
+		arg.Skip,
+		arg.ContributorID,
+		arg.OverlapK,
+	)
 	var i PickRegularItemRow
 	err := row.Scan(&i.ID, &i.OrgID)
 	return i, err
@@ -894,4 +921,20 @@ type SaveDraftProgressParams struct {
 func (q *Queries) SaveDraftProgress(ctx context.Context, arg SaveDraftProgressParams) error {
 	_, err := q.db.Exec(ctx, saveDraftProgress, arg.CurrentRevision, arg.TimeOnTaskMs, arg.ID)
 	return err
+}
+
+const sweepExpiredReservations = `-- name: SweepExpiredReservations :execrows
+UPDATE assignments SET status = 'expired', completed_at = now()
+WHERE id IN (SELECT id FROM assignments WHERE status = 'reserved' AND expires_at <= now()
+             ORDER BY expires_at LIMIT 500 FOR UPDATE SKIP LOCKED)
+`
+
+// Background sweep: marks lapsed reservations, skipping any row a request
+// is working on right now.
+func (q *Queries) SweepExpiredReservations(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, sweepExpiredReservations)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

@@ -64,12 +64,12 @@ func (s *Service) Next(ctx context.Context, p *auth.Principal, projectID uuid.UU
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		item, err := q.PickRegularItem(ctx, store.PickRegularItemParams{ProjectID: projectID, ContributorID: id, OverlapK: int32(pr.OverlapK)})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil // commit the expiries; taskID stays nil
-		}
+		item, ok, err := pickRegular(ctx, q, projectID, id, int32(pr.OverlapK))
 		if err != nil {
 			return err
+		}
+		if !ok {
+			return nil // commit the expiries; taskID stays nil
 		}
 		itemID, gold := item.ID, uuid.Nil
 		if pr.GoldRate > 0 && s.rnd() < pr.GoldRate {
@@ -275,6 +275,13 @@ func (s *Service) Submit(ctx context.Context, p *auth.Principal, taskID uuid.UUI
 	var out Result
 	err = s.pool.InScope(ctx, db.System(), func(tx pgx.Tx) error {
 		q := store.New(tx)
+		// Lock the task first, then look for the key: a second request with
+		// the same key waits here for the first and then replays its result.
+		if _, err := q.LockMyAssignment(ctx, store.LockMyAssignmentParams{ID: taskID, ContributorID: id}); errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
 		if r, done, err := replayed(ctx, q, id, key, taskID); done || err != nil {
 			out = r
 			return err
@@ -450,4 +457,35 @@ func optionalNote(note string, required bool) (*string, error) {
 		return nil, nil
 	}
 	return &note, nil
+}
+
+// maxPicks bounds how many locked candidates Next will recount before
+// reporting no work (each full one is skipped).
+const maxPicks = 20
+
+// pickRegular locks the best candidate item and confirms, in a fresh
+// statement, that it still has room under k. The candidate query's own count
+// comes from its snapshot and can miss a reservation committed a moment
+// earlier; the recount cannot, because this transaction now holds the item's
+// row lock and every reserver of the item takes that lock first (D-105).
+func pickRegular(ctx context.Context, q *store.Queries, project, contributor uuid.UUID, k int32) (store.PickRegularItemRow, bool, error) {
+	skip := []uuid.UUID{}
+	for range maxPicks {
+		item, err := q.PickRegularItem(ctx, store.PickRegularItemParams{ProjectID: project, ContributorID: contributor, OverlapK: k, Skip: skip})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return item, false, nil
+		}
+		if err != nil {
+			return item, false, err
+		}
+		load, err := q.ItemLoad(ctx, item.ID)
+		if err != nil {
+			return item, false, err
+		}
+		if load < k {
+			return item, true, nil
+		}
+		skip = append(skip, item.ID)
+	}
+	return store.PickRegularItemRow{}, false, nil
 }
