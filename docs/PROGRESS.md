@@ -5,7 +5,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 ## Current state
 
 - **Last stage:** 7d-2 (core check, skill validity). Branch `stage-07d2-core-check`, PR open. 7d-1 merged as #30; flaky-test fix #34.
-- **Next stage:** 10 (quality engine: gold scoring, agreement, trust score, and the paid project warm-up moved here by D-102). Planned split? Check D-011: Stage 10 is not in the split list; confirm size with Dan at the start.
+- **Next stage:** 10 (quality engine: gold scoring, agreement, trust score, and the paid project warm-up moved here by D-102). Not in the D-011 split list; if it is too big for one sitting, propose a split to Dan first.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -90,7 +90,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 9a | Merged | #28 | Migration 00012 (`reported` assignment status, one reservation per contributor and project, `submissions.qa_warnings`). `internal/tasks`: eligibility, Next (overlap k, gold mixing, SKIP LOCKED), task view (content in contributor scope), drafts, idempotent submit with QA checks (`quality/qa.go`), skip, report, Ops report queue. 10 endpoints. AC-06 (1,000 assignments) and AC-07 tests. Seed qualifies active sample contributors. |
 | 9b | Merged | #29 | Contributor Tasks list (`/c/work`), project brief (`/c/projects/[id]`), task workspace (`/c/work/[projectId]`) for all three task types: clock, autosave, keyboard, instructions drawer, skip/report dialogs, QA messages, idempotent submit. Ops content-report queue (`/w/reports`). Full-stack test creates its own projects through the API so reruns always have work. Screening funnel research and plan (D-100, Stage 7d). |
 | 7d-1 | Merged | #30 | Migration 00013 (application answers, LinkedIn, CV columns, screening status, `interviews`). Application form and optional PDF CV (deleted on decline or by an hourly sweep 90 days after the decision); Ops shortlist / waitlist / decline; structured phone interview (fixed script and rubric, no recording); tests open only once shortlisted; activation = shortlisted + test + interview + verified identity. Privacy notice and contributor terms 0.3. Ops Applications and Interviews queues. |
-| 7d-2 | PR open | – | Migration 00014 (`core` skill kind, one active core check, per-question `task_type`/`config`, `writing_rating`). Core check content in `corecheck.go` and `POST /qualification/core-check` (draft); writing answers (60–250 words) rated by Ops; core first, 30-day core retake; activation on the core check; skills valid 12 months. Screens: core check first on the tests list, mixed question types, writing input, Ops writing rating. |
+| 7d-2 | PR open | #35 | Migration 00014 (`core` skill kind, one active core check, per-question `task_type`/`config`, `writing_rating`). Core check content in `corecheck.go` and `POST /qualification/core-check` (draft); writing answers (60–250 words) rated by Ops; core first, 30-day core retake; activation on the core check; skills valid 12 months. Screens: core check first on the tests list, mixed question types, writing input, Ops writing rating. |
 
 ## Notes for the next session
 
