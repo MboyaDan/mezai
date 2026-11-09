@@ -238,6 +238,8 @@ type ReviewQuestion struct {
 	Expected json.RawMessage `json:"expected"`
 	Answer   json.RawMessage `json:"answer"`
 	Correct  *bool           `json:"correct"`
+	TaskType string          `json:"task_type"`
+	Config   json.RawMessage `json:"config"`
 }
 
 // AttemptReview is everything Ops needs to decide on an attempt.
@@ -256,6 +258,10 @@ type AttemptReview struct {
 	PassThreshold float64          `json:"pass_threshold"`
 	Contributor   Summary          `json:"contributor"`
 	Questions     []ReviewQuestion `json:"questions"`
+	SkillKind     string           `json:"skill_kind"`
+	// HasWriting: approving needs a writing rating of 2 or 3 (core check).
+	HasWriting    bool   `json:"has_writing"`
+	WritingRating *int16 `json:"writing_rating"`
 }
 
 // ReviewAttempt returns one attempt with expected answers, for Ops.
@@ -280,16 +286,21 @@ func (s *Service) ReviewAttempt(ctx context.Context, p *auth.Principal, id uuid.
 		}
 		out = AttemptReview{ID: a.ID, Status: a.Status, Score: a.Score, Passed: a.Passed, SubmittedAt: a.SubmittedAt,
 			DecidedAt: a.DecidedAt, DecisionNote: a.DecisionNote, TestID: v.TestID, TestTitle: v.Title, TaskType: v.TaskType,
-			Config: v.Config, PassThreshold: v.PassThreshold,
+			Config: v.Config, PassThreshold: v.PassThreshold, WritingRating: a.WritingRating,
 			Contributor: Summary{ID: cp.ID, PublicCode: cp.PublicCode, Status: cp.Status, DisplayName: cp.DisplayName,
 				Email: cp.Email, Country: cp.Country, Languages: []string{}, CreatedAt: cp.CreatedAt},
 			Questions: make([]ReviewQuestion, len(v.Questions))}
 		for i, qq := range v.Questions {
 			rd := v.review[qq.ID.String()]
 			out.Questions[i] = ReviewQuestion{ID: qq.ID, Position: qq.Position, Content: qq.Content, Expected: rd.expected,
-				Answer: v.Answers[qq.ID.String()], Correct: rd.correct}
+				Answer: v.Answers[qq.ID.String()], Correct: rd.correct, TaskType: qq.TaskType, Config: qq.Config}
+			if qq.TaskType == quality.Writing {
+				out.HasWriting = true
+			}
 		}
-		return nil
+		t, err := q.GetQualificationTest(ctx, a.TestID)
+		out.SkillKind = t.SkillKind
+		return err
 	})
 	return out, err
 }
@@ -298,7 +309,10 @@ func (s *Service) ReviewAttempt(ctx context.Context, p *auth.Principal, id uuid.
 // approved; approving makes a qualifying contributor active once their
 // identity is verified. A rejection
 // needs a note, which the contributor sees.
-func (s *Service) Decide(ctx context.Context, p *auth.Principal, id uuid.UUID, decision, note string, m auth.Meta) (AttemptReview, error) {
+func (s *Service) Decide(ctx context.Context, p *auth.Principal, id uuid.UUID, decision, note string, writingRating *int16, m auth.Meta) (AttemptReview, error) {
+	if writingRating != nil && (*writingRating < 1 || *writingRating > 3) {
+		return AttemptReview{}, fieldErr("writing_rating", "rate the writing 1, 2 or 3")
+	}
 	note = strings.TrimSpace(note)
 	if len(note) > 1000 {
 		return AttemptReview{}, fieldErr("note", "keep the note under 1000 characters")
@@ -330,11 +344,27 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, id uuid.UUID, d
 		if status == AttemptApproved && (a.Passed == nil || !*a.Passed) {
 			return ErrNotPassed
 		}
+		// A writing sample must be read and rated adequate or better to approve.
+		qs, err := q.ListQualificationQuestions(ctx, a.TestID)
+		if err != nil {
+			return err
+		}
+		hasWriting := false
+		for _, qq := range qs {
+			if qq.TaskType != nil && *qq.TaskType == quality.Writing {
+				hasWriting = true
+			}
+		}
+		if !hasWriting {
+			writingRating = nil
+		} else if status == AttemptApproved && (writingRating == nil || *writingRating < 2) {
+			return ErrWritingRating
+		}
 		var notePtr *string
 		if note != "" {
 			notePtr = &note
 		}
-		if _, err := q.DecideAttempt(ctx, store.DecideAttemptParams{ID: id, Status: status, DecidedBy: &p.UserID, DecisionNote: notePtr}); err != nil {
+		if _, err := q.DecideAttempt(ctx, store.DecideAttemptParams{ID: id, Status: status, DecidedBy: &p.UserID, DecisionNote: notePtr, WritingRating: writingRating}); err != nil {
 			return err
 		}
 		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: "qualification.attempt_" + status, EntityType: "qualification_attempt",
@@ -376,16 +406,23 @@ type Test struct {
 
 // ListTests lists every qualification test.
 func (s *Service) ListTests(ctx context.Context, p *auth.Principal) ([]Test, error) {
-	out := []Test{}
+	var out []Test
 	err := s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
-		rows, err := store.New(tx).ListQualificationTests(ctx, nil)
-		for _, r := range rows {
-			out = append(out, Test{ID: r.ID, Title: r.Title, SkillKind: r.SkillKind, SkillValue: r.SkillValue, TaskType: r.TaskType,
-				PassThreshold: r.PassThreshold, InstructionsMd: r.InstructionsMd, Status: r.Status, Config: r.Config,
-				SourceProjectID: r.SourceProjectID, QuestionCount: r.QuestionCount, CreatedAt: r.CreatedAt})
-		}
+		var err error
+		out, err = s.listTests(ctx, store.New(tx))
 		return err
 	})
+	return out, err
+}
+
+func (s *Service) listTests(ctx context.Context, q *store.Queries) ([]Test, error) {
+	out := []Test{}
+	rows, err := q.ListQualificationTests(ctx, nil)
+	for _, r := range rows {
+		out = append(out, Test{ID: r.ID, Title: r.Title, SkillKind: r.SkillKind, SkillValue: r.SkillValue, TaskType: r.TaskType,
+			PassThreshold: r.PassThreshold, InstructionsMd: r.InstructionsMd, Status: r.Status, Config: r.Config,
+			SourceProjectID: r.SourceProjectID, QuestionCount: r.QuestionCount, CreatedAt: r.CreatedAt})
+	}
 	return out, err
 }
 

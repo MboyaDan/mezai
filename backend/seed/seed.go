@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/identity"
 	"github.com/MboyaDan/mezai/backend/internal/password"
@@ -372,6 +373,27 @@ func (s *seeder) qualificationTests(labels, rubric, trRubric map[string]any) err
 			}
 		}
 		s.sum.QualificationTests++
+	}
+	// The generalist core check (D-100), passed by everyone already working.
+	core, err := contributors.InsertSampleCoreCheck(s.ctx, s.q, s.admin)
+	if err != nil {
+		return err
+	}
+	s.sum.QualificationTests++
+	for _, c := range s.qualified {
+		a, err := s.q.CreateQualificationAttempt(s.ctx, store.CreateQualificationAttemptParams{TestID: core.ID, ContributorID: c})
+		if err != nil {
+			return err
+		}
+		score, passed, rating, note := 1.0, true, int16(3), "Sample data"
+		if err := s.q.ScoreAttempt(s.ctx, store.ScoreAttemptParams{ID: a.ID, Answers: []byte(`{}`), Results: []byte(`{}`),
+			Score: &score, Passed: &passed}); err != nil {
+			return err
+		}
+		if _, err := s.q.DecideAttempt(s.ctx, store.DecideAttemptParams{ID: a.ID, Status: "approved", DecidedBy: &s.admin,
+			DecisionNote: &note, WritingRating: &rating}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

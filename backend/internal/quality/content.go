@@ -153,6 +153,8 @@ func ContentFields(taskType string) []string {
 		return []string{"prompt", "response_a", "response_b"}
 	case TranslationReview:
 		return []string{"source", "translation", "source_lang", "target_lang"}
+	case Writing:
+		return []string{"prompt"}
 	}
 	return nil
 }

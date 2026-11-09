@@ -53,7 +53,8 @@ WHERE id = @id AND status = 'in_progress';
 
 -- name: DecideAttempt :execrows
 UPDATE qualification_attempts
-SET status = @status, decided_by = @decided_by, decided_at = now(), decision_note = @decision_note
+SET status = @status, decided_by = @decided_by, decided_at = now(), decision_note = @decision_note,
+  writing_rating = sqlc.narg(writing_rating)
 WHERE id = @id AND status = 'scored';
 
 -- name: ListAttemptsForReview :many
@@ -68,3 +69,12 @@ JOIN users u ON u.id = cp.user_id
 WHERE a.status = @status
 ORDER BY a.submitted_at, a.id
 LIMIT 200;
+
+-- Core check (Stage 7d-2, D-100 section 3.3).
+
+-- name: AddQualificationQuestionTyped :exec
+INSERT INTO qualification_questions (test_id, position, content, expected, tolerance, task_type, config)
+VALUES (@test_id, @position, @content, @expected, '{}', sqlc.narg(task_type), sqlc.narg(config));
+
+-- name: CountCoreTests :one
+SELECT count(*)::int FROM qualification_tests WHERE skill_kind = 'core' AND status <> 'retired';

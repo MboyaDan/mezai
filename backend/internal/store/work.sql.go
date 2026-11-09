@@ -119,6 +119,8 @@ const contributorSkillsHeld = `-- name: ContributorSkillsHeld :many
 SELECT DISTINCT t.skill_kind, t.skill_value
 FROM qualification_attempts a JOIN qualification_tests t ON t.id = a.test_id
 WHERE a.contributor_id = $1 AND a.status = 'approved'
+  -- Skills count for 12 months (D-100 section 3.5); the core check never expires.
+  AND (t.skill_kind = 'core' OR a.decided_at > now() - interval '365 days')
 `
 
 type ContributorSkillsHeldRow struct {

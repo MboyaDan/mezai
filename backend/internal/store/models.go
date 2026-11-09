@@ -573,6 +573,7 @@ type QualificationAttempt struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	Results       []byte
+	WritingRating *int16
 }
 
 type QualificationQuestion struct {
@@ -584,6 +585,8 @@ type QualificationQuestion struct {
 	Tolerance []byte
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	TaskType  *string
+	Config    []byte
 }
 
 type QualificationTest struct {

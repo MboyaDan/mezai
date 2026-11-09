@@ -1058,9 +1058,11 @@ paths:
       operationId: decideQualificationAttempt
       summary: Approve or reject a scored attempt (`contributor.approve`).
       description: >-
-        Only a passed attempt can be approved (409 `not_passed`); approving moves a qualifying
-        contributor to active. A rejection needs a note, which the contributor sees. A second
-        decision is 409 `attempt_closed`.
+        Only a passed attempt can be approved (409 `not_passed`). A test with a writing sample
+        (the core check) needs `writing_rating` 2 or 3 to approve (422 `writing_rating_required`).
+        Approving the core check may make a qualifying contributor active (with interview and
+        identity). A rejection needs a note, which the contributor sees. A second decision is
+        409 `attempt_closed`.
       tags: [qualification]
       parameters:
         - { $ref: "#/components/parameters/CSRF" }
@@ -1075,11 +1077,26 @@ paths:
               properties:
                 decision: { type: string, enum: [approve, reject] }
                 note: { type: string, maxLength: 1000 }
+                writing_rating: { type: integer, minimum: 1, maximum: 3, description: "1 weak, 2 adequate, 3 strong" }
       responses:
         "200": { description: Decided attempt, content: { application/json: { schema: { $ref: "#/components/schemas/AttemptReview" } } } }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/qualification/core-check:
+    post:
+      operationId: createCoreCheck
+      summary: Set up the generalist core check as a draft for review (`gold.manage`, D-100).
+      description: >-
+        Seven items written for MezAI: six scored automatically (classification, spot the
+        error, an attention check, a pairwise comparison) and a writing sample rated by Ops.
+        Only one core check may exist outside `retired` (409 `core_check_exists`). Activate it
+        with the test status endpoint after reading it.
+      tags: [qualification]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "201": { description: Draft test, content: { application/json: { schema: { $ref: "#/components/schemas/QualificationTest" } } } }
+        "409": { $ref: "#/components/responses/Error" }
   /v1/qualification/tests:
     get:
       operationId: listQualificationTests
@@ -1843,13 +1860,14 @@ components:
           type: array
           items:
             type: object
-            required: [test_id, title, skill_kind, skill_value, approved_at]
+            required: [test_id, title, skill_kind, skill_value, approved_at, valid_until]
             properties:
               test_id: { type: string, format: uuid }
               title: { type: string }
               skill_kind: { type: string }
               skill_value: { type: string }
               approved_at: { type: string, format: date-time }
+              valid_until: { type: [string, "null"], format: date-time, description: Skills count for 12 months; null for the core check }
         created_at: { type: string, format: date-time }
     ContributorProfileInput:
       type: object
@@ -2036,7 +2054,8 @@ components:
         Shape of the task template's submission schema. Classification: `labels` (optional
         `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and
         `scores_b` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and
-        `fluency` 1 to 5, `corrected`, optional `error_tags`.
+        `fluency` 1 to 5, `corrected`, optional `error_tags`. Writing sample (core check): `text`,
+        60 to 250 words.
       additionalProperties: true
     AnswersRequest:
       type: object
@@ -2048,17 +2067,22 @@ components:
     MyQualificationTest:
       type: object
       required: [id, title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, question_count,
-        state, attempt_id, score, decision_note, retake_after, can_start]
+        state, valid_until, core_first, attempt_id, score, decision_note, retake_after, can_start]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
-        skill_kind: { type: string, enum: [language, domain, task_type] }
+        skill_kind: { type: string, enum: [language, domain, task_type, core] }
         skill_value: { type: string }
         task_type: { type: string, enum: [classification, pairwise, translation_review] }
         pass_threshold: { type: number }
         instructions_md: { type: string }
         question_count: { type: integer }
-        state: { type: string, enum: [available, in_progress, awaiting_review, qualified, not_passed] }
+        state:
+          type: string
+          enum: [available, in_progress, awaiting_review, qualified, not_passed, expired]
+          description: "`expired`: a skill older than 12 months; it can be taken again. The core check never expires."
+        valid_until: { type: [string, "null"], format: date-time }
+        core_first: { type: boolean, description: A skill test locked until the core check is approved }
         attempt_id: { type: [string, "null"], format: uuid }
         score: { type: [number, "null"] }
         decision_note: { type: [string, "null"] }
@@ -2081,11 +2105,13 @@ components:
           type: array
           items:
             type: object
-            required: [id, position, content]
+            required: [id, position, content, task_type, config]
             properties:
               id: { type: string, format: uuid }
               position: { type: integer }
               content: { type: object, description: Item content in the task template's import shape }
+              task_type: { type: string, enum: [classification, pairwise, translation_review, writing], description: "The question's own type (the core check mixes them)" }
+              config: { $ref: "#/components/schemas/TaskConfig" }
         answers: { type: object, additionalProperties: { $ref: "#/components/schemas/Answer" } }
         score: { type: [number, "null"], description: "Share correct, after submission" }
         passed: { type: [boolean, "null"] }
@@ -2117,7 +2143,7 @@ components:
     AttemptReview:
       type: object
       required: [id, status, score, passed, submitted_at, decided_at, decision_note, test_id, test_title, task_type,
-        config, pass_threshold, contributor, questions]
+        config, pass_threshold, contributor, questions, skill_kind, has_writing, writing_rating]
       properties:
         id: { type: string, format: uuid }
         status: { type: string }
@@ -2136,14 +2162,19 @@ components:
           type: array
           items:
             type: object
-            required: [id, position, content, expected, answer, correct]
+            required: [id, position, content, expected, answer, correct, task_type, config]
             properties:
               id: { type: string, format: uuid }
               position: { type: integer }
               content: { type: object }
               expected: { $ref: "#/components/schemas/Answer" }
               answer: { oneOf: [{ $ref: "#/components/schemas/Answer" }, { type: "null" }] }
-              correct: { type: [boolean, "null"] }
+              correct: { type: [boolean, "null"], description: Null for a writing sample (rated by Ops) }
+              task_type: { type: string }
+              config: { $ref: "#/components/schemas/TaskConfig" }
+        skill_kind: { type: string }
+        has_writing: { type: boolean, description: Approving needs writing_rating 2 or 3 }
+        writing_rating: { type: [integer, "null"] }
     QualificationTest:
       type: object
       required: [id, title, skill_kind, skill_value, task_type, pass_threshold, instructions_md, status, config,

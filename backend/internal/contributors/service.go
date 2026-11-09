@@ -30,6 +30,8 @@ var (
 	ErrNotShareable       = errors.New("contributors: confirm the gold content may be shown to applicants")
 	ErrIdentityIncomplete = errors.New("contributors: the profile has no confirmed M-Pesa number or National ID number")
 	ErrNoIdentityKey      = errors.New("contributors: identity key not configured")
+	ErrCoreFirst          = errors.New("contributors: take the core check first")
+	ErrWritingRating      = errors.New("contributors: rate the writing sample 2 or 3 to approve")
 )
 
 // FieldError is an invalid field; errors.Is(err, ErrInvalidInput) holds.

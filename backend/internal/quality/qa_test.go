@@ -68,3 +68,16 @@ func TestCheckClassificationOnlyTimes(t *testing.T) {
 		t.Fatalf("warnings %q", codes(w))
 	}
 }
+
+func TestWritingAnswer(t *testing.T) {
+	words := func(n int) string { return strings.TrimSpace(strings.Repeat("word ", n)) }
+	for n, ok := range map[int]bool{59: false, 60: true, 150: true, 250: true, 251: false} {
+		_, err := Parse(Writing, Config{}, []byte(`{"text":"`+words(n)+`"}`))
+		if (err == nil) != ok {
+			t.Errorf("%d words: %v", n, err)
+		}
+	}
+	if AutoScored(Writing) || !AutoScored(Classification) {
+		t.Fatal("only writing is read by a person")
+	}
+}

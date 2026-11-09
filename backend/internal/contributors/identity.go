@@ -248,16 +248,11 @@ func activateIfQualified(ctx context.Context, q *store.Queries, m auth.Meta, id 
 	if passed, err := q.HasPassedInterview(ctx, id); err != nil || !passed {
 		return err
 	}
-	attempts, err := q.ListAttemptsByContributor(ctx, id)
-	if err != nil {
+	// The core check (D-100) is the qualification activation needs.
+	if done, err := hasApprovedCore(ctx, q, id); err != nil || !done {
 		return err
 	}
-	for _, a := range attempts {
-		if a.Status == AttemptApproved {
-			return transition(ctx, q, m, id, StatusQualifying, StatusActive, ViaApproval, by, reason)
-		}
-	}
-	return nil
+	return transition(ctx, q, m, id, StatusQualifying, StatusActive, ViaApproval, by, reason)
 }
 
 // RecordMpesaNameCheck records that Ops saw the name M-Pesa shows for the
