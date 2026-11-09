@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 9a (task engine API). Branch `stage-09a-task-engine`, PR open. 7c merged as #27.
-- **Next stage:** 9b (contributor task workspace UI for the three task types; split already approved, D-094). Then 7d, the screening funnel (D-100, `docs/design/screening-funnel.md`), before any real candidate applies.
+- **Last stage:** 9b (task workspace UI). Branch `stage-09b-task-workspace`, PR open. 9a merged as #28.
+- **Next stage:** 7d, the screening funnel (D-100, `docs/design/screening-funnel.md`), before any real candidate applies. Then Stage 10 (quality engine).
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -50,6 +50,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Answer checking (qualification now, gold in Stage 10) | `backend/internal/quality/answer.go` |
 | Legal document versions the API accepts | `backend/internal/legal/legal.go` (kept equal to `frontend/content/legal.ts` by `content/legal.test.ts`) |
 | Phone normalising and masking | `backend/internal/pii/phone.go` |
+| Task workspace and reports screens | `frontend/components/contributor/{work,task-workspace}.tsx`, helpers `frontend/lib/tasks.ts`, Ops `frontend/components/workspace/reports.tsx` |
 | Task engine (eligibility, assignment, submit, reports) and QA checks | `backend/internal/tasks/`, handlers `backend/internal/httpapi/tasks.go`, checks `backend/internal/quality/qa.go` |
 | National ID fingerprint, identity checks | `backend/internal/identity/`, `backend/internal/contributors/identity.go`; Ops panel `frontend/components/workspace/identity-panel.tsx` |
 | API types and client (frontend) | `frontend/lib/api/schema.ts` (generated: `npm run gen:api`), `lib/api/client.ts` |
@@ -84,7 +85,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 8a | Merged | #25 | Migration 00010 (project QA checks, import digests, `project_requests` with RLS). 21 endpoints: organisations, task templates, projects (create, edit, lifecycle with readiness), CSV/JSONL import dry run and all-or-nothing commit, gold list/add/retire, client project requests with sample file, convert and decline. Object storage put/get. AC-05 API tests. Plan: auto QA checks (D-077, Stage 9) and one-account checks (D-078, new Stage 7c). |
 | 8b | Merged | #26 | Projects list, create (and convert from a request), overview with readiness, status actions, settings with locks, item and gold import wizard (check → report → import), gold by hand, retire, "Make a qualification test" (D-073 done), organisations, client request form and Ops inbox with convert/decline. AC-05 full-stack UI test. |
 | 7c | Merged | #27 | Migration 00011 (ID fingerprint + last 3 digits, identity status and M-Pesa name check on `contributor_profiles`, unique M-Pesa number and ID, `identity_flags`, `norm_name`; clears duplicate numbers left by test data). `internal/identity` (normalise, HMAC, key). `IDENTITY_HMAC_KEY` required outside dev/test. Profile takes `national_id`; reused numbers refused and flagged; profile saves rate limited per account. Ops verify/reject (`/contributors/{id}/identity`) and M-Pesa name check (`/mpesa-name-check`). Active needs approved test + verified identity. Privacy notice and contributor terms 0.2. UI: National ID field, dashboard identity step, Ops identity panel and "Identity checks" tab. Sign-out now does a full page load (fixes a redirect race). |
-| 9a | PR open | #28 | Migration 00012 (`reported` assignment status, one reservation per contributor and project, `submissions.qa_warnings`). `internal/tasks`: eligibility, Next (overlap k, gold mixing, SKIP LOCKED), task view (content in contributor scope), drafts, idempotent submit with QA checks (`quality/qa.go`), skip, report, Ops report queue. 10 endpoints. AC-06 (1,000 assignments) and AC-07 tests. Seed qualifies active sample contributors. |
+| 9a | Merged | #28 | Migration 00012 (`reported` assignment status, one reservation per contributor and project, `submissions.qa_warnings`). `internal/tasks`: eligibility, Next (overlap k, gold mixing, SKIP LOCKED), task view (content in contributor scope), drafts, idempotent submit with QA checks (`quality/qa.go`), skip, report, Ops report queue. 10 endpoints. AC-06 (1,000 assignments) and AC-07 tests. Seed qualifies active sample contributors. |
+| 9b | PR open | – | Contributor Tasks list (`/c/work`), project brief (`/c/projects/[id]`), task workspace (`/c/work/[projectId]`) for all three task types: clock, autosave, keyboard, instructions drawer, skip/report dialogs, QA messages, idempotent submit. Ops content-report queue (`/w/reports`). Full-stack test creates its own projects through the API so reruns always have work. Screening funnel research and plan (D-100, Stage 7d). |
 
 ## Notes for the next session
 
@@ -97,7 +99,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - SignalLattice fills its container width; size it with a wrapper div.
 - Use `m.*` from `motion/react`, never `motion.*` (LazyMotion strict throws). Section reveals: `Reveal`, `RevealGroup` + `RevealItem` from `@/motion/reveal`.
 - Local databases seeded before 7a have empty qualification test `config`: re-seed a fresh volume, or run the UPDATE in the 7b PR notes.
-- Stage 9b: task screen uses `/v1/me/projects`, `/next`, `/me/tasks/{id}` (+ `/draft`, `/submit` with `Idempotency-Key`, `/skip`, `/report`); QA settings come with the project (`qa_checks`, `min_rationale_chars`) for client-side hints; `qa_blocked` answers list `issues`. Ops content-report screen also belongs to 9b (API: `/v1/content-reports`).
+- Done in 9b: task screen uses `/v1/me/projects`, `/next`, `/me/tasks/{id}` (+ `/draft`, `/submit` with `Idempotency-Key`, `/skip`, `/report`); QA settings come with the project (`qa_checks`, `min_rationale_chars`) for client-side hints; `qa_blocked` answers list `issues`. Ops content-report screen also belongs to 9b (API: `/v1/content-reports`).
+- Local databases seeded before 7c/9a: run the fix-up SQL in the 9b PR notes (verified identities, sample qualifications), or re-seed a fresh volume. Contributors who accepted 0.1 legal documents see the 0.2 consent prompt first.
 - Stage 11: AC-07's "one earning" half (earning on acceptance, same idempotency key). Stage 10: gold scoring reads gold-ness from `gold_items.item_id`; submissions on gold items stay out of consensus. Stage 14: require `mpesa_name_checked_at` before a contributor's first payout (D-092). Stage 17: decide whether deletion keeps the ID fingerprint (A-053).
 - Sign-up allows 10 an hour per IP: repeated full-stack runs hit it; `docker compose restart api` resets it locally.
 - Contributor endpoints call `contributorOf(p)`: Super Admin holds every permission but has no contributor profile.
