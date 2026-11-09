@@ -672,6 +672,7 @@ type Submission struct {
 	RejectionReason *string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	QaWarnings      []byte
 }
 
 type SubmissionRevision struct {

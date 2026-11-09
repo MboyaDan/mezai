@@ -608,6 +608,227 @@ paths:
         "200": { description: Scored attempt, content: { application/json: { schema: { $ref: "#/components/schemas/QualificationAttempt" } } } }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/projects:
+    get:
+      operationId: listMyProjects
+      summary: Live projects the caller may work on (`task.submit`). Needs active status, a verified identity and every required skill.
+      tags: [tasks]
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects: { type: array, items: { $ref: "#/components/schemas/WorkProject" } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/me/projects/{id}:
+    get:
+      operationId: getMyProject
+      summary: One live project the caller may work on.
+      tags: [tasks]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Project, content: { application/json: { schema: { $ref: "#/components/schemas/WorkProject" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/me/projects/{id}/next:
+    post:
+      operationId: nextTask
+      summary: The caller's current task in the project, or a newly reserved one (one at a time).
+      description: >-
+        409 `no_tasks` when nothing is left for the caller. Gold items are mixed in at the
+        project's rate and look exactly like other tasks (AC-06).
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Task, content: { application/json: { schema: { $ref: "#/components/schemas/Task" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/me/tasks/{id}:
+    get:
+      operationId: getTask
+      summary: One of the caller's tasks. Content only while the reservation is live.
+      tags: [tasks]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Task, content: { application/json: { schema: { $ref: "#/components/schemas/Task" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/me/tasks/{id}/draft:
+    put:
+      operationId: saveTaskDraft
+      summary: Autosave an unfinished answer (a new revision when it changed).
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer: { $ref: "#/components/schemas/Answer" }
+                time_on_task_ms: { type: integer, minimum: 0 }
+      responses:
+        "204": { description: Saved }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/tasks/{id}/submit:
+    post:
+      operationId: submitTask
+      summary: Submit the final answer once (AC-07).
+      description: >-
+        A retry with the same `Idempotency-Key` returns the first result and writes nothing.
+        Another key on a submitted task is 409 `already_submitted`; a key already used on
+        another task is 422 `idempotency_key_reused`. Blocking QA checks answer 422
+        `qa_blocked` with `issues`; warnings are returned and stored for reviewers (D-077).
+        The result is the same for gold and other items.
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_.:-]{8,100}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer: { $ref: "#/components/schemas/Answer" }
+                signals:
+                  type: object
+                  description: What the task screen saw; used only for warnings.
+                  properties:
+                    time_on_task_ms: { type: integer, minimum: 0 }
+                    pasted_chars: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [submission_id, status, warnings]
+                properties:
+                  submission_id: { type: string, format: uuid }
+                  status: { type: string }
+                  warnings: { type: array, items: { $ref: "#/components/schemas/QAIssue" } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+        "422":
+          description: Invalid answer, key problem, or blocked by QA checks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error: { type: string }
+                  field: { type: string }
+                  message: { type: string }
+                  issues: { type: array, items: { $ref: "#/components/schemas/QAIssue" } }
+  /v1/me/tasks/{id}/skip:
+    post:
+      operationId: skipTask
+      summary: Give a task back with a reason; the item never returns to the caller.
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [unclear, language, expertise, technical, other] }
+                note: { type: string, maxLength: 1000, description: Required for `other` }
+      responses:
+        "204": { description: Skipped }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/tasks/{id}/report:
+    post:
+      operationId: reportTaskContent
+      summary: Report an item's content. It leaves the caller's queue at once and nobody gets it while the report is open.
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category]
+              properties:
+                category: { type: string, enum: [harmful, personal_data, broken, other] }
+                note: { type: string, maxLength: 1000, description: Required for `other` }
+      responses:
+        "204": { description: Reported }
+        "404": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/content-reports:
+    get:
+      operationId: listContentReports
+      summary: Content reports, oldest first (`project.manage`). Default status `open`.
+      tags: [tasks]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, actioned, dismissed] } }
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                properties:
+                  reports: { type: array, items: { $ref: "#/components/schemas/ContentReport" } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/content-reports/{id}/resolve:
+    post:
+      operationId: resolveContentReport
+      summary: Dismiss (the item returns to the queue) or withdraw (the item is removed for good, gold retired).
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, reason]
+              properties:
+                action: { type: string, enum: [dismiss, withdraw] }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "204": { description: Resolved }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/contributors:
     get:
       operationId: listContributors
@@ -1572,6 +1793,71 @@ components:
               other: { $ref: "#/components/schemas/ContributorRef" }
               at: { type: string, format: date-time }
         same_name: { type: array, items: { $ref: "#/components/schemas/ContributorRef" }, description: Other accounts with the same name }
+    WorkProject:
+      type: object
+      description: A live project as a contributor sees it. No gold, overlap or other contributors.
+      required: [id, name, task_type, instructions_md, config, pay_per_task_cents, currency, deadline,
+        reservation_minutes, skills, qa_checks, min_rationale_chars, my_submitted]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        instructions_md: { type: string }
+        config: { $ref: "#/components/schemas/TaskConfig" }
+        pay_per_task_cents: { type: integer, format: int64 }
+        currency: { type: string }
+        deadline: { type: [string, "null"], format: date-time }
+        reservation_minutes: { type: integer }
+        skills:
+          type: array
+          items:
+            type: object
+            required: [kind, value, min_proficiency]
+            properties:
+              kind: { type: string }
+              value: { type: string }
+              min_proficiency: { type: [string, "null"] }
+        qa_checks: { $ref: "#/components/schemas/QAChecks" }
+        min_rationale_chars: { type: integer }
+        my_submitted: { type: integer }
+    Task:
+      type: object
+      description: One reserved item. The ID is the assignment's; gold and other items look the same.
+      required: [id, project_id, task_type, status, expires_at, content, draft, time_on_task_ms]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        status: { type: string, enum: [reserved, submitted, skipped, expired, reported] }
+        expires_at: { type: string, format: date-time }
+        content:
+          type: [object, "null"]
+          additionalProperties: { type: string }
+          description: Item fields for the task type; null once the reservation has ended
+        draft: { oneOf: [{ $ref: "#/components/schemas/Answer" }, { type: "null" }] }
+        time_on_task_ms: { type: integer, format: int64 }
+    QAIssue:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [rationale_too_short, translation_unchanged, rationale_mismatch, too_fast, mostly_pasted] }
+        field: { type: string }
+        message: { type: string }
+    ContentReport:
+      type: object
+      required: [id, category, note, status, created_at, resolved_at, item_id, external_id, project_id, project_name, reported_by]
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string, enum: [harmful, personal_data, broken, other] }
+        note: { type: [string, "null"] }
+        status: { type: string, enum: [open, actioned, dismissed] }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: [string, "null"], format: date-time }
+        item_id: { type: string, format: uuid }
+        external_id: { type: [string, "null"] }
+        project_id: { type: string, format: uuid }
+        project_name: { type: string }
+        reported_by: { type: string, description: Contributor code }
     ContributorSummary:
       type: object
       required: [id, public_code, status, display_name, email, country, languages, mpesa_phone_masked,

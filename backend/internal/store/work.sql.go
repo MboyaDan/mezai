@@ -12,6 +12,200 @@ import (
 	"github.com/google/uuid"
 )
 
+const addContentReport = `-- name: AddContentReport :one
+INSERT INTO content_reports (org_id, item_id, assignment_id, contributor_id, category, note)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id
+`
+
+type AddContentReportParams struct {
+	OrgID         uuid.UUID
+	ItemID        uuid.UUID
+	AssignmentID  *uuid.UUID
+	ContributorID uuid.UUID
+	Category      string
+	Note          *string
+}
+
+func (q *Queries) AddContentReport(ctx context.Context, arg AddContentReportParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, addContentReport,
+		arg.OrgID,
+		arg.ItemID,
+		arg.AssignmentID,
+		arg.ContributorID,
+		arg.Category,
+		arg.Note,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const addSkip = `-- name: AddSkip :exec
+INSERT INTO skips (org_id, assignment_id, contributor_id, reason, note) VALUES ($1, $2, $3, $4, $5)
+`
+
+type AddSkipParams struct {
+	OrgID         uuid.UUID
+	AssignmentID  uuid.UUID
+	ContributorID uuid.UUID
+	Reason        string
+	Note          *string
+}
+
+func (q *Queries) AddSkip(ctx context.Context, arg AddSkipParams) error {
+	_, err := q.db.Exec(ctx, addSkip,
+		arg.OrgID,
+		arg.AssignmentID,
+		arg.ContributorID,
+		arg.Reason,
+		arg.Note,
+	)
+	return err
+}
+
+const addSubmissionRevision = `-- name: AddSubmissionRevision :exec
+INSERT INTO submission_revisions (org_id, submission_id, revision, answer, is_draft)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type AddSubmissionRevisionParams struct {
+	OrgID        uuid.UUID
+	SubmissionID uuid.UUID
+	Revision     int32
+	Answer       []byte
+	IsDraft      bool
+}
+
+func (q *Queries) AddSubmissionRevision(ctx context.Context, arg AddSubmissionRevisionParams) error {
+	_, err := q.db.Exec(ctx, addSubmissionRevision,
+		arg.OrgID,
+		arg.SubmissionID,
+		arg.Revision,
+		arg.Answer,
+		arg.IsDraft,
+	)
+	return err
+}
+
+const bumpGoldUsage = `-- name: BumpGoldUsage :exec
+UPDATE gold_items SET usage_count = usage_count + 1 WHERE id = $1
+`
+
+func (q *Queries) BumpGoldUsage(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, bumpGoldUsage, id)
+	return err
+}
+
+const completeAssignment = `-- name: CompleteAssignment :execrows
+UPDATE assignments SET status = $1, completed_at = now()
+WHERE id = $2 AND status = 'reserved'
+`
+
+type CompleteAssignmentParams struct {
+	Status string
+	ID     uuid.UUID
+}
+
+func (q *Queries) CompleteAssignment(ctx context.Context, arg CompleteAssignmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, completeAssignment, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const contributorSkillsHeld = `-- name: ContributorSkillsHeld :many
+SELECT DISTINCT t.skill_kind, t.skill_value
+FROM qualification_attempts a JOIN qualification_tests t ON t.id = a.test_id
+WHERE a.contributor_id = $1 AND a.status = 'approved'
+`
+
+type ContributorSkillsHeldRow struct {
+	SkillKind  string
+	SkillValue string
+}
+
+// Skills granted by approved qualification attempts.
+func (q *Queries) ContributorSkillsHeld(ctx context.Context, contributorID uuid.UUID) ([]ContributorSkillsHeldRow, error) {
+	rows, err := q.db.Query(ctx, contributorSkillsHeld, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContributorSkillsHeldRow{}
+	for rows.Next() {
+		var i ContributorSkillsHeldRow
+		if err := rows.Scan(&i.SkillKind, &i.SkillValue); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countItemSubmission = `-- name: CountItemSubmission :exec
+UPDATE items SET submission_count = submission_count + 1,
+  status = CASE WHEN NOT $1::bool AND submission_count + 1 >= $2::int THEN 'awaiting_consensus' ELSE status END
+WHERE id = $3
+`
+
+type CountItemSubmissionParams struct {
+	IsGold   bool
+	OverlapK int32
+	ID       uuid.UUID
+}
+
+// k submissions make a regular item ready for consensus; gold items only count.
+func (q *Queries) CountItemSubmission(ctx context.Context, arg CountItemSubmissionParams) error {
+	_, err := q.db.Exec(ctx, countItemSubmission, arg.IsGold, arg.OverlapK, arg.ID)
+	return err
+}
+
+const countMyWork = `-- name: CountMyWork :many
+SELECT project_id, count(*) FILTER (WHERE status = 'submitted')::int AS submitted
+FROM assignments WHERE contributor_id = $1 GROUP BY project_id
+`
+
+type CountMyWorkRow struct {
+	ProjectID uuid.UUID
+	Submitted int32
+}
+
+func (q *Queries) CountMyWork(ctx context.Context, contributorID uuid.UUID) ([]CountMyWorkRow, error) {
+	rows, err := q.db.Query(ctx, countMyWork, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountMyWorkRow{}
+	for rows.Next() {
+		var i CountMyWorkRow
+		if err := rows.Scan(&i.ProjectID, &i.Submitted); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countSubmissionRevisions = `-- name: CountSubmissionRevisions :one
+SELECT count(*)::int FROM submission_revisions WHERE submission_id = $1
+`
+
+func (q *Queries) CountSubmissionRevisions(ctx context.Context, submissionID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countSubmissionRevisions, submissionID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAssignment = `-- name: CreateAssignment :one
 INSERT INTO assignments (org_id, project_id, item_id, contributor_id, expires_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -49,4 +243,653 @@ func (q *Queries) CreateAssignment(ctx context.Context, arg CreateAssignmentPara
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const createDraftSubmission = `-- name: CreateDraftSubmission :one
+INSERT INTO submissions (org_id, project_id, item_id, assignment_id, contributor_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings
+`
+
+type CreateDraftSubmissionParams struct {
+	OrgID         uuid.UUID
+	ProjectID     uuid.UUID
+	ItemID        uuid.UUID
+	AssignmentID  uuid.UUID
+	ContributorID uuid.UUID
+}
+
+func (q *Queries) CreateDraftSubmission(ctx context.Context, arg CreateDraftSubmissionParams) (Submission, error) {
+	row := q.db.QueryRow(ctx, createDraftSubmission,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.ItemID,
+		arg.AssignmentID,
+		arg.ContributorID,
+	)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.AssignmentID,
+		&i.ContributorID,
+		&i.Status,
+		&i.CurrentRevision,
+		&i.TimeOnTaskMs,
+		&i.IdempotencyKey,
+		&i.SubmittedAt,
+		&i.DecidedAt,
+		&i.RejectionReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaWarnings,
+	)
+	return i, err
+}
+
+const currentReservation = `-- name: CurrentReservation :one
+SELECT id, org_id, project_id, item_id, contributor_id, status, reserved_at, expires_at, completed_at, created_at, updated_at FROM assignments
+WHERE contributor_id = $1 AND project_id = $2 AND status = 'reserved' AND expires_at > now()
+`
+
+type CurrentReservationParams struct {
+	ContributorID uuid.UUID
+	ProjectID     uuid.UUID
+}
+
+func (q *Queries) CurrentReservation(ctx context.Context, arg CurrentReservationParams) (Assignment, error) {
+	row := q.db.QueryRow(ctx, currentReservation, arg.ContributorID, arg.ProjectID)
+	var i Assignment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.ContributorID,
+		&i.Status,
+		&i.ReservedAt,
+		&i.ExpiresAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const expireStaleReservations = `-- name: ExpireStaleReservations :exec
+UPDATE assignments SET status = 'expired', completed_at = now()
+WHERE status = 'reserved' AND expires_at <= now() AND (project_id = $1 OR contributor_id = $2)
+`
+
+type ExpireStaleReservationsParams struct {
+	ProjectID     uuid.UUID
+	ContributorID uuid.UUID
+}
+
+func (q *Queries) ExpireStaleReservations(ctx context.Context, arg ExpireStaleReservationsParams) error {
+	_, err := q.db.Exec(ctx, expireStaleReservations, arg.ProjectID, arg.ContributorID)
+	return err
+}
+
+const getItemContent = `-- name: GetItemContent :one
+SELECT content FROM items WHERE id = $1
+`
+
+func (q *Queries) GetItemContent(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getItemContent, id)
+	var content []byte
+	err := row.Scan(&content)
+	return content, err
+}
+
+const getLatestRevision = `-- name: GetLatestRevision :one
+SELECT id, org_id, submission_id, revision, answer, is_draft, created_at FROM submission_revisions WHERE submission_id = $1 ORDER BY revision DESC LIMIT 1
+`
+
+func (q *Queries) GetLatestRevision(ctx context.Context, submissionID uuid.UUID) (SubmissionRevision, error) {
+	row := q.db.QueryRow(ctx, getLatestRevision, submissionID)
+	var i SubmissionRevision
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.SubmissionID,
+		&i.Revision,
+		&i.Answer,
+		&i.IsDraft,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getMyAssignment = `-- name: GetMyAssignment :one
+SELECT id, org_id, project_id, item_id, contributor_id, status, reserved_at, expires_at, completed_at, created_at, updated_at FROM assignments WHERE id = $1
+`
+
+func (q *Queries) GetMyAssignment(ctx context.Context, id uuid.UUID) (Assignment, error) {
+	row := q.db.QueryRow(ctx, getMyAssignment, id)
+	var i Assignment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.ContributorID,
+		&i.Status,
+		&i.ReservedAt,
+		&i.ExpiresAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getProjectForWork = `-- name: GetProjectForWork :one
+SELECT p.id, p.org_id, p.name, p.status, p.task_type, p.instructions_md, p.config, p.overlap_k, p.gold_rate,
+  p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars
+FROM projects p WHERE p.id = $1
+`
+
+type GetProjectForWorkRow struct {
+	ID                 uuid.UUID
+	OrgID              uuid.UUID
+	Name               string
+	Status             string
+	TaskType           string
+	InstructionsMd     string
+	Config             []byte
+	OverlapK           int16
+	GoldRate           float64
+	PayPerTaskCents    int64
+	Currency           string
+	Deadline           *time.Time
+	ReservationMinutes int32
+	QaChecks           []byte
+	MinRationaleChars  int32
+}
+
+func (q *Queries) GetProjectForWork(ctx context.Context, id uuid.UUID) (GetProjectForWorkRow, error) {
+	row := q.db.QueryRow(ctx, getProjectForWork, id)
+	var i GetProjectForWorkRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Name,
+		&i.Status,
+		&i.TaskType,
+		&i.InstructionsMd,
+		&i.Config,
+		&i.OverlapK,
+		&i.GoldRate,
+		&i.PayPerTaskCents,
+		&i.Currency,
+		&i.Deadline,
+		&i.ReservationMinutes,
+		&i.QaChecks,
+		&i.MinRationaleChars,
+	)
+	return i, err
+}
+
+const getSubmissionByAssignment = `-- name: GetSubmissionByAssignment :one
+SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings FROM submissions WHERE assignment_id = $1
+`
+
+func (q *Queries) GetSubmissionByAssignment(ctx context.Context, assignmentID uuid.UUID) (Submission, error) {
+	row := q.db.QueryRow(ctx, getSubmissionByAssignment, assignmentID)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.AssignmentID,
+		&i.ContributorID,
+		&i.Status,
+		&i.CurrentRevision,
+		&i.TimeOnTaskMs,
+		&i.IdempotencyKey,
+		&i.SubmittedAt,
+		&i.DecidedAt,
+		&i.RejectionReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaWarnings,
+	)
+	return i, err
+}
+
+const getSubmissionByKey = `-- name: GetSubmissionByKey :one
+SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings FROM submissions WHERE contributor_id = $1 AND idempotency_key = $2
+`
+
+type GetSubmissionByKeyParams struct {
+	ContributorID  uuid.UUID
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetSubmissionByKey(ctx context.Context, arg GetSubmissionByKeyParams) (Submission, error) {
+	row := q.db.QueryRow(ctx, getSubmissionByKey, arg.ContributorID, arg.IdempotencyKey)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.AssignmentID,
+		&i.ContributorID,
+		&i.Status,
+		&i.CurrentRevision,
+		&i.TimeOnTaskMs,
+		&i.IdempotencyKey,
+		&i.SubmittedAt,
+		&i.DecidedAt,
+		&i.RejectionReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaWarnings,
+	)
+	return i, err
+}
+
+const isGoldItem = `-- name: IsGoldItem :one
+SELECT EXISTS (SELECT 1 FROM gold_items WHERE item_id = $1)::bool
+`
+
+func (q *Queries) IsGoldItem(ctx context.Context, itemID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, isGoldItem, itemID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const listContentReports = `-- name: ListContentReports :many
+SELECT r.id, r.category, r.note, r.status, r.created_at, r.resolved_at, r.item_id, i.external_id, i.project_id,
+  p.name AS project_name, c.public_code
+FROM content_reports r
+JOIN items i ON i.id = r.item_id
+JOIN projects p ON p.id = i.project_id
+JOIN contributor_profiles c ON c.id = r.contributor_id
+WHERE $1::text IS NULL OR r.status = $1::text
+ORDER BY r.created_at
+LIMIT 200
+`
+
+type ListContentReportsRow struct {
+	ID          uuid.UUID
+	Category    string
+	Note        *string
+	Status      string
+	CreatedAt   time.Time
+	ResolvedAt  *time.Time
+	ItemID      uuid.UUID
+	ExternalID  *string
+	ProjectID   uuid.UUID
+	ProjectName string
+	PublicCode  string
+}
+
+func (q *Queries) ListContentReports(ctx context.Context, status *string) ([]ListContentReportsRow, error) {
+	rows, err := q.db.Query(ctx, listContentReports, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListContentReportsRow{}
+	for rows.Next() {
+		var i ListContentReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Category,
+			&i.Note,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ResolvedAt,
+			&i.ItemID,
+			&i.ExternalID,
+			&i.ProjectID,
+			&i.ProjectName,
+			&i.PublicCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveProjects = `-- name: ListLiveProjects :many
+
+SELECT p.id, p.name, p.task_type, p.instructions_md, p.config, p.pay_per_task_cents, p.currency,
+  p.deadline, p.reservation_minutes, p.org_id
+FROM projects p
+WHERE p.status = 'live'
+ORDER BY p.published_at DESC NULLS LAST, p.id
+`
+
+type ListLiveProjectsRow struct {
+	ID                 uuid.UUID
+	Name               string
+	TaskType           string
+	InstructionsMd     string
+	Config             []byte
+	PayPerTaskCents    int64
+	Currency           string
+	Deadline           *time.Time
+	ReservationMinutes int32
+	OrgID              uuid.UUID
+}
+
+// Task engine (Stage 9a). Writes run in system scope because they touch
+// staff-only rows (item counters, gold usage); every query here that acts
+// for a contributor filters by @contributor_id itself.
+func (q *Queries) ListLiveProjects(ctx context.Context) ([]ListLiveProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listLiveProjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLiveProjectsRow{}
+	for rows.Next() {
+		var i ListLiveProjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.TaskType,
+			&i.InstructionsMd,
+			&i.Config,
+			&i.PayPerTaskCents,
+			&i.Currency,
+			&i.Deadline,
+			&i.ReservationMinutes,
+			&i.OrgID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSkillsForProjects = `-- name: ListSkillsForProjects :many
+SELECT project_id, skill_kind, skill_value, min_proficiency FROM project_skills WHERE project_id = ANY($1::uuid[])
+`
+
+type ListSkillsForProjectsRow struct {
+	ProjectID      uuid.UUID
+	SkillKind      string
+	SkillValue     string
+	MinProficiency *string
+}
+
+func (q *Queries) ListSkillsForProjects(ctx context.Context, ids []uuid.UUID) ([]ListSkillsForProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listSkillsForProjects, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSkillsForProjectsRow{}
+	for rows.Next() {
+		var i ListSkillsForProjectsRow
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.SkillKind,
+			&i.SkillValue,
+			&i.MinProficiency,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockContentReport = `-- name: LockContentReport :one
+SELECT id, org_id, item_id, assignment_id, contributor_id, category, note, status, resolved_by, resolved_at, created_at, updated_at FROM content_reports WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockContentReport(ctx context.Context, id uuid.UUID) (ContentReport, error) {
+	row := q.db.QueryRow(ctx, lockContentReport, id)
+	var i ContentReport
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ItemID,
+		&i.AssignmentID,
+		&i.ContributorID,
+		&i.Category,
+		&i.Note,
+		&i.Status,
+		&i.ResolvedBy,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const lockMyAssignment = `-- name: LockMyAssignment :one
+SELECT id, org_id, project_id, item_id, contributor_id, status, reserved_at, expires_at, completed_at, created_at, updated_at FROM assignments WHERE id = $1 AND contributor_id = $2 FOR UPDATE
+`
+
+type LockMyAssignmentParams struct {
+	ID            uuid.UUID
+	ContributorID uuid.UUID
+}
+
+func (q *Queries) LockMyAssignment(ctx context.Context, arg LockMyAssignmentParams) (Assignment, error) {
+	row := q.db.QueryRow(ctx, lockMyAssignment, arg.ID, arg.ContributorID)
+	var i Assignment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.ContributorID,
+		&i.Status,
+		&i.ReservedAt,
+		&i.ExpiresAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const markItemInProgress = `-- name: MarkItemInProgress :exec
+UPDATE items SET status = 'in_progress' WHERE id = $1 AND status = 'pending'
+`
+
+func (q *Queries) MarkItemInProgress(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markItemInProgress, id)
+	return err
+}
+
+const markSubmitted = `-- name: MarkSubmitted :exec
+UPDATE submissions SET status = 'submitted', submitted_at = now(), idempotency_key = $1,
+  current_revision = $2, time_on_task_ms = $3, qa_warnings = $4
+WHERE id = $5 AND status = 'draft'
+`
+
+type MarkSubmittedParams struct {
+	IdempotencyKey  *string
+	CurrentRevision int32
+	TimeOnTaskMs    int64
+	QaWarnings      []byte
+	ID              uuid.UUID
+}
+
+func (q *Queries) MarkSubmitted(ctx context.Context, arg MarkSubmittedParams) error {
+	_, err := q.db.Exec(ctx, markSubmitted,
+		arg.IdempotencyKey,
+		arg.CurrentRevision,
+		arg.TimeOnTaskMs,
+		arg.QaWarnings,
+		arg.ID,
+	)
+	return err
+}
+
+const pickGoldItem = `-- name: PickGoldItem :one
+SELECT g.id, g.item_id, g.org_id FROM gold_items g
+WHERE g.project_id = $1 AND g.status = 'active'
+  AND NOT EXISTS (SELECT 1 FROM assignments a WHERE a.item_id = g.item_id AND a.contributor_id = $2)
+  AND NOT EXISTS (SELECT 1 FROM content_reports r WHERE r.item_id = g.item_id AND r.status = 'open')
+ORDER BY g.usage_count, g.id
+LIMIT 1
+FOR UPDATE OF g SKIP LOCKED
+`
+
+type PickGoldItemParams struct {
+	ProjectID     uuid.UUID
+	ContributorID uuid.UUID
+}
+
+type PickGoldItemRow struct {
+	ID     uuid.UUID
+	ItemID uuid.UUID
+	OrgID  uuid.UUID
+}
+
+// Active gold this contributor has not seen; least used first (rotation).
+func (q *Queries) PickGoldItem(ctx context.Context, arg PickGoldItemParams) (PickGoldItemRow, error) {
+	row := q.db.QueryRow(ctx, pickGoldItem, arg.ProjectID, arg.ContributorID)
+	var i PickGoldItemRow
+	err := row.Scan(&i.ID, &i.ItemID, &i.OrgID)
+	return i, err
+}
+
+const pickRegularItem = `-- name: PickRegularItem :one
+SELECT i.id, i.org_id FROM items i
+WHERE i.project_id = $1 AND i.status IN ('pending', 'in_progress')
+  AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
+  AND NOT EXISTS (SELECT 1 FROM assignments a WHERE a.item_id = i.id AND a.contributor_id = $2)
+  AND NOT EXISTS (SELECT 1 FROM content_reports r WHERE r.item_id = i.id AND r.status = 'open')
+  AND i.submission_count + (SELECT count(*) FROM assignments a
+        WHERE a.item_id = i.id AND a.status = 'reserved' AND a.expires_at > now()) < $3::int
+ORDER BY i.submission_count DESC, i.created_at, i.id
+LIMIT 1
+FOR UPDATE OF i SKIP LOCKED
+`
+
+type PickRegularItemParams struct {
+	ProjectID     uuid.UUID
+	ContributorID uuid.UUID
+	OverlapK      int32
+}
+
+type PickRegularItemRow struct {
+	ID    uuid.UUID
+	OrgID uuid.UUID
+}
+
+// An item still short of k submissions (counting live reservations), never
+// seen by this contributor, not gold and not under an open content report.
+// Items closest to complete first, so whole items finish sooner.
+func (q *Queries) PickRegularItem(ctx context.Context, arg PickRegularItemParams) (PickRegularItemRow, error) {
+	row := q.db.QueryRow(ctx, pickRegularItem, arg.ProjectID, arg.ContributorID, arg.OverlapK)
+	var i PickRegularItemRow
+	err := row.Scan(&i.ID, &i.OrgID)
+	return i, err
+}
+
+const rejectItem = `-- name: RejectItem :exec
+UPDATE items SET status = 'rejected' WHERE id = $1 AND status <> 'final'
+`
+
+// Removed from the work queue for good (an actioned report).
+func (q *Queries) RejectItem(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, rejectItem, id)
+	return err
+}
+
+const reserveItem = `-- name: ReserveItem :one
+INSERT INTO assignments (org_id, project_id, item_id, contributor_id, expires_at)
+VALUES ($1, $2, $3, $4, now() + make_interval(mins => $5::int))
+RETURNING id, org_id, project_id, item_id, contributor_id, status, reserved_at, expires_at, completed_at, created_at, updated_at
+`
+
+type ReserveItemParams struct {
+	OrgID         uuid.UUID
+	ProjectID     uuid.UUID
+	ItemID        uuid.UUID
+	ContributorID uuid.UUID
+	Minutes       int32
+}
+
+// Expiry from the database clock, the same clock every check compares with.
+func (q *Queries) ReserveItem(ctx context.Context, arg ReserveItemParams) (Assignment, error) {
+	row := q.db.QueryRow(ctx, reserveItem,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.ItemID,
+		arg.ContributorID,
+		arg.Minutes,
+	)
+	var i Assignment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.ItemID,
+		&i.ContributorID,
+		&i.Status,
+		&i.ReservedAt,
+		&i.ExpiresAt,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const resolveContentReport = `-- name: ResolveContentReport :exec
+UPDATE content_reports SET status = $1, resolved_by = $2, resolved_at = now() WHERE id = $3
+`
+
+type ResolveContentReportParams struct {
+	Status     string
+	ResolvedBy *uuid.UUID
+	ID         uuid.UUID
+}
+
+func (q *Queries) ResolveContentReport(ctx context.Context, arg ResolveContentReportParams) error {
+	_, err := q.db.Exec(ctx, resolveContentReport, arg.Status, arg.ResolvedBy, arg.ID)
+	return err
+}
+
+const retireGoldForItem = `-- name: RetireGoldForItem :exec
+UPDATE gold_items SET status = 'retired', retired_at = now() WHERE item_id = $1 AND status = 'active'
+`
+
+func (q *Queries) RetireGoldForItem(ctx context.Context, itemID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, retireGoldForItem, itemID)
+	return err
+}
+
+const saveDraftProgress = `-- name: SaveDraftProgress :exec
+UPDATE submissions SET current_revision = $1, time_on_task_ms = $2
+WHERE id = $3 AND status = 'draft'
+`
+
+type SaveDraftProgressParams struct {
+	CurrentRevision int32
+	TimeOnTaskMs    int64
+	ID              uuid.UUID
+}
+
+func (q *Queries) SaveDraftProgress(ctx context.Context, arg SaveDraftProgressParams) error {
+	_, err := q.db.Exec(ctx, saveDraftProgress, arg.CurrentRevision, arg.TimeOnTaskMs, arg.ID)
+	return err
 }

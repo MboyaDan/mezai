@@ -62,6 +62,10 @@ type seeder struct {
 	hash string
 	sum  *Summary
 	now  time.Time
+	// Active and paused sample contributors, qualified on every sample test
+	// so the task engine has eligible people in development.
+	qualified []uuid.UUID
+	admin     uuid.UUID
 }
 
 func (s *seeder) run() error {
@@ -111,6 +115,7 @@ func (s *seeder) run() error {
 		}
 	}
 
+	s.admin = admin
 	if err := s.contributors(admin); err != nil {
 		return err
 	}
@@ -129,7 +134,7 @@ func (s *seeder) run() error {
 		skillKind, skillVal string
 	}{
 		{sample, "Customer message routing (Sample)", "classification", "live", labels, classificationItems, 3, 1000, "language", "sw"},
-		{sample, "Helpful answers comparison (Sample)", "pairwise", "live", rubric, pairwiseItems, 2, 4000, "language", "en"},
+		{sample, "Helpful answers comparison (Sample)", "pairwise", "live", rubric, pairwiseItems, 2, 4000, "task_type", "pairwise"},
 		{sample, "English to Swahili review (Sample)", "translation_review", "draft", trRubric, translationItems, 2, 3000, "language", "sw"},
 		{other, "Other org message routing (Sample)", "classification", "live", labels, classificationItems, 2, 1000, "language", "sw"},
 	}
@@ -237,6 +242,9 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 				return err
 			}
 		}
+		if status == "active" || status == "paused" {
+			s.qualified = append(s.qualified, cp.ID)
+		}
 		s.sum.Contributors++
 	}
 	return nil
@@ -264,8 +272,12 @@ func (s *seeder) project(org, admin uuid.UUID, name, taskType, status string, co
 		return err
 	}
 	s.sum.Projects++
+	var minProf *string
+	if skillKind == "language" {
+		minProf = ptr("fluent")
+	}
 	if err := s.q.AddProjectSkill(s.ctx, store.AddProjectSkillParams{
-		OrgID: org, ProjectID: p.ID, SkillKind: skillKind, SkillValue: skillVal, MinProficiency: ptr("fluent"),
+		OrgID: org, ProjectID: p.ID, SkillKind: skillKind, SkillValue: skillVal, MinProficiency: minProf,
 	}); err != nil {
 		return err
 	}
@@ -316,6 +328,21 @@ func (s *seeder) qualificationTests(labels, rubric, trRubric map[string]any) err
 			if err := s.q.AddQualificationQuestion(s.ctx, store.AddQualificationQuestionParams{
 				TestID: qt.ID, Position: int32(i + 1), Content: mustJSON(it.content), Expected: mustJSON(it.answer), Tolerance: []byte(`{}`),
 			}); err != nil {
+				return err
+			}
+		}
+		for _, c := range s.qualified {
+			a, err := s.q.CreateQualificationAttempt(s.ctx, store.CreateQualificationAttemptParams{TestID: qt.ID, ContributorID: c})
+			if err != nil {
+				return err
+			}
+			score, passed := 1.0, true
+			if err := s.q.ScoreAttempt(s.ctx, store.ScoreAttemptParams{ID: a.ID, Answers: []byte(`{}`), Results: []byte(`{}`),
+				Score: &score, Passed: &passed}); err != nil {
+				return err
+			}
+			note := "Sample data"
+			if _, err := s.q.DecideAttempt(s.ctx, store.DecideAttemptParams{ID: a.ID, Status: "approved", DecidedBy: &s.admin, DecisionNote: &note}); err != nil {
 				return err
 			}
 		}

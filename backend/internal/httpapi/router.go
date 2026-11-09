@@ -14,6 +14,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/projects"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
+	"github.com/MboyaDan/mezai/backend/internal/tasks"
 )
 
 // Checker is a dependency that /readyz must reach, such as the database or object storage.
@@ -150,6 +151,19 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/qualification/tests", Perm("contributor.approve", "gold.manage"), ch.listTests)
 		a.handle(http.MethodPost, "/qualification/tests", Perm("gold.manage"), ch.createTest)
 		a.handle(http.MethodPost, "/qualification/tests/:id/status", Perm("gold.manage"), ch.setTestStatus)
+
+		// Task engine (Stage 9a). One task at a time; content only while reserved.
+		th := &taskHandlers{svc: tasks.NewService(d.Auth.Pool), log: d.Log}
+		a.handle(http.MethodGet, "/me/projects", Perm("task.submit"), th.myProjects)
+		a.handle(http.MethodGet, "/me/projects/:id", Perm("task.submit"), th.myProject)
+		a.handle(http.MethodPost, "/me/projects/:id/next", Perm("task.submit"), th.next)
+		a.handle(http.MethodGet, "/me/tasks/:id", Perm("task.submit"), th.task)
+		a.handle(http.MethodPut, "/me/tasks/:id/draft", Perm("task.submit"), th.saveDraft)
+		a.handle(http.MethodPost, "/me/tasks/:id/submit", Perm("task.submit"), th.submit)
+		a.handle(http.MethodPost, "/me/tasks/:id/skip", Perm("task.submit"), th.skip)
+		a.handle(http.MethodPost, "/me/tasks/:id/report", Perm("task.submit"), th.report)
+		a.handle(http.MethodGet, "/content-reports", Perm("project.manage"), th.listReports)
+		a.handle(http.MethodPost, "/content-reports/:id/resolve", Perm("project.manage"), th.resolveReport)
 
 		// Projects, imports, gold and client project requests (Stage 8).
 		ph := &projectHandlers{log: d.Log, svc: projects.NewService(d.Auth.Pool, d.Auth.Files,

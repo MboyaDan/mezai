@@ -229,7 +229,23 @@ func TestContributorSeesOnlyReservedItems(t *testing.T) {
 				plain = append(plain, it)
 			}
 		}
-		reserved, expired = plain[0], plain[1]
+		_ = plain
+		// One reservation per contributor and project (D-094), so the three
+		// cases sit in three live projects: gold here, a plain item in the
+		// other organisation's project, and a lapsed one in the pairwise project.
+		pick := func(sql string, args ...any) store.Item {
+			var id uuid.UUID
+			must(t, tx.QueryRow(ctx, sql, args...).Scan(&id))
+			var it store.Item
+			must(t, tx.QueryRow(ctx, `SELECT id, org_id, project_id FROM items WHERE id = $1`, id).Scan(&it.ID, &it.OrgID, &it.ProjectID))
+			return it
+		}
+		reserved = pick(`SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
+			WHERE p.org_id <> $1 AND p.task_type = 'classification' AND p.status = 'live'
+			  AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id) ORDER BY i.id LIMIT 1`, f.sampleOrg)
+		expired = pick(`SELECT i.id FROM items i JOIN projects p ON p.id = i.project_id
+			WHERE p.org_id = $1 AND p.task_type = 'pairwise' AND p.status = 'live'
+			  AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id) ORDER BY i.id LIMIT 1`, f.sampleOrg)
 		for _, it := range []store.Item{reserved, gold} {
 			_, err := q.CreateAssignment(ctx, store.CreateAssignmentParams{
 				OrgID: it.OrgID, ProjectID: it.ProjectID, ItemID: it.ID, ContributorID: contributor,
