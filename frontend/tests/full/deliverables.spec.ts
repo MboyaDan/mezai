@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, request as pwRequest, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
 
 // Stage 11b through the real UI: two contributors agree on every item, so the
@@ -49,17 +49,6 @@ async function signIn(page: Page, who: string, home: RegExp) {
   await expect(page).toHaveURL(home);
 }
 
-async function signOut(page: Page) {
-  const menu = page.getByRole("button", { name: /Account menu/ });
-  if (await menu.isVisible()) {
-    await menu.click();
-    await page.getByRole("button", { name: "Sign out" }).click();
-  } else {
-    await page.getByRole("button", { name: "Sign out" }).first().click();
-  }
-  await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
-}
-
 /** A contributor answers every task on the project with one label, through the API. */
 async function workAs(browser: Browser, who: string, project: string, label: string) {
   const ctx = await browser.newContext({ baseURL: base });
@@ -94,13 +83,11 @@ async function workAs(browser: Browser, who: string, project: string, label: str
 test("11b: Ops exports and publishes a deliverable; the client downloads it", async ({ page, browser }) => {
   test.setTimeout(180_000);
 
-  const api = await pwRequest.newContext({ baseURL: base });
-  const login = await api.post("/api/v1/auth/login", {
-    headers: { Origin: base },
-    data: { email: "ops@sample.invalid", password: seedPassword },
-  });
-  expect(login.ok(), await login.text()).toBeTruthy();
-  const { csrf_token: csrf } = await login.json();
+  // One Ops session drives the setup and the screens; the client has its own
+  // context. Each signs in once, so the per-email login limit is never near.
+  await signIn(page, "ops@sample.invalid", /\/w$/);
+  const api = page.request;
+  const { csrf_token: csrf } = await (await api.get("/api/v1/auth/me")).json();
   const h = { "X-CSRF-Token": csrf, Origin: base };
   const orgs = await (await api.get("/api/v1/organisations")).json();
   const org = orgs.organisations.find((o: { slug: string }) => o.slug === "sample-client-ltd");
@@ -148,14 +135,12 @@ test("11b: Ops exports and publishes a deliverable; the client downloads it", as
     const r = await api.post(`/api/v1/projects/${project}/status`, { headers: h, data: { action } });
     expect(r.ok(), await r.text()).toBeTruthy();
   }
-  await api.dispose();
 
   // Both agree on both items: final by consensus.
   await workAs(browser, "contributor001@sample.invalid", project, "Billing");
   await workAs(browser, "contributor002@sample.invalid", project, "Billing");
 
   // Ops exports version 1 and checks the CSV.
-  await signIn(page, "ops@sample.invalid", /\/w$/);
   await page.goto(`/w/projects/${project}`);
   await page.getByRole("link", { name: "Deliverables" }).click();
   await expect(page.getByText("Nothing exported yet").filter({ visible: true })).toBeVisible();
@@ -172,35 +157,32 @@ test("11b: Ops exports and publishes a deliverable; the client downloads it", as
   expect(csvText).toContain(`${run}-1`);
   await axe(page, "deliverables (Ops)");
   await shot(page, "deliverables-ops");
-  await signOut(page);
 
   // Not yet published: the client sees nothing.
-  await signIn(page, "client.admin@sample.invalid", /\/w/);
-  await page.goto(`/w/projects/${project}/deliverables`);
-  await expect(page.getByText("No deliverables yet").filter({ visible: true })).toBeVisible();
-  await signOut(page);
+  const clientCtx = await browser.newContext({ baseURL: base, viewport: { width: 1440, height: 900 } });
+  const client = await clientCtx.newPage();
+  await signIn(client, "client.admin@sample.invalid", /\/w/);
+  await client.goto(`/w/projects/${project}/deliverables`);
+  await expect(client.getByText("No deliverables yet").filter({ visible: true })).toBeVisible();
 
   // Ops publishes after confirming.
-  await signIn(page, "ops@sample.invalid", /\/w$/);
-  await page.goto(`/w/projects/${project}/deliverables`);
   await page.getByRole("button", { name: "Publish to client" }).click();
   await expect(page.getByRole("dialog", { name: "Publish version 1?" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByText("Published", { exact: true })).toBeVisible();
-  await signOut(page);
+  await expect(page.getByText("Published", { exact: true }).filter({ visible: true })).toBeVisible();
 
   // The client downloads the manifest.
-  await signIn(page, "client.admin@sample.invalid", /\/w/);
-  await page.goto(`/w/projects/${project}/deliverables`);
-  await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export final items" })).toHaveCount(0);
-  const manDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download Manifest (JSON)" }).click();
+  await client.reload();
+  await expect(client.getByRole("heading", { name: "Version 1" })).toBeVisible();
+  await expect(client.getByRole("button", { name: "Export final items" })).toHaveCount(0);
+  const manDownload = client.waitForEvent("download");
+  await client.getByRole("button", { name: "Download Manifest (JSON)" }).click();
   const man = JSON.parse(readFileSync(await (await manDownload).path(), "utf8"));
   expect(man.schema).toBe("mezai.delivery-manifest");
   expect(man.items.delivered).toBe(2);
   expect(man.items.complete).toBe(true);
   expect(man.files.map((f: { format: string }) => f.format)).toEqual(["jsonl", "csv"]);
-  await axe(page, "deliverables (client)");
-  await shot(page, "deliverables-client");
+  await axe(client, "deliverables (client)");
+  await shot(client, "deliverables-client");
+  await clientCtx.close();
 });
