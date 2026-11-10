@@ -143,6 +143,11 @@ function SubNav({ id }: { id: string }) {
     { href: base, label: "Overview", exact: true, show: true },
     { href: `${base}/items`, label: "Items", show: can("item.import") },
     { href: `${base}/gold`, label: "Gold", show: can("gold.manage") },
+    {
+      href: `${base}/deliverables`,
+      label: "Deliverables",
+      show: can("deliverable.publish", "org.deliverable.download"),
+    },
     { href: `${base}/settings`, label: "Settings", show: can("project.manage") },
   ].filter((t) => t.show);
   if (tabs.length < 2) return null;
