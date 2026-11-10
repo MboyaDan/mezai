@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import { Button, ButtonLink, IconButton } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Checkbox, ChoiceGroup } from "@/components/ui/choice";
 import { Alert, Card } from "@/components/ui/display";
 import { Field } from "@/components/ui/field";
@@ -44,6 +45,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 export function ProfileForm() {
   const { profile, setProfile } = useProfile();
   const toast = useToast();
+  const router = useRouter();
   const [name, setName] = useState(profile.display_name);
   const [country, setCountry] = useState(profile.country ?? "KE");
   const [city, setCity] = useState(profile.city ?? "");
@@ -68,7 +70,6 @@ export function ProfileForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
-  const [becameQualifying, setBecameQualifying] = useState(false);
   const removed = profile.status === "removed";
 
   function validate(): Errors {
@@ -131,7 +132,12 @@ export function ProfileForm() {
       setPhone("");
       setPhone2("");
       setNationalId("");
-      setBecameQualifying(before === "applied" && next.status === "qualifying");
+      // The first time the profile is complete, the application is in:
+      // show that as its own moment, not a toast at the bottom of a long form.
+      if (before === "applied" && next.status === "qualifying") {
+        router.push("/c/profile/complete");
+        return;
+      }
       toast({ tone: "success", title: "Profile saved" });
     } catch (err) {
       const a = err instanceof ApiError ? err : new ApiError(0, "network");
@@ -156,19 +162,6 @@ export function ProfileForm() {
         </p>
       </header>
 
-      {becameQualifying && (
-        <Alert
-          tone="success"
-          title="Application complete"
-          action={
-            <ButtonLink href="/c" arrow>
-              Back to dashboard
-            </ButtonLink>
-          }
-        >
-          A person on the MezAI team reads it next. Qualification tests open once you are shortlisted.
-        </Alert>
-      )}
       {removed && <Alert tone="danger" title="This account is closed, so the profile cannot be changed." />}
       {formError && <Alert tone="danger" title={errorMessage(formError)} />}
 
