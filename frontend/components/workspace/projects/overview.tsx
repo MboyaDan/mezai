@@ -12,6 +12,7 @@ import { shortDate } from "../contributors";
 import { useCan } from "../workspace";
 import { useProject } from "./frame";
 import { ImportHistory } from "./imports";
+import { Reviewers } from "./reviewers";
 
 export function skillText(s: ProjectSkill): string {
   if (s.kind === "language")
@@ -135,6 +136,7 @@ function Files() {
 
 export function ProjectOverview() {
   const { project: p } = useProject();
+  const can = useCan();
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="grid content-start gap-6 lg:col-span-2">
@@ -159,6 +161,7 @@ export function ProjectOverview() {
       <div className="grid content-start gap-6">
         <Readiness />
         <Facts />
+        {can("project.manage") && <Reviewers />}
       </div>
     </div>
   );

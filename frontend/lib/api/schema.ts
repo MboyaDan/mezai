@@ -785,6 +785,101 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{id}/reviewers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The project's assigned reviewers and the staff who could be assigned (`project.manage`). */
+    get: operations["listProjectReviewers"];
+    put?: never;
+    /** Assign a reviewer to the project (`project.manage`). Only staff holding `review.decide` can be assigned. */
+    post: operations["addProjectReviewer"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/reviewers/{userId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Remove a reviewer from the project (`project.manage`). */
+    delete: operations["removeProjectReviewer"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/review/items": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Items waiting for review, oldest first (`review.read`).
+     * @description Reviewers see items from projects Ops assigned them to; people with `review.adjudicate` see every project (D-111). Gold items never appear: they are checked automatically.
+     */
+    get: operations["listReviewQueue"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/review/items/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One item with every answer side by side, the consensus and any decision (`review.read`).
+     * @description Contributors appear by code only. Items on projects the caller may not review are not found.
+     */
+    get: operations["getReviewItem"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/review/items/{id}/decision": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Decide an item in review (`review.decide`; `write_final` and `reject_item` also need `review.adjudicate`).
+     * @description One transaction: the item becomes final (or rejected), every open answer is accepted and earns unless listed in `rejections` (the reason is shown to the contributor), agreement with the final answer is recorded and trust scores are recalculated. A retry with the same `Idempotency-Key` returns the first result and writes nothing; a second decision on a decided item is refused (409 `already_decided`). Feedback needs `feedback.write`.
+     */
+    post: operations["decideReviewItem"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/content-reports": {
     parameters: {
       query?: never;
@@ -1702,6 +1797,135 @@ export interface components {
         /** Format: date-time */
         window_end: string;
       }[];
+    };
+    /** @enum {string} */
+    RouteReason: "no_majority" | "spread" | "flagged" | "audit_sample";
+    Reviewer: {
+      /** Format: uuid */
+      id: string;
+      display_name: string;
+      email: string;
+    };
+    ProjectReviewers: {
+      assigned: components["schemas"]["Reviewer"][];
+      candidates: components["schemas"]["Reviewer"][];
+    };
+    ReviewQueue: {
+      items: {
+        /** Format: uuid */
+        item_id: string;
+        external_id: string | null;
+        /** Format: uuid */
+        project_id: string;
+        project_name: string;
+        org_name: string;
+        task_type: string;
+        reason: components["schemas"]["RouteReason"];
+        agreement: number | null;
+        spread: number | null;
+        submissions: number;
+        /** Format: date-time */
+        waiting_since: string;
+      }[];
+      projects: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        waiting: number;
+      }[];
+    };
+    ReviewItem: {
+      /** Format: uuid */
+      id: string;
+      external_id: string | null;
+      status: string;
+      /** Format: uuid */
+      project_id: string;
+      project_name: string;
+      task_type: string;
+      config: {
+        [key: string]: unknown;
+      };
+      instructions_md: string;
+      content: {
+        [key: string]: unknown;
+      };
+      can_adjudicate: boolean;
+      consensus: null | {
+        /** @enum {string} */
+        method: "majority" | "mean";
+        result: {
+          [key: string]: unknown;
+        };
+        /** @description There is a consensus answer to accept */
+        complete: boolean;
+        agreement: number | null;
+        spread: number | null;
+        reason: components["schemas"]["RouteReason"] | null;
+      };
+      submissions: {
+        /** Format: uuid */
+        id: string;
+        /** @description Contributor code */
+        contributor: string;
+        /** @enum {string} */
+        status: "submitted" | "accepted" | "rejected";
+        /** Format: date-time */
+        submitted_at: string | null;
+        time_on_task_ms: number;
+        answer: {
+          [key: string]: unknown;
+        };
+        warnings: components["schemas"]["QAIssue"][];
+        rejection_reason: string | null;
+        agrees_with_final: boolean | null;
+      }[];
+      decision: null | {
+        /** Format: uuid */
+        id: string;
+        decision: components["schemas"]["ReviewDecisionKind"];
+        /** Format: uuid */
+        chosen_submission_id: string | null;
+        final_answer: {
+          [key: string]: unknown;
+        } | null;
+        reason: string | null;
+        reviewer: string;
+        /** Format: date-time */
+        created_at: string;
+      };
+    };
+    /** @enum {string} */
+    ReviewDecisionKind: "accept_consensus" | "choose_submission" | "write_final" | "reject_item";
+    SubmissionNote: {
+      /** Format: uuid */
+      submission_id: string;
+      text: string;
+    };
+    DecisionInput: {
+      decision: components["schemas"]["ReviewDecisionKind"];
+      /**
+       * Format: uuid
+       * @description Required for choose_submission
+       */
+      submission_id?: string | null;
+      /** @description Required for write_final; validated like a submission */
+      final_answer?: {
+        [key: string]: unknown;
+      };
+      /** @description Required (10 or more characters) for reject_item */
+      reason?: string;
+      /** @description Answers that will not be accepted (no earning); the reason (10 or more characters) is shown to the contributor */
+      rejections?: components["schemas"]["SubmissionNote"][];
+      /** @description Notes to contributors (`feedback.write`) */
+      feedback?: components["schemas"]["SubmissionNote"][];
+    };
+    DecisionResult: {
+      /** Format: uuid */
+      review_id: string;
+      decision: components["schemas"]["ReviewDecisionKind"];
+      /** @enum {string} */
+      item_status: "final" | "rejected";
     };
     ContentReport: {
       /** Format: uuid */
@@ -3525,6 +3749,168 @@ export interface operations {
         };
       };
       404: components["responses"]["Error"];
+    };
+  };
+  listProjectReviewers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reviewers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectReviewers"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  addProjectReviewer: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** Format: uuid */
+          user_id: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Assigned */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  removeProjectReviewer: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  listReviewQueue: {
+    parameters: {
+      query?: {
+        project_id?: string;
+        reason?: components["schemas"]["RouteReason"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Queue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewQueue"];
+        };
+      };
+      403: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  getReviewItem: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Item */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReviewItem"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  decideReviewItem: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+        "Idempotency-Key": string;
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DecisionInput"];
+      };
+    };
+    responses: {
+      /** @description Decided */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DecisionResult"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
     };
   };
   listContentReports: {

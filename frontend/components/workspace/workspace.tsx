@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, type ReactNode } from "react";
-import { Building2, Flag, FolderKanban, Inbox, LayoutGrid, Users } from "lucide-react";
+import { Building2, ClipboardCheck, Flag, FolderKanban, Inbox, LayoutGrid, Users } from "lucide-react";
 import { initialsOf, SignOutButton } from "@/components/shells/account-menu";
 import { WorkspaceShell, type WorkspaceNavItem } from "@/components/shells/workspace-shell";
 import { brand } from "@/lib/brand";
@@ -29,6 +29,7 @@ const items: Array<WorkspaceNavItem & { perms?: string[] }> = [
     icon: Inbox,
     perms: ["project.manage", "org.project.request", "org.project.read"],
   },
+  { href: "/w/review", label: "Review", icon: ClipboardCheck, perms: ["review.read"] },
   {
     href: "/w/contributors",
     label: "Contributors",

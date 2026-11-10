@@ -35,6 +35,15 @@ export type Experience = Schemas["Experience"];
 export type Application = Schemas["Application"];
 export type Interview = Schemas["Interview"];
 export type ScreeningStatus = Schemas["ScreeningStatus"];
+export type RouteReason = Schemas["RouteReason"];
+export type ReviewQueue = Schemas["ReviewQueue"];
+export type ReviewQueueItem = ReviewQueue["items"][number];
+export type ReviewItem = Schemas["ReviewItem"];
+export type ReviewSubmission = ReviewItem["submissions"][number];
+export type ReviewDecisionKind = Schemas["ReviewDecisionKind"];
+export type DecisionInput = Schemas["DecisionInput"];
+export type DecisionResult = Schemas["DecisionResult"];
+export type ProjectReviewers = Schemas["ProjectReviewers"];
 
 /** An error answer from the API, or a network failure (status 0). */
 export class ApiError extends Error {
