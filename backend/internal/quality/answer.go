@@ -131,6 +131,9 @@ func Parse(taskType string, cfg Config, raw json.RawMessage) (Answer, error) {
 // expected answer (everything except writing samples).
 func AutoScored(taskType string) bool { return taskType != Writing }
 
+// MultiLabelJaccard is the similarity a multi-label gold answer needs (brief 8.1).
+const MultiLabelJaccard = 0.8
+
 // Tolerance loosens a match. Translation scores default to ±1 point.
 type Tolerance struct {
 	Adequacy *int `json:"adequacy,omitempty"`
@@ -148,12 +151,33 @@ func Matches(taskType string, expected, tolerance json.RawMessage, a Answer) (bo
 	}
 	switch taskType {
 	case Classification:
-		x, y := slices.Clone(a.Labels), slices.Clone(want.Labels)
-		slices.Sort(x)
-		slices.Sort(y)
-		return len(y) > 0 && slices.Equal(x, y), nil
+		if len(want.Labels) == 0 {
+			return false, nil
+		}
+		// Brief 8.1: exact match for a single label; Jaccard of at least 0.8
+		// for multi-label answers.
+		if len(want.Labels) == 1 && len(a.Labels) <= 1 {
+			return len(a.Labels) == 1 && a.Labels[0] == want.Labels[0], nil
+		}
+		return Jaccard(a.Labels, want.Labels) >= MultiLabelJaccard-1e-9, nil
 	case Pairwise:
-		return want.Preference != "" && a.Preference == want.Preference, nil
+		// Brief 8.1: the preference, plus each expected rubric score within
+		// 1 point (expected answers may give the preference only).
+		if want.Preference == "" || a.Preference != want.Preference {
+			return false, nil
+		}
+		for side, exp := range map[string]map[string]int{"a": want.ScoresA, "b": want.ScoresB} {
+			got := a.ScoresA
+			if side == "b" {
+				got = a.ScoresB
+			}
+			for c, v := range exp {
+				if g, ok := got[c]; !ok || math.Abs(float64(g-v)) > 1 {
+					return false, nil
+				}
+			}
+		}
+		return true, nil
 	case TranslationReview:
 		tol := Tolerance{}
 		if len(tolerance) > 0 {
