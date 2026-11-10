@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 10b (quality reporting and the job queue). Branch `stage-10b-quality-reporting`, PR open. 10a merged as #37.
-- **Next stage:** 11 (review and adjudication). It must set `agrees_with_final` for reviewed items, set submissions to accepted or rejected (the trust score's review-acceptance input), recompute trust after each decision, and create earnings on acceptance.
+- **Last stage:** 11a (review, adjudication, earnings on acceptance, "Application received" screen). Branch `stage-11a-review`, PR open. 10b merged as #38.
+- **Next stage:** 11b (deliverables): export final answers as JSONL and CSV with the brief 8.5 manifest (counts total/consensus/adjudicated/rejected, gold accuracy, agreement, review rate, contributor IDs only, checksum per file), stored in object storage as a `deliverables` row, publish (`deliverable.publish`), signed download with a `deliverable_downloads` audit row. Rejected items (D-110, A-066) and gold items are left out. Finishes AC-09.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -22,7 +22,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Tokens | `frontend/app/globals.css` |
 | Components and shells | `frontend/components/{ui,brand,shells}/`, gallery at `/design` (dev) |
 | Charts | `frontend/components/charts/`, scale helper in `frontend/lib/charts/` |
-| Motion variants, gate, Reveal | `frontend/motion/` (provider in the root layout) |
+| Motion variants, gate, Reveal | `frontend/motion/` (`MotionProvider` only in `/design` and screens that animate, e.g. `application-received.tsx`; D-050) |
 | Schema and RLS | `backend/migrations/` (00007 has every policy and grant) |
 | Queries and generated code | `backend/queries/*.sql` → `backend/internal/store/` (`make sqlc`) |
 | Scoped transactions | `backend/internal/db/scope.go` (`db.InScope`, `db.Staff/Org/Contributor`) |
@@ -54,6 +54,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Screening funnel (application, CV, screening, interview) | `backend/internal/contributors/screening.go`; Ops panels `frontend/components/workspace/screening-panels.tsx`; rubric mirror `frontend/lib/screening.ts` |
 | Task workspace and reports screens | `frontend/components/contributor/{work,task-workspace}.tsx`, helpers `frontend/lib/tasks.ts`, Ops `frontend/components/workspace/reports.tsx` |
 | Background jobs (daily, SKIP LOCKED) | `backend/internal/jobs/`; quality jobs and reports in `backend/internal/tasks/reporting.go` |
+| Review and adjudication (queue, decisions, reviewers, earnings) | `backend/internal/tasks/review.go`, `queries/review.sql`, handlers in `httpapi/tasks.go`; screens `frontend/components/workspace/review.tsx`, `projects/reviewers.tsx`, helpers `frontend/lib/review.ts` |
 | Quality engine (gold scoring, consensus, trust, auto-pause) and maths | `backend/internal/tasks/quality.go`, `backend/internal/quality/agreement.go` |
 | Task engine (eligibility, assignment, submit, reports) and QA checks | `backend/internal/tasks/`, handlers `backend/internal/httpapi/tasks.go`, checks `backend/internal/quality/qa.go` |
 | National ID fingerprint, identity checks | `backend/internal/identity/`, `backend/internal/contributors/identity.go`; Ops panel `frontend/components/workspace/identity-panel.tsx` |
@@ -95,7 +96,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 7d-2 | Merged | #35 | Migration 00014 (`core` skill kind, one active core check, per-question `task_type`/`config`, `writing_rating`). Core check content in `corecheck.go` and `POST /qualification/core-check` (draft); writing answers (60–250 words) rated by Ops; core first, 30-day core retake; activation on the core check; skills valid 12 months. Screens: core check first on the tests list, mixed question types, writing input, Ops writing rating. |
 | 9c | Merged | #36 | Concurrency test with 60 contributors found two races (items over k; same-key submits refused) and fixed them: recount under the item lock, lock the task before the key lookup. Own-only expiry plus a background sweep; 5 s lock and 30 s statement timeouts answered as 503 busy; per-account limits on task routes; pool of 20 connections. About 350 next-and-submit cycles a second locally. |
 | 10a | Merged | #37 | `quality/agreement.go` (Cohen, Fleiss, percent, MAD, majority, Jaccard, spread, bands, trust formula) with textbook tests; brief 8.1 gold rules. Migration 00015 (`agrees_with_final`, one consensus per item, probation settings). On submit: gold scored, consensus or review routing, agreement per rater, trust recalculated, auto-pause below 0.70 with Ops email; probation gold rate. Profile shows the latest trust score. |
-| 10b | PR open | #38 | `internal/jobs` runner on the Postgres `jobs` table (daily jobs per Nairobi date, SKIP LOCKED, backoff). Nightly agreement snapshots (percent, Cohen or Fleiss kappa per project and label, rubric MAD); daily gold-miss feedback that never names items; per-project warm-up gold rate; `GET /projects/{id}/quality` (aggregates, kappa bands) and Ops recompute; `/me/feedback`. Migration 00016 (warm-up settings, indexes). |
+| 10b | Merged | #38 | `internal/jobs` runner on the Postgres `jobs` table (daily jobs per Nairobi date, SKIP LOCKED, backoff). Nightly agreement snapshots (percent, Cohen or Fleiss kappa per project and label, rubric MAD); daily gold-miss feedback that never names items; per-project warm-up gold rate; `GET /projects/{id}/quality` (aggregates, kappa bands) and Ops recompute; `/me/feedback`. Migration 00016 (warm-up settings, indexes). |
+| 11a | PR open | (link after push) | Migration 00017 (`decision_source`, `review_id`, one review per item, `project_reviewers`; Stage 10 consensus items made final and paid). Consensus items become final and every answer earns; gold work accepted in the daily batch (D-110). Review queue and item API, decisions (accept consensus, choose, write final, reject item) with idempotency, per-answer rejection with reason shown to the contributor, feedback, agreement and trust; reviewer assignment per project (D-111, D-112). Screens `/w/review`, `/w/review/[id]`, reviewers panel; `/c/profile/complete` after the first complete profile (D-113). Fixed: gold feedback named the date and project in swapped places. |
 
 ## Notes for the next session
 
@@ -110,7 +112,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Local databases seeded before 7a have empty qualification test `config`: re-seed a fresh volume, or run the UPDATE in the 7b PR notes.
 - Done in 9b: task screen uses `/v1/me/projects`, `/next`, `/me/tasks/{id}` (+ `/draft`, `/submit` with `Idempotency-Key`, `/skip`, `/report`); QA settings come with the project (`qa_checks`, `min_rationale_chars`) for client-side hints; `qa_blocked` answers list `issues`. Ops content-report screen also belongs to 9b (API: `/v1/content-reports`).
 - Local databases seeded before 7c/9a: run the fix-up SQL in the 9b PR notes (verified identities, sample qualifications), or re-seed a fresh volume. Contributors who accepted 0.1 legal documents see the 0.2 consent prompt first.
-- Stage 11: AC-07's "one earning" half (earning on acceptance, same idempotency key). Stage 10: gold scoring reads gold-ness from `gold_items.item_id`; submissions on gold items stay out of consensus. Stage 14: require `mpesa_name_checked_at` before a contributor's first payout (D-092). Stage 17: decide whether deletion keeps the ID fingerprint (A-053).
+- Stage 10: gold scoring reads gold-ness from `gold_items.item_id`; submissions on gold items stay out of consensus. Stage 14: require `mpesa_name_checked_at` before a contributor's first payout (D-092). Stage 17: decide whether deletion keeps the ID fingerprint (A-053).
 - Sign-up allows 10 an hour per IP: repeated full-stack runs hit it; `docker compose restart api` resets it locally.
 - Contributor endpoints call `contributorOf(p)`: Super Admin holds every permission but has no contributor profile.
 - Qualification answers use the task templates' submission shapes; reuse `quality.Parse` and `quality.Matches` for gold in Stages 9 and 10.
@@ -135,3 +137,5 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Next 16 keeps the previous route's DOM hidden: in Playwright use `getByRole`, or add `.filter({ visible: true })` to `getByText` / `getByLabel`.
 - Local full-stack reruns hit the login limits (20/min per IP, 10 per 15 min per email). `docker compose restart api` resets them (in memory).
 - `npm run dev` prints "Could not validate instant navigation" for client-loaded workspace routes (also `/w` from 7b). Dev-only; `npm run build` passes and the full-stack tests run against it.
+- Earnings: `AccrueEarning` (one per accepted submission). Contributors are paid for every accepted answer (D-110); Stage 12 shows pending (submitted, not yet decided) vs approved (ledger accruals) vs paid.
+- Review radio groups need per-instance names (`useId`): Next keeps the previous item mounted while hidden.
