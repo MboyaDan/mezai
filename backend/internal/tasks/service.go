@@ -59,11 +59,24 @@ func (e *BlockedError) Error() string { return "tasks: blocked by QA checks" }
 // Service is the task engine.
 type Service struct {
 	pool *db.Pool
-	// rnd decides gold mixing; tests seed it so the gold-rate test is exact.
-	rnd func() float64
+	// rnd decides gold mixing and audit sampling; tests seed it.
+	rnd  func() float64
+	opts Options
 }
 
-func NewService(pool *db.Pool) *Service { return &Service{pool: pool, rnd: rand.Float64} }
+// Options: where automatic-pause notices go (brief 8.4).
+type Options struct {
+	NotifyTo  string // Ops inbox
+	AppOrigin string // for links in emails
+}
+
+func NewService(pool *db.Pool, opts ...Options) *Service {
+	s := &Service{pool: pool, rnd: rand.Float64}
+	if len(opts) > 0 {
+		s.opts = opts[0]
+	}
+	return s
+}
 
 // WithRand returns a copy that draws gold decisions from r (tests).
 func (s *Service) WithRand(r func() float64) *Service {

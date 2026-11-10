@@ -16,7 +16,8 @@ ORDER BY p.published_at DESC NULLS LAST, p.id;
 
 -- name: GetProjectForWork :one
 SELECT p.id, p.org_id, p.name, p.status, p.task_type, p.instructions_md, p.config, p.overlap_k, p.gold_rate,
-  p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars
+  p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars,
+  p.review_spread_threshold, p.audit_sample_rate
 FROM projects p WHERE p.id = $1;
 
 -- name: ListSkillsForProjects :many
@@ -136,11 +137,12 @@ SELECT * FROM submissions WHERE contributor_id = @contributor_id AND idempotency
 UPDATE assignments SET status = @status, completed_at = now()
 WHERE id = @id AND status = 'reserved';
 
--- name: CountItemSubmission :exec
+-- name: CountItemSubmission :one
 -- k submissions make a regular item ready for consensus; gold items only count.
 UPDATE items SET submission_count = submission_count + 1,
   status = CASE WHEN NOT @is_gold::bool AND submission_count + 1 >= @overlap_k::int THEN 'awaiting_consensus' ELSE status END
-WHERE id = @id;
+WHERE id = @id
+RETURNING status;
 
 -- name: AddSkip :exec
 INSERT INTO skips (org_id, assignment_id, contributor_id, reason, note) VALUES (@org_id, @assignment_id, @contributor_id, @reason, @note);

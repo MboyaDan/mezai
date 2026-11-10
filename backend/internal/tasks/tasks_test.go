@@ -108,6 +108,14 @@ func TestGoldRateAndOverlap(t *testing.T) {
 	}
 	const k, rate, total = 5, 0.10, 1000
 	project := bigProject(t, pool, k, 250, 40, rate)
+	// AC-06 measures the project's configured rate: turn probation (a higher
+	// rate for new contributors, TestProbation) off here.
+	if err := pool.InScope(ctx, db.Staff(), func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE settings SET value = '1' WHERE key = 'trust.probation_gold_multiplier'`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	ws := workers(t, pool)
 	svc := tasks.NewService(pool).WithRand(rand.New(rand.NewPCG(7, 11)).Float64)
 
@@ -160,8 +168,8 @@ func TestGoldRateAndOverlap(t *testing.T) {
 			AND (SELECT count(*) FROM submissions s WHERE s.item_id = i.id AND s.status = 'submitted') > $2`, project, k).Scan(&overK); err != nil {
 			return err
 		}
-		// Every regular item that reached awaiting_consensus has exactly k distinct contributors.
-		return tx.QueryRow(ctx, `SELECT count(*) FROM items i WHERE i.project_id = $1 AND i.status = 'awaiting_consensus'
+		// Every regular item that reached consensus or review has exactly k distinct contributors.
+		return tx.QueryRow(ctx, `SELECT count(*) FROM items i WHERE i.project_id = $1 AND i.status IN ('consensus', 'in_review')
 			AND (SELECT count(DISTINCT s.contributor_id) FROM submissions s WHERE s.item_id = i.id) <> $2`, project, k).Scan(&notK)
 	})
 	if dupes != 0 || overK != 0 || notK != 0 {

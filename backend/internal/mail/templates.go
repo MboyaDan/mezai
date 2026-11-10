@@ -16,6 +16,7 @@ const (
 	TemplateInvitation     = "invitation"
 	TemplateEnquiry        = "enquiry_received"
 	TemplateProjectRequest = "project_request_received"
+	TemplateTrustPause     = "trust_pause"
 )
 
 // Plain text for now; Stage 16 adds HTML versions and preferences.
@@ -73,6 +74,20 @@ Message:
 
 Reference: {{.ID}}
 It is saved in the enquiries inbox with status "new".
+`,
+	},
+	// To the ops inbox when a contributor is paused automatically (brief 8.4).
+	TemplateTrustPause: {
+		subject: "Contributor {{.Code}} paused automatically",
+		body: `{{.Code}} was paused from new tasks because their trust score fell below the floor.
+
+Trust score:        {{.Score}} (floor {{.Floor}})
+Gold accuracy:      {{.Gold}}
+Agreement:          {{.Agreement}}
+Review acceptance:  {{.Review}}
+
+Review their work and reinstate them with a note if the pause is not deserved:
+{{.Link}}
 `,
 	},
 	TemplateProjectRequest: {

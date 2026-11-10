@@ -77,6 +77,7 @@ type Profile struct {
 	ScreeningStatus     string          `json:"screening_status"`
 	ScreeningNote       *string         `json:"screening_note"` // shown for waitlist and decline
 	InterviewPassed     bool            `json:"interview_passed"`
+	Trust               *Trust          `json:"trust"` // null until the first gold result or agreement
 	Languages           []Language      `json:"languages"`
 	Domains             []string        `json:"domains"`
 	Missing             []string        `json:"missing"` // fields still needed before qualification
@@ -84,6 +85,19 @@ type Profile struct {
 	ConsentRequired     []string        `json:"consent_required"` // documents to accept (again)
 	Qualifications      []Qualification `json:"qualifications"`
 	CreatedAt           time.Time       `json:"created_at"`
+}
+
+// Trust is the latest trust score and its inputs (brief 8.4). Building:
+// fewer gold results than the minimum, so the score is not yet used to pause.
+type Trust struct {
+	Score            *float64  `json:"score"`
+	GoldAccuracy     *float64  `json:"gold_accuracy"`
+	Agreement        *float64  `json:"agreement"`
+	ReviewAcceptance *float64  `json:"review_acceptance"`
+	GoldResults      int32     `json:"gold_results"` // all time
+	MinGoldResults   int32     `json:"min_gold_results"`
+	Building         bool      `json:"building"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // ProfileInput replaces the editable profile. Empty M-Pesa fields keep the
@@ -147,6 +161,9 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 	}
 	_ = json.Unmarshal(cp.Experience, &out.Experience)
 	if out.InterviewPassed, err = q.HasPassedInterview(ctx, id); err != nil {
+		return Profile{}, err
+	}
+	if out.Trust, err = loadTrust(ctx, q, id); err != nil {
 		return Profile{}, err
 	}
 	langs, err := q.ListContributorLanguages(ctx, id)
@@ -509,4 +526,27 @@ func transition(ctx context.Context, q *store.Queries, m auth.Meta, id uuid.UUID
 	}
 	return auth.Audit(ctx, q, m, auth.Entry{Actor: by, Action: "contributor.status_changed", EntityType: "contributor", EntityID: &id,
 		Reason: reason, Before: map[string]string{"status": from}, After: map[string]string{"status": to}})
+}
+
+func loadTrust(ctx context.Context, q *store.Queries, id uuid.UUID) (*Trust, error) {
+	ts, err := q.LatestTrustScore(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	minGold := int32(20)
+	if v, err := q.GetSetting(ctx, "trust.min_gold_results"); err == nil {
+		var n int32
+		if json.Unmarshal(v, &n) == nil {
+			minGold = n
+		}
+	}
+	gs, err := q.GoldStats(ctx, store.GoldStatsParams{ContributorID: id, Days: ts.WindowDays})
+	if err != nil {
+		return nil, err
+	}
+	return &Trust{Score: ts.Score, GoldAccuracy: ts.GoldAccuracy, Agreement: ts.AgreementRate, ReviewAcceptance: ts.ReviewAcceptance,
+		GoldResults: gs.AllTime, MinGoldResults: minGold, Building: gs.AllTime < minGold, UpdatedAt: ts.CreatedAt}, nil
 }

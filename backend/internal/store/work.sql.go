@@ -149,10 +149,11 @@ func (q *Queries) ContributorSkillsHeld(ctx context.Context, contributorID uuid.
 	return items, nil
 }
 
-const countItemSubmission = `-- name: CountItemSubmission :exec
+const countItemSubmission = `-- name: CountItemSubmission :one
 UPDATE items SET submission_count = submission_count + 1,
   status = CASE WHEN NOT $1::bool AND submission_count + 1 >= $2::int THEN 'awaiting_consensus' ELSE status END
 WHERE id = $3
+RETURNING status
 `
 
 type CountItemSubmissionParams struct {
@@ -162,9 +163,11 @@ type CountItemSubmissionParams struct {
 }
 
 // k submissions make a regular item ready for consensus; gold items only count.
-func (q *Queries) CountItemSubmission(ctx context.Context, arg CountItemSubmissionParams) error {
-	_, err := q.db.Exec(ctx, countItemSubmission, arg.IsGold, arg.OverlapK, arg.ID)
-	return err
+func (q *Queries) CountItemSubmission(ctx context.Context, arg CountItemSubmissionParams) (string, error) {
+	row := q.db.QueryRow(ctx, countItemSubmission, arg.IsGold, arg.OverlapK, arg.ID)
+	var status string
+	err := row.Scan(&status)
+	return status, err
 }
 
 const countMyWork = `-- name: CountMyWork :many
@@ -250,7 +253,7 @@ func (q *Queries) CreateAssignment(ctx context.Context, arg CreateAssignmentPara
 const createDraftSubmission = `-- name: CreateDraftSubmission :one
 INSERT INTO submissions (org_id, project_id, item_id, assignment_id, contributor_id)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings
+RETURNING id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final
 `
 
 type CreateDraftSubmissionParams struct {
@@ -287,6 +290,7 @@ func (q *Queries) CreateDraftSubmission(ctx context.Context, arg CreateDraftSubm
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaWarnings,
+		&i.AgreesWithFinal,
 	)
 	return i, err
 }
@@ -393,26 +397,29 @@ func (q *Queries) GetMyAssignment(ctx context.Context, id uuid.UUID) (Assignment
 
 const getProjectForWork = `-- name: GetProjectForWork :one
 SELECT p.id, p.org_id, p.name, p.status, p.task_type, p.instructions_md, p.config, p.overlap_k, p.gold_rate,
-  p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars
+  p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars,
+  p.review_spread_threshold, p.audit_sample_rate
 FROM projects p WHERE p.id = $1
 `
 
 type GetProjectForWorkRow struct {
-	ID                 uuid.UUID
-	OrgID              uuid.UUID
-	Name               string
-	Status             string
-	TaskType           string
-	InstructionsMd     string
-	Config             []byte
-	OverlapK           int16
-	GoldRate           float64
-	PayPerTaskCents    int64
-	Currency           string
-	Deadline           *time.Time
-	ReservationMinutes int32
-	QaChecks           []byte
-	MinRationaleChars  int32
+	ID                    uuid.UUID
+	OrgID                 uuid.UUID
+	Name                  string
+	Status                string
+	TaskType              string
+	InstructionsMd        string
+	Config                []byte
+	OverlapK              int16
+	GoldRate              float64
+	PayPerTaskCents       int64
+	Currency              string
+	Deadline              *time.Time
+	ReservationMinutes    int32
+	QaChecks              []byte
+	MinRationaleChars     int32
+	ReviewSpreadThreshold float64
+	AuditSampleRate       float64
 }
 
 func (q *Queries) GetProjectForWork(ctx context.Context, id uuid.UUID) (GetProjectForWorkRow, error) {
@@ -434,12 +441,14 @@ func (q *Queries) GetProjectForWork(ctx context.Context, id uuid.UUID) (GetProje
 		&i.ReservationMinutes,
 		&i.QaChecks,
 		&i.MinRationaleChars,
+		&i.ReviewSpreadThreshold,
+		&i.AuditSampleRate,
 	)
 	return i, err
 }
 
 const getSubmissionByAssignment = `-- name: GetSubmissionByAssignment :one
-SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings FROM submissions WHERE assignment_id = $1
+SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final FROM submissions WHERE assignment_id = $1
 `
 
 func (q *Queries) GetSubmissionByAssignment(ctx context.Context, assignmentID uuid.UUID) (Submission, error) {
@@ -462,12 +471,13 @@ func (q *Queries) GetSubmissionByAssignment(ctx context.Context, assignmentID uu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaWarnings,
+		&i.AgreesWithFinal,
 	)
 	return i, err
 }
 
 const getSubmissionByKey = `-- name: GetSubmissionByKey :one
-SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings FROM submissions WHERE contributor_id = $1 AND idempotency_key = $2
+SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final FROM submissions WHERE contributor_id = $1 AND idempotency_key = $2
 `
 
 type GetSubmissionByKeyParams struct {
@@ -495,6 +505,7 @@ func (q *Queries) GetSubmissionByKey(ctx context.Context, arg GetSubmissionByKey
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaWarnings,
+		&i.AgreesWithFinal,
 	)
 	return i, err
 }

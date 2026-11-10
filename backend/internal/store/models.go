@@ -700,6 +700,7 @@ type Submission struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	QaWarnings      []byte
+	AgreesWithFinal *bool
 }
 
 type SubmissionRevision struct {
