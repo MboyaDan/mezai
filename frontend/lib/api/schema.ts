@@ -748,6 +748,103 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/earnings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The caller's earnings card (`earnings.read_own`).
+     * @description Totals per currency from the append-only ledger: approved is the balance (accepted work and adjustments not yet paid), paid is payouts net of reversals, earned is accruals plus adjustments, so earned - paid = approved. Pending is an estimate: undecided answers at the project's current rate. Next payout date is null unless Ops has set one (D-119).
+     */
+    get: operations["getMyEarnings"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/earnings/statement": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The caller's statement, 30 days with entries per page, newest first (`earnings.read_own`).
+     * @description Accepted work is one line per Nairobi day and project (never per task, so a line cannot be matched to a gold item); payouts, reversals and adjustments are one line each. The lines of every page together sum to the approved balance.
+     */
+    get: operations["getMyStatement"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/payouts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The caller's payout lines in batches past draft, newest first (`earnings.read_own`). */
+    get: operations["listMyPayouts"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/quality": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The caller's trust score, its inputs and a 30-day trend (`earnings.read_own`).
+     * @description As of the start of today in Nairobi (`as_of`): today's work shows tomorrow, like gold feedback and gold earnings, so the score never moves straight after a gold task (D-120). Weights, floor, window and minimum gold results are the live settings.
+     */
+    get: operations["getMyQuality"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/training": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Instructions and guidelines of the live projects the caller may work on (`task.submit`).
+     * @description Empty for a contributor who is not active and verified.
+     */
+    get: operations["listMyTraining"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{id}/quality": {
     parameters: {
       query?: never;
@@ -1665,7 +1762,7 @@ export interface components {
       /** @description The reason for a waitlist or decline */
       screening_note: string | null;
       interview_passed: boolean;
-      /** @description Latest trust score (brief 8.4): 0.5 × gold accuracy + 0.3 × agreement with the final answer + 0.2 × review acceptance over 30 days; inputs without data are left out and the weights rescaled (D-106). While building (fewer gold results than the minimum) it never pauses anyone. Null until the first gold result or agreement. */
+      /** @description Ops only (null for the contributor, who reads /v1/me/quality; D-120). Latest trust score (brief 8.4): 0.5 × gold accuracy + 0.3 × agreement with the final answer + 0.2 × review acceptance over 30 days; inputs without data are left out and the weights rescaled (D-106). While building (fewer gold results than the minimum) it never pauses anyone. Null until the first gold result or agreement. */
       trust: {
         score: number | null;
         gold_accuracy: number | null;
@@ -1797,6 +1894,104 @@ export interface components {
       /** @description Other accounts with the same name */
       same_name: components["schemas"]["ContributorRef"][];
     };
+    EarningsSummary: {
+      totals: {
+        currency: string;
+        /** Format: int64 */
+        pending_cents: number;
+        pending_tasks: number;
+        /** Format: int64 */
+        approved_cents: number;
+        /** Format: int64 */
+        paid_cents: number;
+        /** Format: int64 */
+        earned_cents: number;
+      }[];
+      tasks: {
+        submitted: number;
+        waiting: number;
+        accepted: number;
+        not_accepted: number;
+      };
+      /** Format: date */
+      next_payout_date: string | null;
+      /** Format: int64 */
+      min_payout_cents: number;
+      payout_schedule: string;
+    };
+    Statement: {
+      lines: {
+        /** Format: date */
+        day: string;
+        /** @enum {string} */
+        type: "accrual" | "payout" | "payout_reversal" | "adjustment";
+        currency: string;
+        /** Format: uuid */
+        project_id: string | null;
+        project_name: string | null;
+        /** @description Accepted answers on an accrual line; 0 otherwise */
+        tasks: number;
+        /**
+         * Format: int64
+         * @description Signed; payouts are negative
+         */
+        amount_cents: number;
+        reason: string | null;
+        mpesa_receipt: string | null;
+      }[];
+      /**
+       * Format: date
+       * @description Cursor for the next older page
+       */
+      before: string | null;
+    };
+    Payout: {
+      /** Format: uuid */
+      id: string;
+      /** Format: date */
+      period_start: string;
+      /** Format: date */
+      period_end: string;
+      /** Format: int64 */
+      amount_cents: number;
+      currency: string;
+      /** @enum {string} */
+      status: "processing" | "paid" | "failed";
+      mpesa_receipt: string | null;
+      failure_reason: string | null;
+      phone_masked: string;
+      /** Format: date-time */
+      recorded_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    MyQuality: {
+      /** Format: date-time */
+      as_of: string;
+      trust: {
+        score: number | null;
+        gold_accuracy: number | null;
+        agreement: number | null;
+        review_acceptance: number | null;
+        building: boolean;
+        /** Format: date-time */
+        calculated_at: string;
+      } | null;
+      trend: {
+        /** Format: date */
+        day: string;
+        score: number | null;
+        gold_accuracy: number | null;
+      }[];
+      weights: {
+        gold_accuracy: number;
+        agreement: number;
+        review_acceptance: number;
+      };
+      floor: number;
+      window_days: number;
+      min_gold_results: number;
+    };
     /** @description A live project as a contributor sees it. No gold, overlap or other contributors. */
     WorkProject: {
       /** Format: uuid */
@@ -1820,6 +2015,10 @@ export interface components {
       qa_checks: components["schemas"]["QAChecks"];
       min_rationale_chars: number;
       my_submitted: number;
+      /** @description List only. About how many more tasks the caller could get: regular items short of k answers that they have not seen. Gold checks come on top and are never counted apart. */
+      tasks_left?: number;
+      /** @description List only. Median time on task over the last 30 days, rounded up to the half minute; absent below 10 answers. */
+      minutes_per_task?: number;
     };
     /** @description One reserved item. The ID is the assignment's; gold and other items look the same. */
     Task: {
@@ -3884,6 +4083,129 @@ export interface operations {
         };
         content?: never;
       };
+    };
+  };
+  getMyEarnings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Summary */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EarningsSummary"];
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  getMyStatement: {
+    parameters: {
+      query?: {
+        /** @description Nairobi date (YYYY-MM-DD); only days before it. The `before` of the previous page. */
+        before?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Statement page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Statement"];
+        };
+      };
+      403: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  listMyPayouts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Payouts */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            payouts: components["schemas"]["Payout"][];
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  getMyQuality: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Quality record */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MyQuality"];
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  listMyTraining: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Training projects */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            projects: {
+              /** Format: uuid */
+              id: string;
+              name: string;
+              task_type: string;
+              instructions_md: string;
+              guidelines: {
+                title: string;
+                body_md: string;
+              }[];
+            }[];
+          };
+        };
+      };
+      403: components["responses"]["Error"];
     };
   };
   getProjectQuality: {
