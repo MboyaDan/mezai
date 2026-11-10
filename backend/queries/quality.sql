@@ -40,11 +40,13 @@ WHERE contributor_id = @contributor_id AND agrees_with_final IS NOT NULL
   AND submitted_at > now() - make_interval(days => @days::int);
 
 -- name: ReviewStats :one
--- Reviewer decisions on the contributor's work (Stage 11 fills these).
-SELECT count(*) FILTER (WHERE status IN ('accepted', 'rejected'))::int AS decided,
+-- Reviewer decisions on the contributor's work. Automatic acceptance by
+-- consensus or gold is not a review and does not count (D-110).
+SELECT count(*)::int AS decided,
        count(*) FILTER (WHERE status = 'accepted')::int AS accepted
 FROM submissions
-WHERE contributor_id = @contributor_id AND decided_at > now() - make_interval(days => @days::int);
+WHERE contributor_id = @contributor_id AND decision_source = 'review'
+  AND decided_at > now() - make_interval(days => @days::int);
 
 -- name: AddTrustScore :one
 INSERT INTO trust_scores (contributor_id, score, gold_accuracy, agreement_rate, review_acceptance, gold_count, window_days, weights)

@@ -546,6 +546,15 @@ type ProjectRequest struct {
 	UpdatedAt      time.Time
 }
 
+type ProjectReviewer struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	ProjectID uuid.UUID
+	UserID    uuid.UUID
+	AddedBy   *uuid.UUID
+	CreatedAt time.Time
+}
+
 type ProjectSkill struct {
 	ID             uuid.UUID
 	OrgID          uuid.UUID
@@ -701,6 +710,8 @@ type Submission struct {
 	UpdatedAt       time.Time
 	QaWarnings      []byte
 	AgreesWithFinal *bool
+	DecisionSource  *string
+	ReviewID        *uuid.UUID
 }
 
 type SubmissionRevision struct {
