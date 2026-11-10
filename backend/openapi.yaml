@@ -880,6 +880,92 @@ paths:
       responses:
         "200": { description: Quality, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectQuality" } } } }
         "404": { $ref: "#/components/responses/Error" }
+  /v1/projects/{id}/reviewers:
+    get:
+      operationId: listProjectReviewers
+      summary: The project's assigned reviewers and the staff who could be assigned (`project.manage`).
+      tags: [review]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Reviewers, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectReviewers" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: addProjectReviewer
+      summary: Assign a reviewer to the project (`project.manage`). Only staff holding `review.decide` can be assigned.
+      tags: [review]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [user_id], properties: { user_id: { type: string, format: uuid } } }
+      responses:
+        "204": { description: Assigned }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/projects/{id}/reviewers/{userId}:
+    delete:
+      operationId: removeProjectReviewer
+      summary: Remove a reviewer from the project (`project.manage`).
+      tags: [review]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/review/items:
+    get:
+      operationId: listReviewQueue
+      summary: Items waiting for review, oldest first (`review.read`).
+      description: >-
+        Reviewers see items from projects Ops assigned them to; people with `review.adjudicate`
+        see every project (D-111). Gold items never appear: they are checked automatically.
+      tags: [review]
+      parameters:
+        - { name: project_id, in: query, schema: { type: string, format: uuid } }
+        - { name: reason, in: query, schema: { $ref: "#/components/schemas/RouteReason" } }
+      responses:
+        "200": { description: Queue, content: { application/json: { schema: { $ref: "#/components/schemas/ReviewQueue" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/review/items/{id}:
+    get:
+      operationId: getReviewItem
+      summary: One item with every answer side by side, the consensus and any decision (`review.read`).
+      description: Contributors appear by code only. Items on projects the caller may not review are not found.
+      tags: [review]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Item, content: { application/json: { schema: { $ref: "#/components/schemas/ReviewItem" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/review/items/{id}/decision:
+    post:
+      operationId: decideReviewItem
+      summary: Decide an item in review (`review.decide`; `write_final` and `reject_item` also need `review.adjudicate`).
+      description: >-
+        One transaction: the item becomes final (or rejected), every open answer is accepted and earns
+        unless listed in `rejections` (the reason is shown to the contributor), agreement with the final
+        answer is recorded and trust scores are recalculated. A retry with the same `Idempotency-Key`
+        returns the first result and writes nothing; a second decision on a decided item is refused (409 `already_decided`).
+        Feedback needs `feedback.write`.
+      tags: [review]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_.:-]{8,100}$" } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DecisionInput" } } }
+      responses:
+        "200": { description: Decided, content: { application/json: { schema: { $ref: "#/components/schemas/DecisionResult" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/content-reports:
     get:
       operationId: listContentReports
@@ -2110,6 +2196,131 @@ components:
               items: { type: integer }
               raters: { type: integer }
               window_end: { type: string, format: date-time }
+    RouteReason: { type: string, enum: [no_majority, spread, flagged, audit_sample] }
+    Reviewer:
+      type: object
+      required: [id, display_name, email]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+        email: { type: string }
+    ProjectReviewers:
+      type: object
+      required: [assigned, candidates]
+      properties:
+        assigned: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
+        candidates: { type: array, items: { $ref: "#/components/schemas/Reviewer" } }
+    ReviewQueue:
+      type: object
+      required: [items, projects]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [item_id, external_id, project_id, project_name, org_name, task_type, reason, agreement, spread, submissions, waiting_since]
+            properties:
+              item_id: { type: string, format: uuid }
+              external_id: { type: [string, "null"] }
+              project_id: { type: string, format: uuid }
+              project_name: { type: string }
+              org_name: { type: string }
+              task_type: { type: string }
+              reason: { $ref: "#/components/schemas/RouteReason" }
+              agreement: { type: [number, "null"] }
+              spread: { type: [number, "null"] }
+              submissions: { type: integer }
+              waiting_since: { type: string, format: date-time }
+        projects:
+          type: array
+          items:
+            type: object
+            required: [id, name, waiting]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              waiting: { type: integer }
+    ReviewItem:
+      type: object
+      required: [id, external_id, status, project_id, project_name, task_type, config, instructions_md, content, consensus, submissions, decision, can_adjudicate]
+      properties:
+        id: { type: string, format: uuid }
+        external_id: { type: [string, "null"] }
+        status: { type: string }
+        project_id: { type: string, format: uuid }
+        project_name: { type: string }
+        task_type: { type: string }
+        config: { type: object, additionalProperties: true }
+        instructions_md: { type: string }
+        content: { type: object, additionalProperties: true }
+        can_adjudicate: { type: boolean }
+        consensus:
+          oneOf:
+            - { type: "null" }
+            - type: object
+              required: [method, result, complete, agreement, spread, reason]
+              properties:
+                method: { type: string, enum: [majority, mean] }
+                result: { type: object, additionalProperties: true }
+                complete: { type: boolean, description: There is a consensus answer to accept }
+                agreement: { type: [number, "null"] }
+                spread: { type: [number, "null"] }
+                reason: { oneOf: [{ $ref: "#/components/schemas/RouteReason" }, { type: "null" }] }
+        submissions:
+          type: array
+          items:
+            type: object
+            required: [id, contributor, status, submitted_at, time_on_task_ms, answer, warnings, rejection_reason, agrees_with_final]
+            properties:
+              id: { type: string, format: uuid }
+              contributor: { type: string, description: Contributor code }
+              status: { type: string, enum: [submitted, accepted, rejected] }
+              submitted_at: { type: [string, "null"], format: date-time }
+              time_on_task_ms: { type: integer }
+              answer: { type: object, additionalProperties: true }
+              warnings: { type: array, items: { $ref: "#/components/schemas/QAIssue" } }
+              rejection_reason: { type: [string, "null"] }
+              agrees_with_final: { type: [boolean, "null"] }
+        decision:
+          oneOf:
+            - { type: "null" }
+            - type: object
+              required: [id, decision, chosen_submission_id, final_answer, reason, reviewer, created_at]
+              properties:
+                id: { type: string, format: uuid }
+                decision: { $ref: "#/components/schemas/ReviewDecisionKind" }
+                chosen_submission_id: { type: [string, "null"], format: uuid }
+                final_answer: { oneOf: [{ type: object, additionalProperties: true }, { type: "null" }] }
+                reason: { type: [string, "null"] }
+                reviewer: { type: string }
+                created_at: { type: string, format: date-time }
+    ReviewDecisionKind: { type: string, enum: [accept_consensus, choose_submission, write_final, reject_item] }
+    SubmissionNote:
+      type: object
+      required: [submission_id, text]
+      properties:
+        submission_id: { type: string, format: uuid }
+        text: { type: string, minLength: 1, maxLength: 1000 }
+    DecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { $ref: "#/components/schemas/ReviewDecisionKind" }
+        submission_id: { type: [string, "null"], format: uuid, description: Required for choose_submission }
+        final_answer: { type: object, additionalProperties: true, description: Required for write_final; validated like a submission }
+        reason: { type: string, maxLength: 1000, description: Required (10 or more characters) for reject_item }
+        rejections:
+          type: array
+          description: Answers that will not be accepted (no earning); the reason (10 or more characters) is shown to the contributor
+          items: { $ref: "#/components/schemas/SubmissionNote" }
+        feedback: { type: array, description: Notes to contributors (`feedback.write`), items: { $ref: "#/components/schemas/SubmissionNote" } }
+    DecisionResult:
+      type: object
+      required: [review_id, decision, item_status]
+      properties:
+        review_id: { type: string, format: uuid }
+        decision: { $ref: "#/components/schemas/ReviewDecisionKind" }
+        item_status: { type: string, enum: [final, rejected] }
     ContentReport:
       type: object
       required: [id, category, note, status, created_at, resolved_at, item_id, external_id, project_id, project_name, reported_by]

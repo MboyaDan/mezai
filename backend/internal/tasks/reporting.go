@@ -148,11 +148,23 @@ func (s *Service) GoldFeedback(ctx context.Context, from, to time.Time) (int, er
 			body := fmt.Sprintf("On %s, %d of your %d answers on %s to items with a known answer did not match it. "+
 				"Before your next tasks, re-read the project instructions, especially the parts about the cases you found hard. "+
 				"This note is automatic and does not say which items they were.",
-				r.ProjectName, r.Missed, r.Total, from.In(jobs.Nairobi).Format("2 January"))
+				from.In(jobs.Nairobi).Format("2 January"), r.Missed, r.Total, r.ProjectName)
 			if err := q.AddFeedback(ctx, store.AddFeedbackParams{OrgID: r.OrgID, ProjectID: r.ProjectID, ContributorID: r.ContributorID, Body: body}); err != nil {
 				return err
 			}
 			n++
+		}
+		// Gold work earns like any other task, right or wrong: a wrong answer
+		// costs gold accuracy, not pay. It is accepted here, in the same daily
+		// batch as the feedback, so earnings never reveal which items were gold.
+		ids, err := q.AcceptGoldBefore(ctx, to)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := q.AccrueEarning(ctx, id); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

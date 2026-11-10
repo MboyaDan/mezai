@@ -398,7 +398,9 @@ func replayed(ctx context.Context, q *store.Queries, contributor uuid.UUID, key 
 	if prev.AssignmentID != taskID {
 		return Result{}, false, ErrKeyReused
 	}
-	r := Result{SubmissionID: prev.ID, Status: prev.Status, Warnings: []quality.Issue{}}
+	// Always "submitted": the live status would show acceptance timing, and
+	// gold work is accepted later than other work (brief 8.1, D-110).
+	r := Result{SubmissionID: prev.ID, Status: "submitted", Warnings: []quality.Issue{}}
 	_ = json.Unmarshal(prev.QaWarnings, &r.Warnings)
 	return r, true, nil
 }

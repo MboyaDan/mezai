@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/MboyaDan/mezai/backend/internal/quality"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -66,6 +67,10 @@ func (h *taskHandlers) fail(c *gin.Context, err error) {
 		code = "draft_limit"
 	case errors.Is(err, tasks.ErrReportClosed):
 		code = "already_resolved"
+	case errors.Is(err, tasks.ErrAlreadyDecided):
+		code = "already_decided"
+	case errors.Is(err, tasks.ErrForbidden):
+		status, code = http.StatusForbidden, "forbidden"
 	default:
 		h.log.Error("task request failed", slog.String("request_id", RequestIDFrom(c)), slog.Any("error", err))
 		status, code = http.StatusInternalServerError, "internal_error"
@@ -245,6 +250,95 @@ func (h *taskHandlers) resolveReport(c *gin.Context) {
 		return
 	}
 	if err := h.svc.ResolveReport(c.Request.Context(), PrincipalFrom(c), id, req.Action, req.Reason, meta(c)); err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *taskHandlers) reviewQueue(c *gin.Context) {
+	var project *uuid.UUID
+	if v := c.Query("project_id"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid_input", "field": "project_id", "message": "not a valid ID"})
+			return
+		}
+		project = &id
+	}
+	out, err := h.svc.ListReviewQueue(c.Request.Context(), PrincipalFrom(c), project, c.Query("reason"))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) reviewItem(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := h.svc.GetReviewItem(c.Request.Context(), PrincipalFrom(c), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) decide(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req tasks.DecisionInput
+	if !ok || !h.bind(c, &req) {
+		return
+	}
+	out, err := h.svc.Decide(c.Request.Context(), PrincipalFrom(c), id, c.GetHeader(HeaderIdempotencyKey), req, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) projectReviewers(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := h.svc.ListProjectReviewers(c.Request.Context(), PrincipalFrom(c), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) addReviewer(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req struct {
+		UserID uuid.UUID `json:"user_id"`
+	}
+	if !ok || !h.bind(c, &req) {
+		return
+	}
+	if err := h.svc.SetProjectReviewer(c.Request.Context(), PrincipalFrom(c), id, req.UserID, true, meta(c)); err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (h *taskHandlers) removeReviewer(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	user, ok := pathID(c, "userId")
+	if !ok {
+		return
+	}
+	if err := h.svc.SetProjectReviewer(c.Request.Context(), PrincipalFrom(c), id, user, false, meta(c)); err != nil {
 		h.fail(c, err)
 		return
 	}
