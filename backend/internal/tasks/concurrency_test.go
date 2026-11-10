@@ -30,7 +30,7 @@ func crowd(t *testing.T, pool *db.Pool, n int) []*auth.Principal {
 		for i := range n {
 			p := &auth.Principal{Kind: auth.KindContributor}
 			if err := tx.QueryRow(ctx, `INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id`,
-				fmt.Sprintf("crowd%03d@sample.invalid", i), fmt.Sprintf("Sample Crowd %03d", i)).Scan(&p.UserID); err != nil {
+				fmt.Sprintf("crowd-%s@sample.invalid", uuid.NewString()[:13]), fmt.Sprintf("Sample Crowd %03d", i)).Scan(&p.UserID); err != nil {
 				return err
 			}
 			if err := tx.QueryRow(ctx, `INSERT INTO contributor_profiles (user_id, public_code, status, identity_status)
@@ -116,7 +116,7 @@ func TestManyPeopleTasking(t *testing.T) {
 			AND (SELECT count(*) FROM assignments a WHERE a.item_id = i.id AND a.status IN ('reserved', 'submitted')) > $2`, project, k).Scan(&overK)
 		_ = tx.QueryRow(ctx, `SELECT count(*) FROM items i WHERE i.project_id = $1
 			AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
-			AND (i.submission_count <> $2 OR i.status <> 'awaiting_consensus')`, project, k).Scan(&notK)
+			AND (i.submission_count <> $2 OR i.status NOT IN ('consensus', 'in_review'))`, project, k).Scan(&notK)
 		_ = tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 FROM assignments WHERE project_id = $1
 			GROUP BY item_id, contributor_id HAVING count(*) > 1) d`, project).Scan(&dupes)
 		return tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 FROM assignments WHERE project_id = $1 AND status = 'reserved'

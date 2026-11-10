@@ -72,7 +72,11 @@ func (s *Service) Next(ctx context.Context, p *auth.Principal, projectID uuid.UU
 			return nil // commit the expiries; taskID stays nil
 		}
 		itemID, gold := item.ID, uuid.Nil
-		if pr.GoldRate > 0 && s.rnd() < pr.GoldRate {
+		rate, err := goldRateFor(ctx, q, id, pr.GoldRate) // higher during probation (brief 8.4)
+		if err != nil {
+			return err
+		}
+		if rate > 0 && s.rnd() < rate {
 			g, err := q.PickGoldItem(ctx, store.PickGoldItemParams{ProjectID: projectID, ContributorID: id})
 			if err == nil {
 				itemID, gold = g.ItemID, g.ID
@@ -338,8 +342,32 @@ func (s *Service) Submit(ctx context.Context, p *auth.Principal, taskID uuid.UUI
 		if err != nil {
 			return err
 		}
-		if err := q.CountItemSubmission(ctx, store.CountItemSubmissionParams{ID: a.ItemID, IsGold: gold, OverlapK: int32(pr.OverlapK)}); err != nil {
+		itemStatus, err := q.CountItemSubmission(ctx, store.CountItemSubmissionParams{ID: a.ItemID, IsGold: gold, OverlapK: int32(pr.OverlapK)})
+		if err != nil {
 			return err
+		}
+		// Quality engine (brief 8): gold is scored now and never shown; an
+		// item with k answers gets its consensus or goes to review; trust
+		// scores of everyone affected are recalculated.
+		touched := []uuid.UUID{}
+		if gold {
+			if err := scoreGold(ctx, q, pr.TaskType, a.ItemID, sub.ID, id, ans); err != nil {
+				return err
+			}
+			touched = append(touched, id)
+		} else if itemStatus == "awaiting_consensus" {
+			if touched, err = s.runConsensus(ctx, q, pr, a.ItemID); err != nil {
+				return err
+			}
+		}
+		seen := map[uuid.UUID]bool{}
+		for _, c := range touched {
+			if !seen[c] {
+				seen[c] = true
+				if _, err := s.recomputeTrust(ctx, q, m, c); err != nil {
+					return err
+				}
+			}
 		}
 		out = Result{SubmissionID: sub.ID, Status: "submitted", Warnings: warnings}
 		// The audit names the task and the warnings, never the answer.

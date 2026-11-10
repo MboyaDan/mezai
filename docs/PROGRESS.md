@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 9c (task engine under concurrency, Dan's request). Branch `stage-09c-concurrency`, PR open. 7d-2 merged as #35.
-- **Next stage:** 10 (quality engine: gold scoring, agreement, trust score, and the paid project warm-up moved here by D-102). Not in the D-011 split list; if it is too big for one sitting, propose a split to Dan first.
+- **Last stage:** 10a (quality engine: scoring, consensus, trust). Branch `stage-10a-quality-engine`, PR open. 9c merged as #36.
+- **Next stage:** 10b (nightly agreement snapshots, daily gold-miss feedback, per-project warm-up, Ops agreement API; D-106). Then Stage 11 (review and adjudication; it must set `agrees_with_final` for reviewed items and fill review acceptance).
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -53,6 +53,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Core check content and creation | `backend/internal/contributors/corecheck.go` |
 | Screening funnel (application, CV, screening, interview) | `backend/internal/contributors/screening.go`; Ops panels `frontend/components/workspace/screening-panels.tsx`; rubric mirror `frontend/lib/screening.ts` |
 | Task workspace and reports screens | `frontend/components/contributor/{work,task-workspace}.tsx`, helpers `frontend/lib/tasks.ts`, Ops `frontend/components/workspace/reports.tsx` |
+| Quality engine (gold scoring, consensus, trust, auto-pause) and maths | `backend/internal/tasks/quality.go`, `backend/internal/quality/agreement.go` |
 | Task engine (eligibility, assignment, submit, reports) and QA checks | `backend/internal/tasks/`, handlers `backend/internal/httpapi/tasks.go`, checks `backend/internal/quality/qa.go` |
 | National ID fingerprint, identity checks | `backend/internal/identity/`, `backend/internal/contributors/identity.go`; Ops panel `frontend/components/workspace/identity-panel.tsx` |
 | API types and client (frontend) | `frontend/lib/api/schema.ts` (generated: `npm run gen:api`), `lib/api/client.ts` |
@@ -91,7 +92,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 9b | Merged | #29 | Contributor Tasks list (`/c/work`), project brief (`/c/projects/[id]`), task workspace (`/c/work/[projectId]`) for all three task types: clock, autosave, keyboard, instructions drawer, skip/report dialogs, QA messages, idempotent submit. Ops content-report queue (`/w/reports`). Full-stack test creates its own projects through the API so reruns always have work. Screening funnel research and plan (D-100, Stage 7d). |
 | 7d-1 | Merged | #30 | Migration 00013 (application answers, LinkedIn, CV columns, screening status, `interviews`). Application form and optional PDF CV (deleted on decline or by an hourly sweep 90 days after the decision); Ops shortlist / waitlist / decline; structured phone interview (fixed script and rubric, no recording); tests open only once shortlisted; activation = shortlisted + test + interview + verified identity. Privacy notice and contributor terms 0.3. Ops Applications and Interviews queues. |
 | 7d-2 | Merged | #35 | Migration 00014 (`core` skill kind, one active core check, per-question `task_type`/`config`, `writing_rating`). Core check content in `corecheck.go` and `POST /qualification/core-check` (draft); writing answers (60–250 words) rated by Ops; core first, 30-day core retake; activation on the core check; skills valid 12 months. Screens: core check first on the tests list, mixed question types, writing input, Ops writing rating. |
-| 9c | PR open | #36 | Concurrency test with 60 contributors found two races (items over k; same-key submits refused) and fixed them: recount under the item lock, lock the task before the key lookup. Own-only expiry plus a background sweep; 5 s lock and 30 s statement timeouts answered as 503 busy; per-account limits on task routes; pool of 20 connections. About 350 next-and-submit cycles a second locally. |
+| 9c | Merged | #36 | Concurrency test with 60 contributors found two races (items over k; same-key submits refused) and fixed them: recount under the item lock, lock the task before the key lookup. Own-only expiry plus a background sweep; 5 s lock and 30 s statement timeouts answered as 503 busy; per-account limits on task routes; pool of 20 connections. About 350 next-and-submit cycles a second locally. |
+| 10a | PR open | #37 | `quality/agreement.go` (Cohen, Fleiss, percent, MAD, majority, Jaccard, spread, bands, trust formula) with textbook tests; brief 8.1 gold rules. Migration 00015 (`agrees_with_final`, one consensus per item, probation settings). On submit: gold scored, consensus or review routing, agreement per rater, trust recalculated, auto-pause below 0.70 with Ops email; probation gold rate. Profile shows the latest trust score. |
 
 ## Notes for the next session
 

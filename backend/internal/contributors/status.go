@@ -1,5 +1,14 @@
 package contributors
 
+import (
+	"context"
+
+	"github.com/google/uuid"
+
+	"github.com/MboyaDan/mezai/backend/internal/auth"
+	"github.com/MboyaDan/mezai/backend/internal/store"
+)
+
 // Contributor statuses (brief 9): applied → qualifying → active ⇄ paused → removed.
 const (
 	StatusApplied    = "applied"
@@ -52,4 +61,22 @@ func validStatus(s string) bool {
 		return true
 	}
 	return false
+}
+
+// PauseForTrust pauses an active contributor whose trust score fell below
+// the floor (brief 8.4), through the state machine (history and audit).
+// It reports whether the contributor was paused; anyone not active is left
+// as they are.
+func PauseForTrust(ctx context.Context, q *store.Queries, m auth.Meta, id uuid.UUID, reason string) (bool, error) {
+	cp, err := q.LockContributorProfile(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if cp.Status != StatusActive {
+		return false, nil
+	}
+	if err := transition(ctx, q, m, id, StatusActive, StatusPaused, ViaTrust, nil, reason); err != nil {
+		return false, err
+	}
+	return true, nil
 }

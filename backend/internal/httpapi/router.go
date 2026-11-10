@@ -159,7 +159,7 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/qualification/tests/:id/status", Perm("gold.manage"), ch.setTestStatus)
 
 		// Task engine (Stage 9a). One task at a time; content only while reserved.
-		th := &taskHandlers{svc: tasks.NewService(d.Auth.Pool), log: d.Log}
+		th := &taskHandlers{svc: tasks.NewService(d.Auth.Pool, tasks.Options{NotifyTo: d.Auth.Enquiry.NotifyTo, AppOrigin: d.Auth.AppOrigin}), log: d.Log}
 		a.handle(http.MethodGet, "/me/projects", Perm("task.submit"), th.myProjects)
 		a.handle(http.MethodGet, "/me/projects/:id", Perm("task.submit"), th.myProject)
 		// Per-person limits well above honest use (a task takes seconds at

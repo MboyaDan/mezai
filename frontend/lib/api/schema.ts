@@ -1418,6 +1418,18 @@ export interface components {
       /** @description The reason for a waitlist or decline */
       screening_note: string | null;
       interview_passed: boolean;
+      /** @description Latest trust score (brief 8.4): 0.5 × gold accuracy + 0.3 × agreement with the final answer + 0.2 × review acceptance over 30 days; inputs without data are left out and the weights rescaled (D-106). While building (fewer gold results than the minimum) it never pauses anyone. Null until the first gold result or agreement. */
+      trust: {
+        score: number | null;
+        gold_accuracy: number | null;
+        agreement: number | null;
+        review_acceptance: number | null;
+        gold_results: number;
+        min_gold_results: number;
+        building: boolean;
+        /** Format: date-time */
+        updated_at: string;
+      } | null;
       languages: components["schemas"]["Language"][];
       domains: ("health" | "law" | "finance" | "education" | "software" | "agriculture" | "other")[];
       /** @description Fields still needed before the contributor can qualify */
