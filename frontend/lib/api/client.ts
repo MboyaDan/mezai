@@ -44,6 +44,10 @@ export type ReviewDecisionKind = Schemas["ReviewDecisionKind"];
 export type DecisionInput = Schemas["DecisionInput"];
 export type DecisionResult = Schemas["DecisionResult"];
 export type ProjectReviewers = Schemas["ProjectReviewers"];
+export type DeliverableVersion = Schemas["DeliverableVersion"];
+export type DeliverableFile = Schemas["DeliverableFile"];
+export type DeliverableManifest = Schemas["DeliverableManifest"];
+export type DeliverableLink = Schemas["DeliverableLink"];
 
 /** An error answer from the API, or a network failure (status 0). */
 export class ApiError extends Error {

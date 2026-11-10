@@ -47,14 +47,14 @@ func setup(t *testing.T) fixture {
 			_, err := q.CreateDeliverable(ctx, store.CreateDeliverableParams{
 				OrgID: p.OrgID, ProjectID: p.ID, Format: "jsonl", FileKey: "test/" + p.ID.String(),
 				ManifestKey: "test/manifest", Manifest: []byte(`{}`), ChecksumSha256: sha64, SchemaVersion: 1,
-				PublishedAt: &now, PublishedBy: &admin,
+				PublishedAt: &now, PublishedBy: &admin, Version: 1,
 			})
 			must(t, err)
 		}
 		// An unpublished deliverable is invisible to its own client until published.
 		_, err = q.CreateDeliverable(ctx, store.CreateDeliverableParams{
 			OrgID: projects[0].OrgID, ProjectID: projects[0].ID, Format: "csv", FileKey: "test/draft",
-			ManifestKey: "test/manifest", Manifest: []byte(`{}`), ChecksumSha256: sha64, SchemaVersion: 1,
+			ManifestKey: "test/manifest", Manifest: []byte(`{}`), ChecksumSha256: sha64, SchemaVersion: 1, Version: 2,
 		})
 		must(t, err)
 	})

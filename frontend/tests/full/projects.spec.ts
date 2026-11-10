@@ -1,6 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { signIn as signInAs } from "./auth";
+
+const signIn = (page: Page, who: string) => signInAs(page, who, /\/w$/);
 
 // AC-05 through the real UI: a client admin requests a project, Ops converts
 // it, imports items (a file with row errors imports nothing, a valid one
@@ -8,7 +11,6 @@ import { mkdirSync } from "node:fs";
 // The client then sees its own project without staff-only settings, and a
 // client of another organisation cannot open it.
 
-const seedPassword = process.env.SEED_PASSWORD ?? "sample-password-only";
 const shots = "../docs/screenshots/stage-08b";
 const run = Date.now().toString(36);
 const title = `Support ticket routing ${run} (Sample)`;
@@ -41,14 +43,6 @@ async function shot(page: Page, file: string) {
 }
 
 const tabs = (page: Page) => page.getByRole("navigation", { name: "Project" });
-
-async function signIn(page: Page, who: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").filter({ visible: true }).fill(who);
-  await page.getByLabel("Password").filter({ visible: true }).fill(seedPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/w$/);
-}
 
 async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).first().click();

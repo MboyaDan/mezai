@@ -12,6 +12,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/delivery"
 	"github.com/MboyaDan/mezai/backend/internal/projects"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -215,6 +216,16 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/project-requests/:id/sample", readRequest, ph.requestSample)
 		a.handle(http.MethodPost, "/project-requests/:id/convert", Perm("project.manage"), ph.convertRequest)
 		a.handle(http.MethodPost, "/project-requests/:id/decline", Perm("project.manage"), ph.declineRequest)
+
+		// Deliverables (Stage 11b). A client sees published versions of its
+		// own projects only (RLS); a link works for one user for five minutes.
+		dh := &deliveryHandlers{log: d.Log, svc: delivery.NewService(d.Auth.Pool, d.Auth.Files, d.Auth.IdentityKey, d.Log)}
+		readDeliverables := Perm("deliverable.publish", "org.deliverable.download")
+		a.handle(http.MethodGet, "/projects/:id/deliverables", readDeliverables, dh.list)
+		a.handle(http.MethodPost, "/projects/:id/deliverables", Perm("deliverable.publish"), perMinute(10), dh.export)
+		a.handle(http.MethodPost, "/projects/:id/deliverables/:version/publish", Perm("deliverable.publish"), dh.publish)
+		a.handle(http.MethodPost, "/deliverables/:id/links", readDeliverables, perMinute(60), dh.link)
+		a.handle(http.MethodGet, "/deliverables/:id/download", readDeliverables, perMinute(60), dh.download)
 		rules = a.rules
 	}
 

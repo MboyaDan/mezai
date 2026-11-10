@@ -225,6 +225,10 @@ export function errorMessage(e: ApiError): string {
     interview_too_soon: "A new interview can be held 30 days after the last one.",
     already_passed: "This person has already passed the interview.",
     no_cv: "No CV is on file.",
+    nothing_to_export: "No items are final yet, so there is nothing to export.",
+    too_large: "This project has more final items than one export can hold. Contact the engineering team.",
+    already_published: "This version is already published.",
+    link_expired: "That download link has expired. Choose Download again.",
     identity_incomplete:
       "The contributor has not given a confirmed M-Pesa number and National ID number yet.",
   };

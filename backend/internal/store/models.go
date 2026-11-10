@@ -171,6 +171,9 @@ type Deliverable struct {
 	PublishedBy    *uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Version        int32
+	ByteSize       int64
+	CreatedBy      *uuid.UUID
 }
 
 type DeliverableDownload struct {
@@ -180,6 +183,7 @@ type DeliverableDownload struct {
 	UserID        uuid.UUID
 	Ip            *netip.Addr
 	CreatedAt     time.Time
+	File          string
 }
 
 type EarningsLedger struct {

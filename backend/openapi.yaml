@@ -917,6 +917,89 @@ paths:
       responses:
         "204": { description: Removed }
         "404": { $ref: "#/components/responses/Error" }
+  /v1/projects/{id}/deliverables:
+    get:
+      operationId: listDeliverables
+      summary: The project's deliverable versions, newest first (`deliverable.publish` or `org.deliverable.download`).
+      description: A client user sees published versions of its own organisation's projects only (row-level security).
+      tags: [delivery]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: Versions
+          content:
+            application/json:
+              schema: { type: object, required: [versions], properties: { versions: { type: array, items: { $ref: "#/components/schemas/DeliverableVersion" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: exportDeliverable
+      summary: Export the project's final items as a new, unpublished version (`deliverable.publish`).
+      description: >-
+        Writes a JSONL file, a CSV file and the brief 8.5 manifest to object storage. Only final
+        regular items are included; gold and rejected items never are. Up to 50,000 items.
+      tags: [delivery]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201": { description: Exported, content: { application/json: { schema: { $ref: "#/components/schemas/DeliverableVersion" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "`nothing_to_export`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: "`too_large`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "503": { description: "`storage_unavailable`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/projects/{id}/deliverables/{version}/publish:
+    post:
+      operationId: publishDeliverable
+      summary: Make a version visible to the project's client (`deliverable.publish`).
+      tags: [delivery]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: Published, content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [published] } } } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "`already_published`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/deliverables/{id}/links:
+    post:
+      operationId: createDeliverableLink
+      summary: A download link for one file, valid for five minutes and only for the caller (`deliverable.publish` or `org.deliverable.download`).
+      tags: [delivery]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [file], properties: { file: { type: string, enum: [data, manifest] } } }
+      responses:
+        "200": { description: Link, content: { application/json: { schema: { $ref: "#/components/schemas/DeliverableLink" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/deliverables/{id}/download:
+    get:
+      operationId: downloadDeliverable
+      summary: Download a file through a signed link (`deliverable.publish` or `org.deliverable.download`).
+      description: >-
+        The link must be signed for the signed-in user and unexpired. A data file is checked
+        against its stored checksum. Each download is recorded in deliverable_downloads and the
+        audit log.
+      tags: [delivery]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: file, in: query, required: true, schema: { type: string, enum: [data, manifest] } }
+        - { name: expires, in: query, required: true, schema: { type: string } }
+        - { name: sig, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The file, as an attachment
+          content:
+            application/x-ndjson: { schema: { type: string, format: binary } }
+            text/csv: { schema: { type: string, format: binary } }
+            application/json: { schema: { type: string, format: binary } }
+        "403": { description: "`link_expired` (expired, altered or someone else's link)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/Error" }
   /v1/review/items:
     get:
       operationId: listReviewQueue
@@ -2321,6 +2404,124 @@ components:
         review_id: { type: string, format: uuid }
         decision: { $ref: "#/components/schemas/ReviewDecisionKind" }
         item_status: { type: string, enum: [final, rejected] }
+    DeliverableFile:
+      type: object
+      required: [id, file, format, name, bytes, sha256, downloads]
+      properties:
+        id: { type: string, format: uuid, description: "The deliverable row; the manifest is offered through the JSONL row." }
+        file: { type: string, enum: [data, manifest] }
+        format: { type: string, enum: [jsonl, csv, json] }
+        name: { type: string }
+        bytes: { type: integer, description: "0 for the manifest" }
+        sha256: { type: string, description: "Empty for the manifest, which holds the data files' checksums" }
+        downloads: { type: integer }
+    DeliverableManifest:
+      type: object
+      description: Brief 8.5. Contributors appear by public code only; no item content.
+      required: [schema, schema_version, project, version, exported_at, items, gold_accuracy, agreement, review, contributors, files, notes]
+      properties:
+        schema: { type: string, enum: [mezai.delivery-manifest] }
+        schema_version: { type: integer }
+        project:
+          type: object
+          required: [id, name, task_type, organisation, overlap_k]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            task_type: { type: string }
+            organisation: { type: string }
+            overlap_k: { type: integer }
+        version: { type: integer }
+        exported_at: { type: string, format: date-time }
+        items:
+          type: object
+          required: [total, delivered, consensus, adjudicated, rejected, not_final, complete]
+          properties:
+            total: { type: integer }
+            delivered: { type: integer }
+            consensus: { type: integer }
+            adjudicated: { type: integer }
+            rejected: { type: integer }
+            not_final: { type: integer }
+            complete: { type: boolean }
+        gold_accuracy:
+          type: object
+          required: [results, correct, accuracy, distribution, by_contributor]
+          properties:
+            results: { type: integer }
+            correct: { type: integer }
+            accuracy: { type: [number, "null"] }
+            distribution:
+              type: object
+              required: [contributors, min, median, max]
+              properties:
+                contributors: { type: integer }
+                min: { type: [number, "null"] }
+                median: { type: [number, "null"] }
+                max: { type: [number, "null"] }
+            by_contributor:
+              type: array
+              items:
+                type: object
+                required: [contributor, results, accuracy]
+                properties:
+                  contributor: { type: string }
+                  results: { type: integer }
+                  accuracy: { type: [number, "null"] }
+        agreement:
+          type: array
+          items:
+            type: object
+            required: [statistic, label, value, band, items, raters]
+            properties:
+              statistic: { type: string, enum: [percent, cohen_kappa, fleiss_kappa, mean_abs_diff] }
+              label: { type: [string, "null"] }
+              value: { type: number }
+              band: { type: [string, "null"], enum: [weak, moderate, substantial, strong, null] }
+              items: { type: integer }
+              raters: { type: integer }
+        review:
+          type: object
+          required: [completed, routed, review_rate, reasons]
+          properties:
+            completed: { type: integer }
+            routed: { type: integer }
+            review_rate: { type: [number, "null"] }
+            reasons: { type: object, additionalProperties: { type: integer } }
+        contributors:
+          type: object
+          required: [count, ids]
+          properties:
+            count: { type: integer }
+            ids: { type: array, items: { type: string } }
+        files:
+          type: array
+          items:
+            type: object
+            required: [name, format, records, bytes, sha256]
+            properties:
+              name: { type: string }
+              format: { type: string, enum: [jsonl, csv] }
+              records: { type: integer }
+              bytes: { type: integer }
+              sha256: { type: string }
+        notes: { type: array, items: { type: string } }
+    DeliverableVersion:
+      type: object
+      required: [version, items, created_at, published_at, manifest, files]
+      properties:
+        version: { type: integer }
+        items: { type: integer }
+        created_at: { type: string, format: date-time }
+        published_at: { type: [string, "null"], format: date-time }
+        manifest: { $ref: "#/components/schemas/DeliverableManifest" }
+        files: { type: array, items: { $ref: "#/components/schemas/DeliverableFile" } }
+    DeliverableLink:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url: { type: string, description: "A path on the frontend origin (/api/v1/...)." }
+        expires_at: { type: string, format: date-time }
     ContentReport:
       type: object
       required: [id, category, note, status, created_at, resolved_at, item_id, external_id, project_id, project_name, reported_by]
