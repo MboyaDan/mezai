@@ -318,3 +318,24 @@ func TestQASkipReportExpiry(t *testing.T) {
 		t.Fatal("stale reservation not marked expired")
 	}
 }
+
+// TestTaskRateLimit: one account asking for work far faster than a person
+// can is slowed down (D-105).
+func TestTaskRateLimit(t *testing.T) {
+	e := newEnv(t)
+	project := e.projectID(routing)
+	_, c1 := e.login("contributor001@sample.invalid", pw)
+	limited := 0
+	for range 61 {
+		if w, _ := e.next(c1, project); w.Code == http.StatusTooManyRequests {
+			limited++
+		}
+	}
+	if limited != 1 {
+		t.Fatalf("61 requests in a minute: %d limited, want 1", limited)
+	}
+	_, c2 := e.login("contributor002@sample.invalid", pw)
+	if w, _ := e.next(c2, project); w.Code != http.StatusOK {
+		t.Fatalf("another account is not limited by the first: %d", w.Code)
+	}
+}

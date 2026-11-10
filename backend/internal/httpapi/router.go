@@ -162,12 +162,16 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		th := &taskHandlers{svc: tasks.NewService(d.Auth.Pool), log: d.Log}
 		a.handle(http.MethodGet, "/me/projects", Perm("task.submit"), th.myProjects)
 		a.handle(http.MethodGet, "/me/projects/:id", Perm("task.submit"), th.myProject)
-		a.handle(http.MethodPost, "/me/projects/:id/next", Perm("task.submit"), th.next)
+		// Per-person limits well above honest use (a task takes seconds at
+		// least; autosave runs about every 1.5 s while typing), so one
+		// account or script cannot hog the database (D-105).
+		perMinute := func(n int) gin.HandlerFunc { return rateLimitUser(newLimiter(n, time.Minute)) }
+		a.handle(http.MethodPost, "/me/projects/:id/next", Perm("task.submit"), perMinute(60), th.next)
 		a.handle(http.MethodGet, "/me/tasks/:id", Perm("task.submit"), th.task)
-		a.handle(http.MethodPut, "/me/tasks/:id/draft", Perm("task.submit"), th.saveDraft)
-		a.handle(http.MethodPost, "/me/tasks/:id/submit", Perm("task.submit"), th.submit)
-		a.handle(http.MethodPost, "/me/tasks/:id/skip", Perm("task.submit"), th.skip)
-		a.handle(http.MethodPost, "/me/tasks/:id/report", Perm("task.submit"), th.report)
+		a.handle(http.MethodPut, "/me/tasks/:id/draft", Perm("task.submit"), perMinute(120), th.saveDraft)
+		a.handle(http.MethodPost, "/me/tasks/:id/submit", Perm("task.submit"), perMinute(60), th.submit)
+		a.handle(http.MethodPost, "/me/tasks/:id/skip", Perm("task.submit"), perMinute(60), th.skip)
+		a.handle(http.MethodPost, "/me/tasks/:id/report", Perm("task.submit"), perMinute(30), th.report)
 		a.handle(http.MethodGet, "/content-reports", Perm("project.manage"), th.listReports)
 		a.handle(http.MethodPost, "/content-reports/:id/resolve", Perm("project.manage"), th.resolveReport)
 

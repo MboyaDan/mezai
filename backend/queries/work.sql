@@ -31,8 +31,18 @@ WHERE a.contributor_id = $1 AND a.status = 'approved'
   AND (t.skill_kind = 'core' OR a.decided_at > now() - interval '365 days');
 
 -- name: ExpireStaleReservations :exec
+-- The caller's own lapsed reservation in this project (it would block the
+-- one-reservation index). Everyone else's are swept in the background, so
+-- many people asking for work do not queue on the same rows (D-105).
 UPDATE assignments SET status = 'expired', completed_at = now()
-WHERE status = 'reserved' AND expires_at <= now() AND (project_id = @project_id OR contributor_id = @contributor_id);
+WHERE status = 'reserved' AND expires_at <= now() AND project_id = @project_id AND contributor_id = @contributor_id;
+
+-- name: SweepExpiredReservations :execrows
+-- Background sweep: marks lapsed reservations, skipping any row a request
+-- is working on right now.
+UPDATE assignments SET status = 'expired', completed_at = now()
+WHERE id IN (SELECT id FROM assignments WHERE status = 'reserved' AND expires_at <= now()
+             ORDER BY expires_at LIMIT 500 FOR UPDATE SKIP LOCKED);
 
 -- name: CurrentReservation :one
 SELECT * FROM assignments
@@ -41,9 +51,12 @@ WHERE contributor_id = @contributor_id AND project_id = @project_id AND status =
 -- name: PickRegularItem :one
 -- An item still short of k submissions (counting live reservations), never
 -- seen by this contributor, not gold and not under an open content report.
--- Items closest to complete first, so whole items finish sooner.
+-- Items closest to complete first, so whole items finish sooner. The count
+-- here can be stale under load (it comes from the statement's snapshot), so
+-- the caller recounts with ItemLoad after the lock is held (D-105).
 SELECT i.id, i.org_id FROM items i
 WHERE i.project_id = @project_id AND i.status IN ('pending', 'in_progress')
+  AND NOT (i.id = ANY(@skip::uuid[]))
   AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
   AND NOT EXISTS (SELECT 1 FROM assignments a WHERE a.item_id = i.id AND a.contributor_id = @contributor_id)
   AND NOT EXISTS (SELECT 1 FROM content_reports r WHERE r.item_id = i.id AND r.status = 'open')
@@ -62,6 +75,13 @@ WHERE g.project_id = @project_id AND g.status = 'active'
 ORDER BY g.usage_count, g.id
 LIMIT 1
 FOR UPDATE OF g SKIP LOCKED;
+
+-- name: ItemLoad :one
+-- Submissions plus live reservations on an item, counted in a fresh
+-- statement while the caller holds the item's row lock.
+SELECT (i.submission_count + (SELECT count(*) FROM assignments a
+  WHERE a.item_id = i.id AND a.status = 'reserved' AND a.expires_at > now()))::int AS load
+FROM items i WHERE i.id = $1;
 
 -- name: MarkItemInProgress :exec
 UPDATE items SET status = 'in_progress' WHERE id = $1 AND status = 'pending';

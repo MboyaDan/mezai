@@ -10,16 +10,21 @@
 package tasks
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/quality"
+	"github.com/MboyaDan/mezai/backend/internal/store"
 )
 
 // Errors returned to handlers, which map them to HTTP codes.
@@ -86,3 +91,45 @@ var (
 	SkipReasons      = []string{"unclear", "language", "expertise", "technical", "other"}
 	ReportCategories = []string{"harmful", "personal_data", "broken", "other"}
 )
+
+// SweepExpired marks lapsed reservations as expired, in batches. Capacity
+// checks already ignore lapsed rows; the sweep keeps the table tidy and the
+// partial indexes small.
+func (s *Service) SweepExpired(ctx context.Context) (int64, error) {
+	var total int64
+	for {
+		var n int64
+		err := s.pool.InScope(ctx, db.System(), func(tx pgx.Tx) error {
+			var err error
+			n, err = store.New(tx).SweepExpiredReservations(ctx)
+			return err
+		})
+		total += n
+		if err != nil || n < 500 {
+			return total, err
+		}
+	}
+}
+
+// RunExpirySweep runs SweepExpired every interval until ctx ends.
+func (s *Service) RunExpirySweep(ctx context.Context, every time.Duration, log *slog.Logger) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		if _, err := s.SweepExpired(ctx); err != nil && ctx.Err() == nil && log != nil {
+			log.Error("reservation sweep failed", slog.Any("error", err))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// IsBusy reports a lock or statement timeout (D-105): the request can be
+// retried in a moment.
+func IsBusy(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && (pg.Code == "55P03" || pg.Code == "57014")
+}

@@ -49,6 +49,12 @@ func (p *Pool) InScope(ctx context.Context, s Scope, fn func(pgx.Tx) error) erro
 	})
 }
 
+// Per-transaction limits (D-105).
+const (
+	LockTimeout      = "5s"
+	StatementTimeout = "30s"
+)
+
 // ApplyScope switches an open transaction to mezai_app with the scope set.
 // Settings are transaction-local, so they never leak to the next user of a
 // pooled connection.
@@ -65,10 +71,14 @@ func ApplyScope(ctx context.Context, tx pgx.Tx, s Scope) error {
 		}
 		return id.String()
 	}
+	// Timeouts stop one stuck lock from piling up every request behind it:
+	// a request that cannot get a lock in 5 s fails (and can be retried)
+	// instead of holding a pooled connection (D-105).
 	_, err := tx.Exec(ctx,
 		`SELECT set_config('app.scope', $1, true), set_config('app.org_id', $2, true),
-		        set_config('app.contributor_id', $3, true)`,
-		s.kind, str(s.orgID), str(s.contributorID))
+		        set_config('app.contributor_id', $3, true),
+		        set_config('lock_timeout', $4, true), set_config('statement_timeout', $5, true)`,
+		s.kind, str(s.orgID), str(s.contributorID), LockTimeout, StatementTimeout)
 	if err != nil {
 		return fmt.Errorf("set scope: %w", err)
 	}

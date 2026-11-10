@@ -34,6 +34,12 @@ func (h *taskHandlers) fail(c *gin.Context, err error) {
 		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": "qa_blocked", "issues": be.Issues})
 		return
 	}
+	if tasks.IsBusy(err) {
+		// A lock or statement timeout: the work is safe to retry (D-105).
+		c.Header("Retry-After", "2")
+		abort(c, http.StatusServiceUnavailable, "busy")
+		return
+	}
 	var ie *quality.Invalid
 	status, code := http.StatusConflict, ""
 	switch {
