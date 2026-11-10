@@ -7,17 +7,34 @@ package store
 
 import (
 	"context"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+const countDeliverableVersion = `-- name: CountDeliverableVersion :one
+SELECT count(*)::int FROM deliverables WHERE project_id = $1 AND version = $2
+`
+
+type CountDeliverableVersionParams struct {
+	ProjectID uuid.UUID
+	Version   int32
+}
+
+func (q *Queries) CountDeliverableVersion(ctx context.Context, arg CountDeliverableVersionParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countDeliverableVersion, arg.ProjectID, arg.Version)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createDeliverable = `-- name: CreateDeliverable :one
 INSERT INTO deliverables (
   org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256,
-  schema_version, item_count, published_at, published_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at
+  schema_version, item_count, published_at, published_by, version, byte_size, created_by
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at, version, byte_size, created_by
 `
 
 type CreateDeliverableParams struct {
@@ -32,6 +49,9 @@ type CreateDeliverableParams struct {
 	ItemCount      int32
 	PublishedAt    *time.Time
 	PublishedBy    *uuid.UUID
+	Version        int32
+	ByteSize       int64
+	CreatedBy      *uuid.UUID
 }
 
 func (q *Queries) CreateDeliverable(ctx context.Context, arg CreateDeliverableParams) (Deliverable, error) {
@@ -47,6 +67,9 @@ func (q *Queries) CreateDeliverable(ctx context.Context, arg CreateDeliverablePa
 		arg.ItemCount,
 		arg.PublishedAt,
 		arg.PublishedBy,
+		arg.Version,
+		arg.ByteSize,
+		arg.CreatedBy,
 	)
 	var i Deliverable
 	err := row.Scan(
@@ -64,12 +87,265 @@ func (q *Queries) CreateDeliverable(ctx context.Context, arg CreateDeliverablePa
 		&i.PublishedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Version,
+		&i.ByteSize,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const exportAnswers = `-- name: ExportAnswers :many
+SELECT s.item_id, r.answer
+FROM items i
+JOIN submissions s ON s.item_id = i.id AND s.status IN ('accepted', 'rejected')
+JOIN submission_revisions r ON r.submission_id = s.id AND r.revision = s.current_revision
+WHERE i.project_id = $1 AND i.status = 'final'
+  AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
+ORDER BY s.item_id, s.submitted_at, s.id
+`
+
+type ExportAnswersRow struct {
+	ItemID uuid.UUID
+	Answer []byte
+}
+
+// Every decided answer on the exported items, for the agreement figures.
+func (q *Queries) ExportAnswers(ctx context.Context, projectID uuid.UUID) ([]ExportAnswersRow, error) {
+	rows, err := q.db.Query(ctx, exportAnswers, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExportAnswersRow{}
+	for rows.Next() {
+		var i ExportAnswersRow
+		if err := rows.Scan(&i.ItemID, &i.Answer); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const exportGoldByContributor = `-- name: ExportGoldByContributor :many
+SELECT c.public_code, count(*)::int AS total, count(*) FILTER (WHERE g.correct)::int AS correct
+FROM gold_results g
+JOIN gold_items gi ON gi.id = g.gold_item_id
+JOIN contributor_profiles c ON c.id = g.contributor_id
+WHERE gi.project_id = $1
+GROUP BY c.public_code ORDER BY c.public_code
+`
+
+type ExportGoldByContributorRow struct {
+	PublicCode string
+	Total      int32
+	Correct    int32
+}
+
+// All-time gold results on the project per contributor (IDs only).
+func (q *Queries) ExportGoldByContributor(ctx context.Context, projectID uuid.UUID) ([]ExportGoldByContributorRow, error) {
+	rows, err := q.db.Query(ctx, exportGoldByContributor, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExportGoldByContributorRow{}
+	for rows.Next() {
+		var i ExportGoldByContributorRow
+		if err := rows.Scan(&i.PublicCode, &i.Total, &i.Correct); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const exportItemCounts = `-- name: ExportItemCounts :one
+SELECT
+  count(*)::int AS total,
+  count(*) FILTER (WHERE i.status = 'final')::int AS final,
+  count(*) FILTER (WHERE i.status = 'final' AND r.source = 'consensus')::int AS consensus,
+  count(*) FILTER (WHERE i.status = 'final' AND r.source IN ('review', 'correction'))::int AS adjudicated,
+  count(*) FILTER (WHERE i.status = 'rejected')::int AS rejected,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1)::int AS completed,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1 AND c.routed_to_review)::int AS routed
+FROM items i
+LEFT JOIN item_revisions r ON r.item_id = i.id AND r.revision = i.current_revision
+WHERE i.project_id = $1
+  AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
+`
+
+type ExportItemCountsRow struct {
+	Total       int32
+	Final       int32
+	Consensus   int32
+	Adjudicated int32
+	Rejected    int32
+	Completed   int32
+	Routed      int32
+}
+
+func (q *Queries) ExportItemCounts(ctx context.Context, projectID uuid.UUID) (ExportItemCountsRow, error) {
+	row := q.db.QueryRow(ctx, exportItemCounts, projectID)
+	var i ExportItemCountsRow
+	err := row.Scan(
+		&i.Total,
+		&i.Final,
+		&i.Consensus,
+		&i.Adjudicated,
+		&i.Rejected,
+		&i.Completed,
+		&i.Routed,
+	)
+	return i, err
+}
+
+const exportItems = `-- name: ExportItems :many
+SELECT i.id, i.external_id, i.content, i.finalised_at, r.revision, r.answer, r.source,
+  (SELECT count(*) FROM submissions s WHERE s.item_id = i.id AND s.status IN ('accepted', 'rejected') AND s.agrees_with_final IS NOT NULL)::int AS rated,
+  (SELECT count(*) FROM submissions s WHERE s.item_id = i.id AND s.status IN ('accepted', 'rejected') AND s.agrees_with_final)::int AS agreeing,
+  coalesce((SELECT array_agg(c.public_code ORDER BY s.submitted_at, s.id)
+     FROM submissions s JOIN contributor_profiles c ON c.id = s.contributor_id
+     WHERE s.item_id = i.id AND s.status IN ('accepted', 'rejected')), '{}')::text[] AS contributors
+FROM items i
+JOIN item_revisions r ON r.item_id = i.id AND r.revision = i.current_revision
+WHERE i.project_id = $1 AND i.status = 'final'
+  AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
+ORDER BY i.created_at, i.id
+LIMIT $2
+`
+
+type ExportItemsParams struct {
+	ProjectID uuid.UUID
+	MaxItems  int32
+}
+
+type ExportItemsRow struct {
+	ID           uuid.UUID
+	ExternalID   *string
+	Content      []byte
+	FinalisedAt  *time.Time
+	Revision     int32
+	Answer       []byte
+	Source       string
+	Rated        int32
+	Agreeing     int32
+	Contributors []string
+}
+
+// Final regular items with their current final answer. Gold and rejected
+// items are never delivered. agreeing / rated is the share of answers that
+// agree with the final answer.
+func (q *Queries) ExportItems(ctx context.Context, arg ExportItemsParams) ([]ExportItemsRow, error) {
+	rows, err := q.db.Query(ctx, exportItems, arg.ProjectID, arg.MaxItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExportItemsRow{}
+	for rows.Next() {
+		var i ExportItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
+			&i.Content,
+			&i.FinalisedAt,
+			&i.Revision,
+			&i.Answer,
+			&i.Source,
+			&i.Rated,
+			&i.Agreeing,
+			&i.Contributors,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const exportRouteReasons = `-- name: ExportRouteReasons :many
+SELECT route_reason::text AS reason, count(*)::int AS n
+FROM consensus_results WHERE project_id = $1 AND routed_to_review
+GROUP BY route_reason ORDER BY route_reason
+`
+
+type ExportRouteReasonsRow struct {
+	Reason string
+	N      int32
+}
+
+func (q *Queries) ExportRouteReasons(ctx context.Context, projectID uuid.UUID) ([]ExportRouteReasonsRow, error) {
+	rows, err := q.db.Query(ctx, exportRouteReasons, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExportRouteReasonsRow{}
+	for rows.Next() {
+		var i ExportRouteReasonsRow
+		if err := rows.Scan(&i.Reason, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDeliverable = `-- name: GetDeliverable :one
+SELECT d.id, d.org_id, d.project_id, d.version, d.format, d.file_key, d.manifest_key, d.byte_size,
+  d.checksum_sha256, d.published_at, p.name AS project_name
+FROM deliverables d JOIN projects p ON p.id = d.project_id
+WHERE d.id = $1
+`
+
+type GetDeliverableRow struct {
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	ProjectID      uuid.UUID
+	Version        int32
+	Format         string
+	FileKey        string
+	ManifestKey    string
+	ByteSize       int64
+	ChecksumSha256 string
+	PublishedAt    *time.Time
+	ProjectName    string
+}
+
+func (q *Queries) GetDeliverable(ctx context.Context, id uuid.UUID) (GetDeliverableRow, error) {
+	row := q.db.QueryRow(ctx, getDeliverable, id)
+	var i GetDeliverableRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ProjectID,
+		&i.Version,
+		&i.Format,
+		&i.FileKey,
+		&i.ManifestKey,
+		&i.ByteSize,
+		&i.ChecksumSha256,
+		&i.PublishedAt,
+		&i.ProjectName,
 	)
 	return i, err
 }
 
 const listDeliverables = `-- name: ListDeliverables :many
-SELECT id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at FROM deliverables ORDER BY created_at
+SELECT id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at, version, byte_size, created_by FROM deliverables ORDER BY created_at
 `
 
 func (q *Queries) ListDeliverables(ctx context.Context) ([]Deliverable, error) {
@@ -96,6 +372,9 @@ func (q *Queries) ListDeliverables(ctx context.Context) ([]Deliverable, error) {
 			&i.PublishedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Version,
+			&i.ByteSize,
+			&i.CreatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -105,4 +384,167 @@ func (q *Queries) ListDeliverables(ctx context.Context) ([]Deliverable, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listProjectDeliverables = `-- name: ListProjectDeliverables :many
+SELECT d.id, d.version, d.format, d.byte_size, d.checksum_sha256, d.item_count, d.schema_version,
+  d.manifest, d.published_at, d.created_at,
+  (SELECT count(*) FROM deliverable_downloads dd WHERE dd.deliverable_id = d.id)::int AS downloads
+FROM deliverables d
+WHERE d.project_id = $1
+ORDER BY d.version DESC, d.format
+`
+
+type ListProjectDeliverablesRow struct {
+	ID             uuid.UUID
+	Version        int32
+	Format         string
+	ByteSize       int64
+	ChecksumSha256 string
+	ItemCount      int32
+	SchemaVersion  int32
+	Manifest       []byte
+	PublishedAt    *time.Time
+	CreatedAt      time.Time
+	Downloads      int32
+}
+
+// Visible rows only: a client sees published versions (RLS).
+func (q *Queries) ListProjectDeliverables(ctx context.Context, projectID uuid.UUID) ([]ListProjectDeliverablesRow, error) {
+	rows, err := q.db.Query(ctx, listProjectDeliverables, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProjectDeliverablesRow{}
+	for rows.Next() {
+		var i ListProjectDeliverablesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Version,
+			&i.Format,
+			&i.ByteSize,
+			&i.ChecksumSha256,
+			&i.ItemCount,
+			&i.SchemaVersion,
+			&i.Manifest,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.Downloads,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockProjectForExport = `-- name: LockProjectForExport :one
+
+SELECT p.id, p.org_id, p.name, p.task_type, p.config, p.overlap_k, o.name AS org_name
+FROM projects p JOIN organisations o ON o.id = p.org_id
+WHERE p.id = $1 FOR UPDATE OF p
+`
+
+type LockProjectForExportRow struct {
+	ID       uuid.UUID
+	OrgID    uuid.UUID
+	Name     string
+	TaskType string
+	Config   []byte
+	OverlapK int16
+	OrgName  string
+}
+
+// Deliverable exports (Stage 11b, brief 8.5). Exports read in system scope
+// after the service has checked the caller may manage the project.
+// Serialises exports of one project so two clicks cannot take one version.
+func (q *Queries) LockProjectForExport(ctx context.Context, id uuid.UUID) (LockProjectForExportRow, error) {
+	row := q.db.QueryRow(ctx, lockProjectForExport, id)
+	var i LockProjectForExportRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Name,
+		&i.TaskType,
+		&i.Config,
+		&i.OverlapK,
+		&i.OrgName,
+	)
+	return i, err
+}
+
+const nextDeliverableVersion = `-- name: NextDeliverableVersion :one
+SELECT (coalesce(max(version), 0) + 1)::int FROM deliverables WHERE project_id = $1
+`
+
+func (q *Queries) NextDeliverableVersion(ctx context.Context, projectID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextDeliverableVersion, projectID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const publishDeliverableVersion = `-- name: PublishDeliverableVersion :many
+UPDATE deliverables SET published_at = now(), published_by = $1
+WHERE project_id = $2 AND version = $3 AND published_at IS NULL
+RETURNING id, org_id
+`
+
+type PublishDeliverableVersionParams struct {
+	PublishedBy *uuid.UUID
+	ProjectID   uuid.UUID
+	Version     int32
+}
+
+type PublishDeliverableVersionRow struct {
+	ID    uuid.UUID
+	OrgID uuid.UUID
+}
+
+func (q *Queries) PublishDeliverableVersion(ctx context.Context, arg PublishDeliverableVersionParams) ([]PublishDeliverableVersionRow, error) {
+	rows, err := q.db.Query(ctx, publishDeliverableVersion, arg.PublishedBy, arg.ProjectID, arg.Version)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PublishDeliverableVersionRow{}
+	for rows.Next() {
+		var i PublishDeliverableVersionRow
+		if err := rows.Scan(&i.ID, &i.OrgID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recordDeliverableDownload = `-- name: RecordDeliverableDownload :exec
+INSERT INTO deliverable_downloads (org_id, deliverable_id, user_id, ip, file)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type RecordDeliverableDownloadParams struct {
+	OrgID         uuid.UUID
+	DeliverableID uuid.UUID
+	UserID        uuid.UUID
+	Ip            *netip.Addr
+	File          string
+}
+
+func (q *Queries) RecordDeliverableDownload(ctx context.Context, arg RecordDeliverableDownloadParams) error {
+	_, err := q.db.Exec(ctx, recordDeliverableDownload,
+		arg.OrgID,
+		arg.DeliverableID,
+		arg.UserID,
+		arg.Ip,
+		arg.File,
+	)
+	return err
 }

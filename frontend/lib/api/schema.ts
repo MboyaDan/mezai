@@ -820,6 +820,84 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{id}/deliverables": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The project's deliverable versions, newest first (`deliverable.publish` or `org.deliverable.download`).
+     * @description A client user sees published versions of its own organisation's projects only (row-level security).
+     */
+    get: operations["listDeliverables"];
+    put?: never;
+    /**
+     * Export the project's final items as a new, unpublished version (`deliverable.publish`).
+     * @description Writes a JSONL file, a CSV file and the brief 8.5 manifest to object storage. Only final regular items are included; gold and rejected items never are. Up to 50,000 items.
+     */
+    post: operations["exportDeliverable"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/deliverables/{version}/publish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Make a version visible to the project's client (`deliverable.publish`). */
+    post: operations["publishDeliverable"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/deliverables/{id}/links": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** A download link for one file, valid for five minutes and only for the caller (`deliverable.publish` or `org.deliverable.download`). */
+    post: operations["createDeliverableLink"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/deliverables/{id}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download a file through a signed link (`deliverable.publish` or `org.deliverable.download`).
+     * @description The link must be signed for the signed-in user and unexpired. A data file is checked against its stored checksum. Each download is recorded in deliverable_downloads and the audit log.
+     */
+    get: operations["downloadDeliverable"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/review/items": {
     parameters: {
       query?: never;
@@ -1926,6 +2004,112 @@ export interface components {
       decision: components["schemas"]["ReviewDecisionKind"];
       /** @enum {string} */
       item_status: "final" | "rejected";
+    };
+    DeliverableFile: {
+      /**
+       * Format: uuid
+       * @description The deliverable row; the manifest is offered through the JSONL row.
+       */
+      id: string;
+      /** @enum {string} */
+      file: "data" | "manifest";
+      /** @enum {string} */
+      format: "jsonl" | "csv" | "json";
+      name: string;
+      /** @description 0 for the manifest */
+      bytes: number;
+      /** @description Empty for the manifest, which holds the data files' checksums */
+      sha256: string;
+      downloads: number;
+    };
+    /** @description Brief 8.5. Contributors appear by public code only; no item content. */
+    DeliverableManifest: {
+      /** @enum {string} */
+      schema: "mezai.delivery-manifest";
+      schema_version: number;
+      project: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+        task_type: string;
+        organisation: string;
+        overlap_k: number;
+      };
+      version: number;
+      /** Format: date-time */
+      exported_at: string;
+      items: {
+        total: number;
+        delivered: number;
+        consensus: number;
+        adjudicated: number;
+        rejected: number;
+        not_final: number;
+        complete: boolean;
+      };
+      gold_accuracy: {
+        results: number;
+        correct: number;
+        accuracy: number | null;
+        distribution: {
+          contributors: number;
+          min: number | null;
+          median: number | null;
+          max: number | null;
+        };
+        by_contributor: {
+          contributor: string;
+          results: number;
+          accuracy: number | null;
+        }[];
+      };
+      agreement: {
+        /** @enum {string} */
+        statistic: "percent" | "cohen_kappa" | "fleiss_kappa" | "mean_abs_diff";
+        label: string | null;
+        value: number;
+        /** @enum {string|null} */
+        band: "weak" | "moderate" | "substantial" | "strong" | null;
+        items: number;
+        raters: number;
+      }[];
+      review: {
+        completed: number;
+        routed: number;
+        review_rate: number | null;
+        reasons: {
+          [key: string]: number;
+        };
+      };
+      contributors: {
+        count: number;
+        ids: string[];
+      };
+      files: {
+        name: string;
+        /** @enum {string} */
+        format: "jsonl" | "csv";
+        records: number;
+        bytes: number;
+        sha256: string;
+      }[];
+      notes: string[];
+    };
+    DeliverableVersion: {
+      version: number;
+      items: number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      published_at: string | null;
+      manifest: components["schemas"]["DeliverableManifest"];
+      files: components["schemas"]["DeliverableFile"][];
+    };
+    DeliverableLink: {
+      /** @description A path on the frontend origin (/api/v1/...). */
+      url: string;
+      /** Format: date-time */
+      expires_at: string;
     };
     ContentReport: {
       /** Format: uuid */
@@ -3827,6 +4011,195 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  listDeliverables: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Versions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            versions: components["schemas"]["DeliverableVersion"][];
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  exportDeliverable: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Exported */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliverableVersion"];
+        };
+      };
+      404: components["responses"]["Error"];
+      /** @description `nothing_to_export` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description `too_large` */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description `storage_unavailable` */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  publishDeliverable: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+        version: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Published */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            status: "published";
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+      /** @description `already_published` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  createDeliverableLink: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          file: "data" | "manifest";
+        };
+      };
+    };
+    responses: {
+      /** @description Link */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeliverableLink"];
+        };
+      };
+      404: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  downloadDeliverable: {
+    parameters: {
+      query: {
+        file: "data" | "manifest";
+        expires: string;
+        sig: string;
+      };
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file, as an attachment */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/x-ndjson": string;
+          "text/csv": string;
+          "application/json": string;
+        };
+      };
+      /** @description `link_expired` (expired, altered or someone else's link) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
       };
       404: components["responses"]["Error"];
     };
