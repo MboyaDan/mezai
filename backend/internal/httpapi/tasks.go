@@ -182,6 +182,53 @@ func (h *taskHandlers) report(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *taskHandlers) projectQuality(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := h.svc.GetProjectQuality(c.Request.Context(), PrincipalFrom(c), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) snapshotNow(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := h.svc.SnapshotProjectNow(c.Request.Context(), PrincipalFrom(c), id, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) myFeedback(c *gin.Context) {
+	out, err := h.svc.MyFeedback(c.Request.Context(), PrincipalFrom(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"feedback": out})
+}
+
+func (h *taskHandlers) readFeedback(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.svc.MarkFeedbackRead(c.Request.Context(), PrincipalFrom(c), id); err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *taskHandlers) listReports(c *gin.Context) {
 	out, err := h.svc.ListReports(c.Request.Context(), PrincipalFrom(c), c.DefaultQuery("status", "open"))
 	if err != nil {

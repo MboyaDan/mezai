@@ -174,3 +174,41 @@ func TestGoldRules(t *testing.T) {
 		t.Error("preference-only gold ignores scores")
 	}
 }
+
+func TestProjectAgreement(t *testing.T) {
+	lbl := func(l ...string) Answer { return Answer{Labels: l} }
+	// Two raters on four items: agree on three. Cohen per Wikipedia rules.
+	items := [][]Answer{{lbl("a"), lbl("a")}, {lbl("b"), lbl("b")}, {lbl("a"), lbl("b")}, {lbl("b"), lbl("b")}}
+	stats := ProjectAgreement(Classification, Config{Labels: []string{"a", "b"}}, items, 2)
+	find := func(label, stat string) (float64, bool) {
+		for _, s := range stats {
+			if s.Label == label && s.Statistic == stat {
+				return s.Value, true
+			}
+		}
+		return 0, false
+	}
+	if v, ok := find("", "percent"); !ok || v != 0.75 {
+		t.Fatalf("percent %v %v", v, ok)
+	}
+	// po = 0.75; rater 1: a 2, b 2; rater 2: a 1, b 3; pe = 0.5×0.25 + 0.5×0.75 = 0.5; kappa = 0.5.
+	if v, ok := find("", "cohen_kappa"); !ok || math.Abs(v-0.5) > 1e-9 {
+		t.Fatalf("cohen %v %v", v, ok)
+	}
+	if _, ok := find("a", "percent"); !ok {
+		t.Fatal("per-label figures missing")
+	}
+	// Three raters use Fleiss; one rater gives nothing.
+	three := [][]Answer{{lbl("a"), lbl("a"), lbl("b")}, {lbl("b"), lbl("b"), lbl("b")}}
+	s3 := ProjectAgreement(Classification, Config{}, three, 3)
+	if len(s3) != 2 || s3[1].Statistic != "fleiss_kappa" {
+		t.Fatalf("three raters: %+v", s3)
+	}
+	if ProjectAgreement(Classification, Config{}, [][]Answer{{lbl("a")}}, 1) != nil {
+		t.Fatal("k = 1 has no agreement")
+	}
+	tr := ProjectAgreement(TranslationReview, Config{}, [][]Answer{{{Adequacy: 4, Fluency: 5}, {Adequacy: 2, Fluency: 5}}}, 2)
+	if len(tr) != 2 || tr[0].Value != 2 || tr[1].Value != 0 {
+		t.Fatalf("translation MAD: %+v", tr)
+	}
+}

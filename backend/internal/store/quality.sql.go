@@ -7,9 +7,42 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const addAgreementSnapshot = `-- name: AddAgreementSnapshot :exec
+INSERT INTO agreement_snapshots (org_id, project_id, label, statistic, value, n_items, n_raters, window_start, window_end)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type AddAgreementSnapshotParams struct {
+	OrgID       uuid.UUID
+	ProjectID   uuid.UUID
+	Label       *string
+	Statistic   string
+	Value       float64
+	NItems      int32
+	NRaters     int32
+	WindowStart time.Time
+	WindowEnd   time.Time
+}
+
+func (q *Queries) AddAgreementSnapshot(ctx context.Context, arg AddAgreementSnapshotParams) error {
+	_, err := q.db.Exec(ctx, addAgreementSnapshot,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.Label,
+		arg.Statistic,
+		arg.Value,
+		arg.NItems,
+		arg.NRaters,
+		arg.WindowStart,
+		arg.WindowEnd,
+	)
+	return err
+}
 
 const addConsensus = `-- name: AddConsensus :exec
 INSERT INTO consensus_results (org_id, project_id, item_id, method, result, agreement, spread, routed_to_review, route_reason)
@@ -39,6 +72,32 @@ func (q *Queries) AddConsensus(ctx context.Context, arg AddConsensusParams) erro
 		arg.Spread,
 		arg.RoutedToReview,
 		arg.RouteReason,
+	)
+	return err
+}
+
+const addFeedback = `-- name: AddFeedback :exec
+INSERT INTO feedback (org_id, project_id, contributor_id, submission_id, author_user_id, body)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type AddFeedbackParams struct {
+	OrgID         uuid.UUID
+	ProjectID     uuid.UUID
+	ContributorID uuid.UUID
+	SubmissionID  *uuid.UUID
+	AuthorUserID  *uuid.UUID
+	Body          string
+}
+
+func (q *Queries) AddFeedback(ctx context.Context, arg AddFeedbackParams) error {
+	_, err := q.db.Exec(ctx, addFeedback,
+		arg.OrgID,
+		arg.ProjectID,
+		arg.ContributorID,
+		arg.SubmissionID,
+		arg.AuthorUserID,
+		arg.Body,
 	)
 	return err
 }
@@ -140,6 +199,65 @@ func (q *Queries) AgreementStats(ctx context.Context, arg AgreementStatsParams) 
 	return i, err
 }
 
+const completedItemAnswers = `-- name: CompletedItemAnswers :many
+SELECT c.item_id, r.answer
+FROM consensus_results c
+JOIN submissions s ON s.item_id = c.item_id AND s.status IN ('submitted', 'accepted', 'rejected')
+JOIN submission_revisions r ON r.submission_id = s.id AND r.revision = s.current_revision
+WHERE c.project_id = $1 AND c.created_at >= $2 AND c.created_at < $3
+ORDER BY c.item_id, s.submitted_at, s.id
+`
+
+type CompletedItemAnswersParams struct {
+	ProjectID uuid.UUID
+	FromAt    time.Time
+	ToAt      time.Time
+}
+
+type CompletedItemAnswersRow struct {
+	ItemID uuid.UUID
+	Answer []byte
+}
+
+// Answers on regular items whose consensus was reached in the window: each
+// has exactly k answers. Ordered so the caller can group by item.
+func (q *Queries) CompletedItemAnswers(ctx context.Context, arg CompletedItemAnswersParams) ([]CompletedItemAnswersRow, error) {
+	rows, err := q.db.Query(ctx, completedItemAnswers, arg.ProjectID, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CompletedItemAnswersRow{}
+	for rows.Next() {
+		var i CompletedItemAnswersRow
+		if err := rows.Scan(&i.ItemID, &i.Answer); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countMyWorkInProject = `-- name: CountMyWorkInProject :one
+SELECT count(*)::int FROM assignments WHERE contributor_id = $1 AND project_id = $2 AND status = 'submitted'
+`
+
+type CountMyWorkInProjectParams struct {
+	ContributorID uuid.UUID
+	ProjectID     uuid.UUID
+}
+
+// Tasks this contributor has submitted on the project (warm-up).
+func (q *Queries) CountMyWorkInProject(ctx context.Context, arg CountMyWorkInProjectParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countMyWorkInProject, arg.ContributorID, arg.ProjectID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getGoldForItem = `-- name: GetGoldForItem :one
 
 SELECT id, org_id, expected, tolerance FROM gold_items WHERE item_id = $1
@@ -166,6 +284,59 @@ func (q *Queries) GetGoldForItem(ctx context.Context, itemID uuid.UUID) (GetGold
 	return i, err
 }
 
+const goldResultsForDay = `-- name: GoldResultsForDay :many
+SELECT g.contributor_id, gi.project_id, gi.org_id, p.name AS project_name,
+  count(*)::int AS total, count(*) FILTER (WHERE NOT g.correct)::int AS missed
+FROM gold_results g
+JOIN gold_items gi ON gi.id = g.gold_item_id
+JOIN projects p ON p.id = gi.project_id
+WHERE g.created_at >= $1 AND g.created_at < $2
+GROUP BY g.contributor_id, gi.project_id, gi.org_id, p.name
+`
+
+type GoldResultsForDayParams struct {
+	FromAt time.Time
+	ToAt   time.Time
+}
+
+type GoldResultsForDayRow struct {
+	ContributorID uuid.UUID
+	ProjectID     uuid.UUID
+	OrgID         uuid.UUID
+	ProjectName   string
+	Total         int32
+	Missed        int32
+}
+
+// Gold results per contributor and project in one day, for the batched
+// feedback (brief 8.1: never naming the items).
+func (q *Queries) GoldResultsForDay(ctx context.Context, arg GoldResultsForDayParams) ([]GoldResultsForDayRow, error) {
+	rows, err := q.db.Query(ctx, goldResultsForDay, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GoldResultsForDayRow{}
+	for rows.Next() {
+		var i GoldResultsForDayRow
+		if err := rows.Scan(
+			&i.ContributorID,
+			&i.ProjectID,
+			&i.OrgID,
+			&i.ProjectName,
+			&i.Total,
+			&i.Missed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const goldStats = `-- name: GoldStats :one
 SELECT count(*) FILTER (WHERE created_at > now() - make_interval(days => $1::int))::int AS window_total,
        count(*) FILTER (WHERE created_at > now() - make_interval(days => $1::int) AND correct)::int AS window_correct,
@@ -190,6 +361,53 @@ func (q *Queries) GoldStats(ctx context.Context, arg GoldStatsParams) (GoldStats
 	var i GoldStatsRow
 	err := row.Scan(&i.WindowTotal, &i.WindowCorrect, &i.AllTime)
 	return i, err
+}
+
+const latestSnapshots = `-- name: LatestSnapshots :many
+SELECT DISTINCT ON (statistic, coalesce(label, '')) label, statistic, value, n_items, n_raters, window_start, window_end, created_at
+FROM agreement_snapshots WHERE project_id = $1
+ORDER BY statistic, coalesce(label, ''), created_at DESC
+`
+
+type LatestSnapshotsRow struct {
+	Label       *string
+	Statistic   string
+	Value       float64
+	NItems      int32
+	NRaters     int32
+	WindowStart time.Time
+	WindowEnd   time.Time
+	CreatedAt   time.Time
+}
+
+// The newest figure per statistic and label for a project.
+func (q *Queries) LatestSnapshots(ctx context.Context, projectID uuid.UUID) ([]LatestSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, latestSnapshots, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LatestSnapshotsRow{}
+	for rows.Next() {
+		var i LatestSnapshotsRow
+		if err := rows.Scan(
+			&i.Label,
+			&i.Statistic,
+			&i.Value,
+			&i.NItems,
+			&i.NRaters,
+			&i.WindowStart,
+			&i.WindowEnd,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const latestTrustScore = `-- name: LatestTrustScore :one
@@ -248,6 +466,147 @@ func (q *Queries) ListFinalAnswersForItem(ctx context.Context, itemID uuid.UUID)
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMyFeedback = `-- name: ListMyFeedback :many
+SELECT f.id, f.body, f.read_at, f.created_at, f.project_id, p.name AS project_name, (f.author_user_id IS NULL)::bool AS automatic
+FROM feedback f JOIN projects p ON p.id = f.project_id
+WHERE f.contributor_id = $1
+ORDER BY f.created_at DESC
+LIMIT 50
+`
+
+type ListMyFeedbackRow struct {
+	ID          uuid.UUID
+	Body        string
+	ReadAt      *time.Time
+	CreatedAt   time.Time
+	ProjectID   uuid.UUID
+	ProjectName string
+	Automatic   bool
+}
+
+func (q *Queries) ListMyFeedback(ctx context.Context, contributorID uuid.UUID) ([]ListMyFeedbackRow, error) {
+	rows, err := q.db.Query(ctx, listMyFeedback, contributorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMyFeedbackRow{}
+	for rows.Next() {
+		var i ListMyFeedbackRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Body,
+			&i.ReadAt,
+			&i.CreatedAt,
+			&i.ProjectID,
+			&i.ProjectName,
+			&i.Automatic,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markFeedbackRead = `-- name: MarkFeedbackRead :execrows
+UPDATE feedback SET read_at = now() WHERE id = $1 AND contributor_id = $2 AND read_at IS NULL
+`
+
+type MarkFeedbackReadParams struct {
+	ID            uuid.UUID
+	ContributorID uuid.UUID
+}
+
+func (q *Queries) MarkFeedbackRead(ctx context.Context, arg MarkFeedbackReadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markFeedbackRead, arg.ID, arg.ContributorID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const projectQualitySummary = `-- name: ProjectQualitySummary :one
+SELECT
+  (SELECT count(*) FROM items i WHERE i.project_id = $1 AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id))::int AS items,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1)::int AS completed,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1 AND c.routed_to_review)::int AS routed,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1 AND c.route_reason = 'no_majority')::int AS no_majority,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1 AND c.route_reason = 'spread')::int AS spread,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1 AND c.route_reason = 'flagged')::int AS flagged,
+  (SELECT count(*) FROM consensus_results c WHERE c.project_id = $1 AND c.route_reason = 'audit_sample')::int AS audit_sample,
+  (SELECT count(*) FROM gold_results g JOIN gold_items gi ON gi.id = g.gold_item_id
+     WHERE gi.project_id = $1 AND g.created_at > now() - interval '30 days')::int AS gold_total,
+  (SELECT count(*) FROM gold_results g JOIN gold_items gi ON gi.id = g.gold_item_id
+     WHERE gi.project_id = $1 AND g.created_at > now() - interval '30 days' AND g.correct)::int AS gold_correct,
+  (SELECT count(DISTINCT s.contributor_id) FROM submissions s WHERE s.project_id = $1 AND s.status <> 'draft')::int AS contributors
+`
+
+type ProjectQualitySummaryRow struct {
+	Items        int32
+	Completed    int32
+	Routed       int32
+	NoMajority   int32
+	Spread       int32
+	Flagged      int32
+	AuditSample  int32
+	GoldTotal    int32
+	GoldCorrect  int32
+	Contributors int32
+}
+
+func (q *Queries) ProjectQualitySummary(ctx context.Context, projectID uuid.UUID) (ProjectQualitySummaryRow, error) {
+	row := q.db.QueryRow(ctx, projectQualitySummary, projectID)
+	var i ProjectQualitySummaryRow
+	err := row.Scan(
+		&i.Items,
+		&i.Completed,
+		&i.Routed,
+		&i.NoMajority,
+		&i.Spread,
+		&i.Flagged,
+		&i.AuditSample,
+		&i.GoldTotal,
+		&i.GoldCorrect,
+		&i.Contributors,
+	)
+	return i, err
+}
+
+const projectsWithConsensusIn = `-- name: ProjectsWithConsensusIn :many
+
+SELECT DISTINCT project_id FROM consensus_results WHERE created_at >= $1 AND created_at < $2
+`
+
+type ProjectsWithConsensusInParams struct {
+	FromAt time.Time
+	ToAt   time.Time
+}
+
+// Reporting (Stage 10b).
+func (q *Queries) ProjectsWithConsensusIn(ctx context.Context, arg ProjectsWithConsensusInParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, projectsWithConsensusIn, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var project_id uuid.UUID
+		if err := rows.Scan(&project_id); err != nil {
+			return nil, err
+		}
+		items = append(items, project_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

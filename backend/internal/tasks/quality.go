@@ -75,10 +75,15 @@ func loadTrustSettings(ctx context.Context, q *store.Queries) (trustSettings, er
 
 // goldRateFor is the project's gold rate, raised during probation (brief
 // 8.4: fewer than trust.min_gold_results gold results).
-func goldRateFor(ctx context.Context, q *store.Queries, contributor uuid.UUID, rate float64) (float64, error) {
+func goldRateFor(ctx context.Context, q *store.Queries, contributor, project uuid.UUID, rate float64) (float64, error) {
 	if rate <= 0 {
-		return 0, nil
+		return 0, nil // no gold on this project: neither probation nor warm-up adds any
 	}
+	warm, err := warmupRate(ctx, q, contributor, project)
+	if err != nil {
+		return rate, err
+	}
+	rate = math.Max(rate, warm)
 	ts, err := loadTrustSettings(ctx, q)
 	if err != nil {
 		return rate, err

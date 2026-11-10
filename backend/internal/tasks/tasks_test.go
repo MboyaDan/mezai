@@ -111,7 +111,8 @@ func TestGoldRateAndOverlap(t *testing.T) {
 	// AC-06 measures the project's configured rate: turn probation (a higher
 	// rate for new contributors, TestProbation) off here.
 	if err := pool.InScope(ctx, db.Staff(), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE settings SET value = '1' WHERE key = 'trust.probation_gold_multiplier'`)
+		_, err := tx.Exec(ctx, `UPDATE settings SET value = CASE key WHEN 'trust.probation_gold_multiplier' THEN '1'::jsonb ELSE '0'::jsonb END
+			WHERE key IN ('trust.probation_gold_multiplier', 'warmup.tasks')`) // and no warm-up
 		return err
 	}); err != nil {
 		t.Fatal(err)
