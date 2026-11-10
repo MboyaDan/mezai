@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 10a (quality engine: scoring, consensus, trust). Branch `stage-10a-quality-engine`, PR open. 9c merged as #36.
-- **Next stage:** 10b (nightly agreement snapshots, daily gold-miss feedback, per-project warm-up, Ops agreement API; D-106). Then Stage 11 (review and adjudication; it must set `agrees_with_final` for reviewed items and fill review acceptance).
+- **Last stage:** 10b (quality reporting and the job queue). Branch `stage-10b-quality-reporting`, PR open. 10a merged as #37.
+- **Next stage:** 11 (review and adjudication). It must set `agrees_with_final` for reviewed items, set submissions to accepted or rejected (the trust score's review-acceptance input), recompute trust after each decision, and create earnings on acceptance.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -53,6 +53,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Core check content and creation | `backend/internal/contributors/corecheck.go` |
 | Screening funnel (application, CV, screening, interview) | `backend/internal/contributors/screening.go`; Ops panels `frontend/components/workspace/screening-panels.tsx`; rubric mirror `frontend/lib/screening.ts` |
 | Task workspace and reports screens | `frontend/components/contributor/{work,task-workspace}.tsx`, helpers `frontend/lib/tasks.ts`, Ops `frontend/components/workspace/reports.tsx` |
+| Background jobs (daily, SKIP LOCKED) | `backend/internal/jobs/`; quality jobs and reports in `backend/internal/tasks/reporting.go` |
 | Quality engine (gold scoring, consensus, trust, auto-pause) and maths | `backend/internal/tasks/quality.go`, `backend/internal/quality/agreement.go` |
 | Task engine (eligibility, assignment, submit, reports) and QA checks | `backend/internal/tasks/`, handlers `backend/internal/httpapi/tasks.go`, checks `backend/internal/quality/qa.go` |
 | National ID fingerprint, identity checks | `backend/internal/identity/`, `backend/internal/contributors/identity.go`; Ops panel `frontend/components/workspace/identity-panel.tsx` |
@@ -93,7 +94,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 7d-1 | Merged | #30 | Migration 00013 (application answers, LinkedIn, CV columns, screening status, `interviews`). Application form and optional PDF CV (deleted on decline or by an hourly sweep 90 days after the decision); Ops shortlist / waitlist / decline; structured phone interview (fixed script and rubric, no recording); tests open only once shortlisted; activation = shortlisted + test + interview + verified identity. Privacy notice and contributor terms 0.3. Ops Applications and Interviews queues. |
 | 7d-2 | Merged | #35 | Migration 00014 (`core` skill kind, one active core check, per-question `task_type`/`config`, `writing_rating`). Core check content in `corecheck.go` and `POST /qualification/core-check` (draft); writing answers (60–250 words) rated by Ops; core first, 30-day core retake; activation on the core check; skills valid 12 months. Screens: core check first on the tests list, mixed question types, writing input, Ops writing rating. |
 | 9c | Merged | #36 | Concurrency test with 60 contributors found two races (items over k; same-key submits refused) and fixed them: recount under the item lock, lock the task before the key lookup. Own-only expiry plus a background sweep; 5 s lock and 30 s statement timeouts answered as 503 busy; per-account limits on task routes; pool of 20 connections. About 350 next-and-submit cycles a second locally. |
-| 10a | PR open | #37 | `quality/agreement.go` (Cohen, Fleiss, percent, MAD, majority, Jaccard, spread, bands, trust formula) with textbook tests; brief 8.1 gold rules. Migration 00015 (`agrees_with_final`, one consensus per item, probation settings). On submit: gold scored, consensus or review routing, agreement per rater, trust recalculated, auto-pause below 0.70 with Ops email; probation gold rate. Profile shows the latest trust score. |
+| 10a | Merged | #37 | `quality/agreement.go` (Cohen, Fleiss, percent, MAD, majority, Jaccard, spread, bands, trust formula) with textbook tests; brief 8.1 gold rules. Migration 00015 (`agrees_with_final`, one consensus per item, probation settings). On submit: gold scored, consensus or review routing, agreement per rater, trust recalculated, auto-pause below 0.70 with Ops email; probation gold rate. Profile shows the latest trust score. |
+| 10b | PR open | #38 | `internal/jobs` runner on the Postgres `jobs` table (daily jobs per Nairobi date, SKIP LOCKED, backoff). Nightly agreement snapshots (percent, Cohen or Fleiss kappa per project and label, rubric MAD); daily gold-miss feedback that never names items; per-project warm-up gold rate; `GET /projects/{id}/quality` (aggregates, kappa bands) and Ops recompute; `/me/feedback`. Migration 00016 (warm-up settings, indexes). |
 
 ## Notes for the next session
 

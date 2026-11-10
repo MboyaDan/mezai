@@ -172,6 +172,11 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/me/tasks/:id/submit", Perm("task.submit"), perMinute(60), th.submit)
 		a.handle(http.MethodPost, "/me/tasks/:id/skip", Perm("task.submit"), perMinute(60), th.skip)
 		a.handle(http.MethodPost, "/me/tasks/:id/report", Perm("task.submit"), perMinute(30), th.report)
+		a.handle(http.MethodGet, "/me/feedback", Perm("task.submit"), th.myFeedback)
+		a.handle(http.MethodPost, "/me/feedback/:id/read", Perm("task.submit"), th.readFeedback)
+		// Quality picture: aggregates only, so a project's client may read it too.
+		a.handle(http.MethodGet, "/projects/:id/quality", Perm("project.manage", "org.project.read"), th.projectQuality)
+		a.handle(http.MethodPost, "/projects/:id/quality/snapshot", Perm("project.manage"), th.snapshotNow)
 		a.handle(http.MethodGet, "/content-reports", Perm("project.manage"), th.listReports)
 		a.handle(http.MethodPost, "/content-reports/:id/resolve", Perm("project.manage"), th.resolveReport)
 

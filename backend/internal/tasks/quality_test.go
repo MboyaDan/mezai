@@ -266,6 +266,7 @@ func TestProbation(t *testing.T) {
 	project := qProject(t, pool, quality.Classification, labels3, 1, 0.1,
 		[]map[string]string{{"text": "Sample a."}, {"text": "Sample b."}},
 		[][2]any{{map[string]string{"text": "Sample gold."}, map[string]any{"labels": []string{"Yes"}}}})
+	setSetting(t, pool, "warmup.tasks", "0") // probation alone here; TestWarmup covers the warm-up
 	p := crowd(t, pool, 1)[0]
 	isGold := func(task uuid.UUID) bool {
 		return staffQuery[bool](t, pool, `SELECT EXISTS (SELECT 1 FROM gold_items g JOIN assignments a ON a.item_id = g.item_id WHERE a.id = $1)`, task)

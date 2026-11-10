@@ -339,3 +339,39 @@ func TestTaskRateLimit(t *testing.T) {
 		t.Fatalf("another account is not limited by the first: %d", w.Code)
 	}
 }
+
+// TestProjectQualityAccess: the quality picture is aggregates only; Ops and
+// the project's own client read it, nobody else does (brief 8.4, AC-10 style).
+func TestProjectQualityAccess(t *testing.T) {
+	e := newEnv(t)
+	project := e.projectID(routing)
+	_, ops := e.login("ops@sample.invalid", pw)
+	w := e.do(http.MethodPost, "/v1/projects/"+project+"/quality/snapshot", map[string]any{}, ops, nil)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"route_reasons"`) {
+		t.Fatalf("ops snapshot: %d %s", w.Code, w.Body)
+	}
+	_, client := e.login("client.admin@sample.invalid", pw)
+	w = e.do(http.MethodGet, "/v1/projects/"+project+"/quality", nil, client, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("own client: %d %s", w.Code, w.Body)
+	}
+	for _, leak := range []string{"contributor_id", "public_code", "@sample.invalid"} {
+		if strings.Contains(w.Body.String(), leak) {
+			t.Fatalf("quality picture names contributors (%s): %s", leak, w.Body)
+		}
+	}
+	if w := e.do(http.MethodPost, "/v1/projects/"+project+"/quality/snapshot", map[string]any{}, client, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("client refreshes snapshots: %d", w.Code)
+	}
+	_, other := e.login("other.admin@sample.invalid", pw)
+	if w := e.do(http.MethodGet, "/v1/projects/"+project+"/quality", nil, other, nil); w.Code != http.StatusNotFound {
+		t.Fatalf("another organisation: %d", w.Code)
+	}
+	_, c1 := e.login("contributor001@sample.invalid", pw)
+	if w := e.do(http.MethodGet, "/v1/projects/"+project+"/quality", nil, c1, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("contributor: %d", w.Code)
+	}
+	if w := e.do(http.MethodGet, "/v1/me/feedback", nil, c1, nil); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"feedback":[]`) {
+		t.Fatalf("my feedback: %d %s", w.Code, w.Body)
+	}
+}

@@ -818,6 +818,68 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "410": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/feedback:
+    get:
+      operationId: listMyFeedback
+      summary: The caller's latest feedback (reviewers, and the automatic daily gold-miss note).
+      description: The automatic note never names the items it refers to, so it cannot reveal which were gold (brief 8.1).
+      tags: [tasks]
+      responses:
+        "200":
+          description: Feedback
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [feedback]
+                properties:
+                  feedback:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, body, project_id, project_name, automatic, read_at, created_at]
+                      properties:
+                        id: { type: string, format: uuid }
+                        body: { type: string }
+                        project_id: { type: string, format: uuid }
+                        project_name: { type: string }
+                        automatic: { type: boolean }
+                        read_at: { type: [string, "null"], format: date-time }
+                        created_at: { type: string, format: date-time }
+  /v1/me/feedback/{id}/read:
+    post:
+      operationId: markFeedbackRead
+      summary: Mark one of the caller's notes as read.
+      tags: [tasks]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Marked }
+  /v1/projects/{id}/quality:
+    get:
+      operationId: getProjectQuality
+      summary: The project's quality picture (`project.manage` or the project's client with `org.project.read`).
+      description: >-
+        Aggregates only (brief 8.4): items, completed, review rate and reasons, gold accuracy
+        over 30 days, contributor count, and the latest agreement figures per statistic and
+        label with the brief 8.2 band for kappa. No contributor is named.
+      tags: [projects]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Quality, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectQuality" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/projects/{id}/quality/snapshot:
+    post:
+      operationId: snapshotProjectQuality
+      summary: Recompute the project's agreement over the last 30 days now (`project.manage`). Runs nightly anyway.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Quality, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectQuality" } } } }
+        "404": { $ref: "#/components/responses/Error" }
   /v1/content-reports:
     get:
       operationId: listContentReports
@@ -2023,6 +2085,31 @@ components:
         code: { type: string, enum: [rationale_too_short, translation_unchanged, rationale_mismatch, too_fast, mostly_pasted] }
         field: { type: string }
         message: { type: string }
+    ProjectQuality:
+      type: object
+      required: [items, completed, routed_to_review, review_rate, route_reasons, gold_accuracy, gold_results, contributors, agreement]
+      properties:
+        items: { type: integer, description: Regular items (gold excluded) }
+        completed: { type: integer, description: Items that reached k answers }
+        routed_to_review: { type: integer }
+        review_rate: { type: [number, "null"] }
+        route_reasons: { type: object, additionalProperties: { type: integer } }
+        gold_accuracy: { type: [number, "null"], description: Last 30 days, all contributors }
+        gold_results: { type: integer }
+        contributors: { type: integer }
+        agreement:
+          type: array
+          items:
+            type: object
+            required: [label, statistic, value, band, items, raters, window_end]
+            properties:
+              label: { type: [string, "null"], description: Null for the whole project }
+              statistic: { type: string, enum: [percent, cohen_kappa, fleiss_kappa, mean_abs_diff] }
+              value: { type: number }
+              band: { type: [string, "null"], enum: [weak, moderate, substantial, strong, null] }
+              items: { type: integer }
+              raters: { type: integer }
+              window_end: { type: string, format: date-time }
     ContentReport:
       type: object
       required: [id, category, note, status, created_at, resolved_at, item_id, external_id, project_id, project_name, reported_by]

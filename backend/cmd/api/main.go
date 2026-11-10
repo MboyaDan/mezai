@@ -18,6 +18,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
+	"github.com/MboyaDan/mezai/backend/internal/jobs"
 	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -77,6 +78,10 @@ func run() error {
 	go contributors.NewService(pool, cfg.IdentityKey, store).RunCVSweep(ctx, time.Hour, log)
 	// Lapsed task reservations are marked expired in the background (D-105).
 	go tasks.NewService(pool).RunExpirySweep(ctx, time.Minute, log)
+	// Nightly quality jobs (agreement snapshots, gold feedback) from the
+	// Postgres job queue; safe with several instances (Stage 10b).
+	qualityJobs := tasks.NewService(pool)
+	go (&jobs.Runner{Pool: pool, Log: log, Handlers: qualityJobs.Handlers(), Daily: tasks.DailyJobs}).Run(ctx, 5*time.Minute)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,

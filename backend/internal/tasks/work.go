@@ -72,7 +72,7 @@ func (s *Service) Next(ctx context.Context, p *auth.Principal, projectID uuid.UU
 			return nil // commit the expiries; taskID stays nil
 		}
 		itemID, gold := item.ID, uuid.Nil
-		rate, err := goldRateFor(ctx, q, id, pr.GoldRate) // higher during probation (brief 8.4)
+		rate, err := goldRateFor(ctx, q, id, projectID, pr.GoldRate) // higher in warm-up and probation (brief 8.4, D-100)
 		if err != nil {
 			return err
 		}

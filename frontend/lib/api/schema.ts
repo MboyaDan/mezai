@@ -711,6 +711,80 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/feedback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The caller's latest feedback (reviewers, and the automatic daily gold-miss note).
+     * @description The automatic note never names the items it refers to, so it cannot reveal which were gold (brief 8.1).
+     */
+    get: operations["listMyFeedback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/feedback/{id}/read": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Mark one of the caller's notes as read. */
+    post: operations["markFeedbackRead"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/quality": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The project's quality picture (`project.manage` or the project's client with `org.project.read`).
+     * @description Aggregates only (brief 8.4): items, completed, review rate and reasons, gold accuracy over 30 days, contributor count, and the latest agreement figures per statistic and label with the brief 8.2 band for kappa. No contributor is named.
+     */
+    get: operations["getProjectQuality"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/quality/snapshot": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Recompute the project's agreement over the last 30 days now (`project.manage`). Runs nightly anyway. */
+    post: operations["snapshotProjectQuality"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/content-reports": {
     parameters: {
       query?: never;
@@ -1600,6 +1674,34 @@ export interface components {
         "rationale_too_short" | "translation_unchanged" | "rationale_mismatch" | "too_fast" | "mostly_pasted";
       field?: string;
       message: string;
+    };
+    ProjectQuality: {
+      /** @description Regular items (gold excluded) */
+      items: number;
+      /** @description Items that reached k answers */
+      completed: number;
+      routed_to_review: number;
+      review_rate: number | null;
+      route_reasons: {
+        [key: string]: number;
+      };
+      /** @description Last 30 days */
+      gold_accuracy: number | null;
+      gold_results: number;
+      contributors: number;
+      agreement: {
+        /** @description Null for the whole project */
+        label: string | null;
+        /** @enum {string} */
+        statistic: "percent" | "cohen_kappa" | "fleiss_kappa" | "mean_abs_diff";
+        value: number;
+        /** @enum {string|null} */
+        band: "weak" | "moderate" | "substantial" | "strong" | null;
+        items: number;
+        raters: number;
+        /** Format: date-time */
+        window_end: string;
+      }[];
     };
     ContentReport: {
       /** Format: uuid */
@@ -3317,6 +3419,112 @@ export interface operations {
       404: components["responses"]["Error"];
       410: components["responses"]["Error"];
       422: components["responses"]["InvalidField"];
+    };
+  };
+  listMyFeedback: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Feedback */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            feedback: {
+              /** Format: uuid */
+              id: string;
+              body: string;
+              /** Format: uuid */
+              project_id: string;
+              project_name: string;
+              automatic: boolean;
+              /** Format: date-time */
+              read_at: string | null;
+              /** Format: date-time */
+              created_at: string;
+            }[];
+          };
+        };
+      };
+    };
+  };
+  markFeedbackRead: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Marked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  getProjectQuality: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Quality */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectQuality"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  snapshotProjectQuality: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Quality */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectQuality"];
+        };
+      };
+      404: components["responses"]["Error"];
     };
   };
   listContentReports: {
