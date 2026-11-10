@@ -37,6 +37,13 @@ type Project struct {
 	QAChecks           quality.QAChecks `json:"qa_checks"`
 	MinRationaleChars  int32            `json:"min_rationale_chars"`
 	MySubmitted        int32            `json:"my_submitted"`
+	// TasksLeft is about how many more tasks the caller could get (regular
+	// items short of k they have not seen; gold mixed in comes on top).
+	// Only on the list.
+	TasksLeft *int32 `json:"tasks_left,omitempty"`
+	// MinutesPerTask is the median time on task over the last 30 days, null
+	// until there are enough answers. Only on the list.
+	MinutesPerTask *float64 `json:"minutes_per_task,omitempty"`
 }
 
 var proficiencyRank = map[string]int{"working": 1, "fluent": 2, "native": 3}
@@ -101,9 +108,18 @@ func skillsByProject(rows []store.ListSkillsForProjectsRow) map[uuid.UUID][]Skil
 	return out
 }
 
-// ListProjects returns the live projects the caller is eligible for. An
-// active, verified contributor without the skills gets an empty list.
+// ListProjects returns the live projects the caller is eligible for, with
+// the size of the work on each. An active, verified contributor without the
+// skills gets an empty list.
 func (s *Service) ListProjects(ctx context.Context, p *auth.Principal) ([]Project, error) {
+	out, err := s.eligibleProjects(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return out, s.addWorkSizes(ctx, p.ContributorID, out)
+}
+
+func (s *Service) eligibleProjects(ctx context.Context, p *auth.Principal) ([]Project, error) {
 	id, err := contributorOf(p)
 	if err != nil {
 		return nil, err

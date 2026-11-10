@@ -344,3 +344,21 @@ func (h *taskHandlers) removeReviewer(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+func (h *taskHandlers) myQuality(c *gin.Context) {
+	out, err := h.svc.MyQuality(c.Request.Context(), PrincipalFrom(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *taskHandlers) myTraining(c *gin.Context) {
+	out, err := h.svc.MyTraining(c.Request.Context(), PrincipalFrom(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"projects": out})
+}

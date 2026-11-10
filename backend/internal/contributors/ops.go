@@ -114,7 +114,7 @@ func (s *Service) GetContributor(ctx context.Context, p *auth.Principal, id uuid
 	err := s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		var err error
-		if out.Profile, err = loadProfile(ctx, q, id); err != nil {
+		if out.Profile, err = loadStaffProfile(ctx, q, id); err != nil {
 			return err
 		}
 		if out.Identity, err = loadIdentityChecks(ctx, q, id); err != nil {
@@ -184,7 +184,7 @@ func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, id uuid.UUID
 				return err
 			}
 		}
-		out, err = loadProfile(ctx, q, id)
+		out, err = loadStaffProfile(ctx, q, id)
 		return err
 	})
 	return out, err
