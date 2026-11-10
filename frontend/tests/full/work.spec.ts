@@ -1,13 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, request as pwRequest, test, type APIRequestContext, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { apiSignIn, signIn } from "./auth";
 
 // Stage 9b through the real UI: a qualified contributor finds a project,
 // works on it one task at a time with the keyboard, skips one, reports one
 // and runs out of work; Ops resolves the report. The projects are created
 // fresh through the API each run so reruns always have work.
 
-const seedPassword = process.env.SEED_PASSWORD ?? "sample-password-only";
 const port = Number(process.env.PORT ?? 3000);
 const base = `http://localhost:${port}`;
 const shots = "../docs/screenshots/stage-09b";
@@ -41,14 +41,6 @@ async function shot(page: Page, file: string) {
   await page.screenshot({ path: `${shots}/${file}-390.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await style.evaluate((n) => (n as Element).remove());
-}
-
-async function signIn(page: Page, who: string, home: RegExp) {
-  await page.goto("/login");
-  await page.getByLabel("Email").filter({ visible: true }).fill(who);
-  await page.getByLabel("Password").filter({ visible: true }).fill(seedPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(home);
 }
 
 async function signOut(page: Page) {
@@ -100,12 +92,7 @@ test("9b: work a project one task at a time; Ops resolves a report", async ({ pa
 
   // Setup as Ops, through the API (its own cookie jar).
   const api = await pwRequest.newContext({ baseURL: base });
-  const login = await api.post("/api/v1/auth/login", {
-    headers: { Origin: base },
-    data: { email: "ops@sample.invalid", password: seedPassword },
-  });
-  expect(login.ok(), await login.text()).toBeTruthy();
-  const { csrf_token: csrf } = await login.json();
+  const csrf = (await apiSignIn(api, "ops@sample.invalid"))["X-CSRF-Token"];
   const sw = [{ kind: "language", value: "sw", min_proficiency: "fluent" }];
   await liveProject(
     api,

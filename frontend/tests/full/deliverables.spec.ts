@@ -1,13 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
+import { signIn } from "./auth";
 
 // Stage 11b through the real UI: two contributors agree on every item, so the
 // items become final by consensus; Ops exports a deliverable, checks a file
 // and publishes it; the client then sees and downloads it. Before publishing,
 // the client sees nothing. The project is created fresh each run.
 
-const seedPassword = process.env.SEED_PASSWORD ?? "sample-password-only";
 const port = Number(process.env.PORT ?? 3000);
 const base = `http://localhost:${port}`;
 const shots = "../docs/screenshots/stage-11b";
@@ -39,14 +39,6 @@ async function shot(page: Page, file: string) {
   await page.screenshot({ path: `${shots}/${file}-390.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await style.evaluate((n) => (n as Element).remove());
-}
-
-async function signIn(page: Page, who: string, home: RegExp) {
-  await page.goto("/login");
-  await page.getByLabel("Email").filter({ visible: true }).fill(who);
-  await page.getByLabel("Password").filter({ visible: true }).fill(seedPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(home);
 }
 
 /** A contributor answers every task on the project with one label, through the API. */
@@ -139,6 +131,17 @@ test("11b: Ops exports and publishes a deliverable; the client downloads it", as
   // Both agree on both items: final by consensus.
   await workAs(browser, "contributor001@sample.invalid", project, "Billing");
   await workAs(browser, "contributor002@sample.invalid", project, "Billing");
+
+  // The random audit sample (5%) can still send an agreed item to review;
+  // Ops accepts the consensus there, as they would in the queue.
+  const queue = await (await api.get(`/api/v1/review/items?project_id=${project}`)).json();
+  for (const it of queue.items as { item_id: string }[]) {
+    const d = await api.post(`/api/v1/review/items/${it.item_id}/decision`, {
+      headers: { ...h, "Idempotency-Key": `e2e-${run}-${it.item_id}` },
+      data: { decision: "accept_consensus" },
+    });
+    expect(d.ok(), await d.text()).toBeTruthy();
+  }
 
   // Ops exports version 1 and checks the CSV.
   await page.goto(`/w/projects/${project}`);

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, request as pwRequest, test, type Browser, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { apiSignIn, signIn } from "./auth";
 
 // Stage 11a through the real UI: two contributors disagree on every item, so
 // the items go to review; Ops assigns a reviewer; the reviewer compares the
@@ -8,7 +9,6 @@ import { mkdirSync } from "node:fs";
 // and moves straight on to the next item. The project is created fresh
 // through the API each run.
 
-const seedPassword = process.env.SEED_PASSWORD ?? "sample-password-only";
 const port = Number(process.env.PORT ?? 3000);
 const base = `http://localhost:${port}`;
 const shots = "../docs/screenshots/stage-11a";
@@ -41,14 +41,6 @@ async function shot(page: Page, file: string) {
   await page.screenshot({ path: `${shots}/${file}-390.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await style.evaluate((n) => (n as Element).remove());
-}
-
-async function signIn(page: Page, who: string, home: RegExp) {
-  await page.goto("/login");
-  await page.getByLabel("Email").filter({ visible: true }).fill(who);
-  await page.getByLabel("Password").filter({ visible: true }).fill(seedPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(home);
 }
 
 async function signOut(page: Page) {
@@ -98,13 +90,7 @@ test("11a: disagreeing items reach review; a reviewer decides them", async ({ pa
 
   // Setup as Ops through the API: k = 2, so two answers decide each item.
   const api = await pwRequest.newContext({ baseURL: base });
-  const login = await api.post("/api/v1/auth/login", {
-    headers: { Origin: base },
-    data: { email: "ops@sample.invalid", password: seedPassword },
-  });
-  expect(login.ok(), await login.text()).toBeTruthy();
-  const { csrf_token: csrf } = await login.json();
-  const h = { "X-CSRF-Token": csrf, Origin: base };
+  const h = await apiSignIn(api, "ops@sample.invalid");
   const orgs = await (await api.get("/api/v1/organisations")).json();
   const org = orgs.organisations.find((o: { slug: string }) => o.slug === "sample-client-ltd");
   const created = await api.post("/api/v1/projects", {
