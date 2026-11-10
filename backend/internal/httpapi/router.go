@@ -179,6 +179,14 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/projects/:id/quality/snapshot", Perm("project.manage"), th.snapshotNow)
 		a.handle(http.MethodGet, "/content-reports", Perm("project.manage"), th.listReports)
 		a.handle(http.MethodPost, "/content-reports/:id/resolve", Perm("project.manage"), th.resolveReport)
+		// Review and adjudication (Stage 11a). Reviewers see assigned projects;
+		// review.adjudicate sees all (D-111). The service checks both.
+		a.handle(http.MethodGet, "/review/items", Perm("review.read"), th.reviewQueue)
+		a.handle(http.MethodGet, "/review/items/:id", Perm("review.read"), th.reviewItem)
+		a.handle(http.MethodPost, "/review/items/:id/decision", Perm("review.decide"), perMinute(120), th.decide)
+		a.handle(http.MethodGet, "/projects/:id/reviewers", Perm("project.manage"), th.projectReviewers)
+		a.handle(http.MethodPost, "/projects/:id/reviewers", Perm("project.manage"), th.addReviewer)
+		a.handle(http.MethodDelete, "/projects/:id/reviewers/:userId", Perm("project.manage"), th.removeReviewer)
 
 		// Projects, imports, gold and client project requests (Stage 8).
 		ph := &projectHandlers{log: d.Log, svc: projects.NewService(d.Auth.Pool, d.Auth.Files,

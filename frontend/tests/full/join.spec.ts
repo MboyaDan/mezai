@@ -27,13 +27,13 @@ async function axe(page: Page, label: string) {
 
 // Screenshots for the PR at 1440 and 390, without the Next.js dev badge or
 // toasts, from the top of the page. At 390 the page must not scroll sideways.
-async function shot(page: Page, file: string) {
-  mkdirSync(shots, { recursive: true });
+async function shot(page: Page, file: string, dir = shots) {
+  mkdirSync(dir, { recursive: true });
   await page.addStyleTag({
     content: "nextjs-portal, div[aria-live].fixed > * { display: none !important; }",
   });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `${shots}/${file}-1440.png`, fullPage: true });
+  await page.screenshot({ path: `${dir}/${file}-1440.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   expect(
@@ -41,7 +41,7 @@ async function shot(page: Page, file: string) {
     `${file} overflows at 390`,
   ).toBeLessThanOrEqual(390);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `${shots}/${file}-390.png`, fullPage: true });
+  await page.screenshot({ path: `${dir}/${file}-390.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
@@ -149,7 +149,15 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   await expect(page.getByText("Enter your National ID number: 6 to 9 digits.")).toBeVisible();
   await page.getByRole("textbox", { name: "National ID number" }).fill(nationalId);
   await page.getByRole("button", { name: "Save profile" }).click();
-  await expect(page.getByText("Application complete")).toBeVisible();
+  // The first complete save is its own moment, not a toast (Stage 11a).
+  await expect(page).toHaveURL(/\/c\/profile\/complete$/);
+  await expect(page.getByRole("heading", { name: "Application received" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What happens next" })).toBeVisible();
+  // The steps rise in one after another; wait for the last before checking and capturing.
+  await expect(page.getByRole("listitem").filter({ hasText: "Identity check" })).toHaveCSS("opacity", "1");
+  await axe(page, "/c/profile/complete");
+  await shot(page, "application-received", "../docs/screenshots/stage-11a");
+  await page.getByRole("link", { name: "Review your profile" }).click();
   await expect(page.getByText(`+254 7•• ••• ${phone.slice(-3)}`)).toBeVisible();
   await expect(page.getByText(`ID ending ${nationalId.slice(-3)}`)).toBeVisible();
   await shot(page, "profile");

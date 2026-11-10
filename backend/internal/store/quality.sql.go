@@ -615,10 +615,11 @@ func (q *Queries) ProjectsWithConsensusIn(ctx context.Context, arg ProjectsWithC
 }
 
 const reviewStats = `-- name: ReviewStats :one
-SELECT count(*) FILTER (WHERE status IN ('accepted', 'rejected'))::int AS decided,
+SELECT count(*)::int AS decided,
        count(*) FILTER (WHERE status = 'accepted')::int AS accepted
 FROM submissions
-WHERE contributor_id = $1 AND decided_at > now() - make_interval(days => $2::int)
+WHERE contributor_id = $1 AND decision_source = 'review'
+  AND decided_at > now() - make_interval(days => $2::int)
 `
 
 type ReviewStatsParams struct {
@@ -631,7 +632,8 @@ type ReviewStatsRow struct {
 	Accepted int32
 }
 
-// Reviewer decisions on the contributor's work (Stage 11 fills these).
+// Reviewer decisions on the contributor's work. Automatic acceptance by
+// consensus or gold is not a review and does not count (D-110).
 func (q *Queries) ReviewStats(ctx context.Context, arg ReviewStatsParams) (ReviewStatsRow, error) {
 	row := q.db.QueryRow(ctx, reviewStats, arg.ContributorID, arg.Days)
 	var i ReviewStatsRow

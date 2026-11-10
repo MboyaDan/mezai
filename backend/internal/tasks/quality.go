@@ -302,20 +302,46 @@ func (s *Service) runConsensus(ctx context.Context, q *store.Queries, pr store.G
 	if err := q.SetItemQualityStatus(ctx, store.SetItemQualityStatusParams{ID: itemID, Status: status}); err != nil {
 		return nil, err
 	}
-	// The final answer is known only without review; Stage 11 records
-	// agreement for reviewed items when the reviewer decides.
+	// Routed items wait for a reviewer, who records agreement and decides
+	// the work (review.go). Otherwise the consensus is the final answer.
+	if reason != nil {
+		return nil, nil
+	}
 	var touched []uuid.UUID
-	if reason == nil {
-		for _, r := range rows {
-			if agree, ok := out.agrees[r.ID]; ok {
-				if err := q.SetSubmissionAgreement(ctx, store.SetSubmissionAgreementParams{ID: r.ID, Agrees: &agree}); err != nil {
-					return nil, err
-				}
-				touched = append(touched, r.ContributorID)
+	for _, r := range rows {
+		if agree, ok := out.agrees[r.ID]; ok {
+			if err := q.SetSubmissionAgreement(ctx, store.SetSubmissionAgreementParams{ID: r.ID, Agrees: &agree}); err != nil {
+				return nil, err
 			}
+			touched = append(touched, r.ContributorID)
 		}
 	}
-	return touched, nil
+	return touched, finalise(ctx, q, itemID, result, "consensus", nil)
+}
+
+// finalise records the item's final answer as a new revision, marks it
+// final, and accepts every submitted answer on it so each one earns: honest
+// work is paid whether or not it matched (D-110).
+func finalise(ctx context.Context, q *store.Queries, itemID uuid.UUID, answer []byte, source string, by *uuid.UUID) error {
+	if err := q.FinaliseItem(ctx, store.FinaliseItemParams{Answer: answer, Source: source, CreatedBy: by, ItemID: itemID}); err != nil {
+		return err
+	}
+	if n, err := q.MarkItemFinal(ctx, itemID); err != nil || n != 1 {
+		return errors.Join(err, fmt.Errorf("tasks: item %s is not open for a final answer", itemID))
+	}
+	if source == "review" {
+		return nil // the reviewer's decision accepts or rejects each answer
+	}
+	accepted, err := q.AcceptItemSubmissions(ctx, store.AcceptItemSubmissionsParams{Source: source, ItemID: itemID})
+	if err != nil {
+		return err
+	}
+	for _, a := range accepted {
+		if err := q.AccrueEarning(ctx, a.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // TrustSnapshot is a contributor's latest trust score and its inputs.

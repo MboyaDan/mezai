@@ -253,7 +253,7 @@ func (q *Queries) CreateAssignment(ctx context.Context, arg CreateAssignmentPara
 const createDraftSubmission = `-- name: CreateDraftSubmission :one
 INSERT INTO submissions (org_id, project_id, item_id, assignment_id, contributor_id)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final
+RETURNING id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final, decision_source, review_id
 `
 
 type CreateDraftSubmissionParams struct {
@@ -291,6 +291,8 @@ func (q *Queries) CreateDraftSubmission(ctx context.Context, arg CreateDraftSubm
 		&i.UpdatedAt,
 		&i.QaWarnings,
 		&i.AgreesWithFinal,
+		&i.DecisionSource,
+		&i.ReviewID,
 	)
 	return i, err
 }
@@ -448,7 +450,7 @@ func (q *Queries) GetProjectForWork(ctx context.Context, id uuid.UUID) (GetProje
 }
 
 const getSubmissionByAssignment = `-- name: GetSubmissionByAssignment :one
-SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final FROM submissions WHERE assignment_id = $1
+SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final, decision_source, review_id FROM submissions WHERE assignment_id = $1
 `
 
 func (q *Queries) GetSubmissionByAssignment(ctx context.Context, assignmentID uuid.UUID) (Submission, error) {
@@ -472,12 +474,14 @@ func (q *Queries) GetSubmissionByAssignment(ctx context.Context, assignmentID uu
 		&i.UpdatedAt,
 		&i.QaWarnings,
 		&i.AgreesWithFinal,
+		&i.DecisionSource,
+		&i.ReviewID,
 	)
 	return i, err
 }
 
 const getSubmissionByKey = `-- name: GetSubmissionByKey :one
-SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final FROM submissions WHERE contributor_id = $1 AND idempotency_key = $2
+SELECT id, org_id, project_id, item_id, assignment_id, contributor_id, status, current_revision, time_on_task_ms, idempotency_key, submitted_at, decided_at, rejection_reason, created_at, updated_at, qa_warnings, agrees_with_final, decision_source, review_id FROM submissions WHERE contributor_id = $1 AND idempotency_key = $2
 `
 
 type GetSubmissionByKeyParams struct {
@@ -506,6 +510,8 @@ func (q *Queries) GetSubmissionByKey(ctx context.Context, arg GetSubmissionByKey
 		&i.UpdatedAt,
 		&i.QaWarnings,
 		&i.AgreesWithFinal,
+		&i.DecisionSource,
+		&i.ReviewID,
 	)
 	return i, err
 }

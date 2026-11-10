@@ -185,8 +185,8 @@ func TestEachItemGetsKContributors(t *testing.T) {
 	}
 	if bad := e.count(`SELECT count(*) FROM items i WHERE i.project_id = $1
 		AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id)
-		AND (i.status NOT IN ('consensus', 'in_review') OR i.submission_count <> 3
-		     OR (SELECT count(DISTINCT s.contributor_id) FROM submissions s WHERE s.item_id = i.id AND s.status = 'submitted') <> 3)`, project); bad != 0 {
+		AND (i.status NOT IN ('final', 'in_review') OR i.submission_count <> 3
+		     OR (SELECT count(DISTINCT s.contributor_id) FROM submissions s WHERE s.item_id = i.id AND s.status <> 'draft') <> 3)`, project); bad != 0 {
 		t.Fatalf("%d regular items without exactly k = 3 distinct contributors", bad)
 	}
 	if bad := e.count(`SELECT count(*) FROM items i JOIN gold_items g ON g.item_id = i.id WHERE i.project_id = $1 AND i.status <> 'pending'`, project); bad != 0 {

@@ -27,8 +27,8 @@ func qProject(t *testing.T, pool *db.Pool, taskType string, config any, k int, g
 	err := pool.InScope(ctx, db.Staff(), func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO projects (org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate,
-			  audit_sample_rate, qa_checks, published_at)
-			SELECT o.id, t.id, $1, 'Quality check (Sample)', 'live', 'Sample.', $2, $3, $4, 0, '{"warn_fast_seconds":0}', now()
+			  audit_sample_rate, qa_checks, published_at, pay_per_task_cents)
+			SELECT o.id, t.id, $1, 'Quality check (Sample)', 'live', 'Sample.', $2, $3, $4, 0, '{"warn_fast_seconds":0}', now(), 2500
 			FROM organisations o, task_templates t
 			WHERE o.slug = 'sample-client-ltd' AND t.task_type = $1 ORDER BY t.version DESC LIMIT 1
 			RETURNING id`, taskType, cfg, k, goldRate).Scan(&id); err != nil {
@@ -108,8 +108,21 @@ func TestConsensusClassification(t *testing.T) {
 	for i, ans := range []string{`{"labels":["Yes"]}`, `{"labels":["Yes"]}`, `{"labels":["No"]}`} {
 		work(t, svc, people[i], project, ans)
 	}
-	if s := staffQuery[string](t, pool, `SELECT status FROM items WHERE project_id = $1`, project); s != "consensus" {
+	// Consensus is the final answer, and every answer is accepted and earns,
+	// the dissenting one included (D-110).
+	if s := staffQuery[string](t, pool, `SELECT status FROM items WHERE project_id = $1`, project); s != "final" {
 		t.Fatalf("item status %s", s)
+	}
+	if r := staffQuery[string](t, pool, `SELECT r.answer::text FROM item_revisions r JOIN items i ON i.id = r.item_id
+		WHERE i.project_id = $1 AND r.source = 'consensus' AND r.revision = i.current_revision`, project); r != `{"labels": ["Yes"]}` {
+		t.Fatalf("final answer %s", r)
+	}
+	if n := staffQuery[int64](t, pool, `SELECT count(*) FROM submissions WHERE project_id = $1 AND status = 'accepted'
+		AND decision_source = 'consensus'`, project); n != 3 {
+		t.Fatalf("%d accepted, want 3", n)
+	}
+	if n := staffQuery[int64](t, pool, `SELECT count(*) FROM earnings_ledger WHERE project_id = $1 AND entry_type = 'accrual'`, project); n != 3 {
+		t.Fatalf("%d accruals, want 3", n)
 	}
 	if r := staffQuery[string](t, pool, `SELECT result::text FROM consensus_results WHERE project_id = $1`, project); r != `{"labels": ["Yes"]}` {
 		t.Fatalf("result %s", r)

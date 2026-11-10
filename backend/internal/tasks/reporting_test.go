@@ -135,16 +135,36 @@ func TestGoldFeedbackBatch(t *testing.T) {
 		[]map[string]string{{"text": "Sample x."}, {"text": "Sample y."}}, gold)
 	p := crowd(t, pool, 1)[0]
 	svc := tasks.NewService(pool).WithRand(func() float64 { return 0 })
-	work(t, svc, p, project, `{"labels":["No"]}`)  // a miss
-	work(t, svc, p, project, `{"labels":["Yes"]}`) // a match
+	miss := work(t, svc, p, project, `{"labels":["No"]}`) // a miss
+	work(t, svc, p, project, `{"labels":["Yes"]}`)        // a match
+	// Gold work waits for the daily batch: nothing is accepted or earned at
+	// submit, and a replay says "submitted" like any task (D-110).
+	if n := staffQuery[int64](t, pool, `SELECT count(*) FROM submissions WHERE project_id = $1 AND status = 'submitted'`, project); n != 2 {
+		t.Fatalf("%d gold answers still submitted, want 2", n)
+	}
+	if n := staffQuery[int64](t, pool, `SELECT count(*) FROM earnings_ledger WHERE project_id = $1`, project); n != 0 {
+		t.Fatalf("%d earnings at submit", n)
+	}
+	replay, err := svc.Submit(ctx, p, miss, "q-"+miss.String(), tasks.SubmitInput{Answer: json.RawMessage(`{"labels":["No"]}`)}, auth.Meta{})
+	if err != nil || replay.Status != "submitted" {
+		t.Fatalf("replay: %+v %v", replay, err)
+	}
 	now := time.Now()
 	n, err := svc.GoldFeedback(ctx, now.Add(-time.Hour), now.Add(time.Minute))
 	if err != nil || n != 1 {
 		t.Fatalf("feedback notes: %d %v", n, err)
 	}
+	// Right or wrong, gold work is accepted and earns once (brief 13).
+	if n := staffQuery[int64](t, pool, `SELECT count(*) FROM submissions WHERE project_id = $1 AND status = 'accepted' AND decision_source = 'gold'`, project); n != 2 {
+		t.Fatalf("%d gold answers accepted, want 2", n)
+	}
+
 	fb, err := svc.MyFeedback(ctx, p)
 	if err != nil || len(fb) != 1 || !fb[0].Automatic || fb[0].ReadAt != nil {
 		t.Fatalf("my feedback: %+v %v", fb, err)
+	}
+	if !strings.HasPrefix(fb[0].Body, "On "+now.Add(-time.Hour).In(jobs.Nairobi).Format("2 January")+", ") || !strings.HasSuffix(strings.SplitN(fb[0].Body, ".", 2)[0], "on Quality check (Sample) to items with a known answer did not match it") {
+		t.Fatalf("date and project in the wrong places: %q", fb[0].Body)
 	}
 	if !strings.Contains(fb[0].Body, "1 of your 2 answers") || strings.Contains(fb[0].Body, "Sample gold") || strings.Contains(fb[0].Body, "gold") {
 		t.Fatalf("body names more than it should: %q", fb[0].Body)
@@ -161,6 +181,9 @@ func TestGoldFeedbackBatch(t *testing.T) {
 	}
 	if n, _ := svc.GoldFeedback(ctx, now.Add(time.Hour), now.Add(2*time.Hour)); n != 0 {
 		t.Fatal("feedback written for a day without results")
+	}
+	if n := staffQuery[int64](t, pool, `SELECT count(*) FROM earnings_ledger WHERE project_id = $1 AND entry_type = 'accrual' AND amount_cents = 2500`, project); n != 2 {
+		t.Fatalf("%d earnings after two batches, want 2", n)
 	}
 }
 
