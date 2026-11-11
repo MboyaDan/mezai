@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 12b (contributor dashboard, Earnings and Training screens). Branch `stage-12b-contributor-dashboard`, PR open. 12a merged as #41.
-- **Next stage:** 13 (client and Ops dashboards, AC-10). Planned split (D-011): confirm 13a/13b with Dan before starting.
+- **Last stage:** 13a (client portal, AC-10). Branch `stage-13a-client-portal`, PR open. 12b merged as #42.
+- **Next stage:** 13b (Ops overview: all projects, queue depth, items needing review, contributor health, at-risk deadlines using the 13a pace, A-074).
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -67,6 +67,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Contributor earnings (summary, statement, payouts) | `backend/internal/earnings/`, queries `backend/queries/earnings.sql`, handlers `backend/internal/httpapi/earnings.go` |
 | Contributor dashboard, Earnings, Training screens | `frontend/components/contributor/{working,earnings,training}.tsx`, helpers `frontend/lib/earnings.ts`, copy `frontend/content/training.ts` |
 | Contributor quality record, work sizes, training | `backend/internal/tasks/portal.go` (`/me/quality`, `/me/training`; `tasks_left`, `minutes_per_task` on `/me/projects`) |
+| Client portal (progress, workforce, activity, team, invoices) | `backend/internal/portal/`, queries `backend/queries/portal.sql`, handlers `backend/internal/httpapi/portal.go`; screens `frontend/components/workspace/{client-home,activity,team,invoices}.tsx`, `projects/figures.tsx`, helpers `frontend/lib/portal.ts` |
 | Full-stack tests | `frontend/tests/full/` (`npm run test:full`, needs `make up migrate seed`) |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -103,7 +104,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 11a | Merged | #39 | Migration 00017 (`decision_source`, `review_id`, one review per item, `project_reviewers`; Stage 10 consensus items made final and paid). Consensus items become final and every answer earns; gold work accepted in the daily batch (D-110). Review queue and item API, decisions (accept consensus, choose, write final, reject item) with idempotency, per-answer rejection with reason shown to the contributor, feedback, agreement and trust; reviewer assignment per project (D-111, D-112). Screens `/w/review`, `/w/review/[id]`, reviewers panel; `/c/profile/complete` after the first complete profile (D-113). Fixed: gold feedback named the date and project in swapped places. |
 | 11b | Merged | #40 | Migration 00018 (deliverable versions, size, creator; download file). `internal/delivery`: export of final regular items as JSONL and CSV with the brief 8.5 manifest in object storage, publish per version, five-minute links signed per user, checksum check and a `deliverable_downloads` row plus audit on every download (D-115, D-116). Export schema per task type with CSV formula guard (D-117). Deliverables tab for Ops and clients. AC-09 done. |
 | 12a | Merged | #41 | Migration 00019 (`earnings.read_own`, `payout.next_date`, payout line index). `/me/earnings` (approved = ledger balance, paid, earned, pending estimate, task counts, payout settings), `/me/earnings/statement` (per day and project, paged by 30 days), `/me/payouts`, `/me/quality` (trust and 30-day trend as of the start of the Nairobi day, D-120), `/me/training`; `tasks_left` and `minutes_per_task` on `/me/projects`. Profile trust now Ops only (it leaked gold timing and was always "building" for contributors). Reconciliation and isolation tests (D-119). |
-| 12b | PR open | #42 | Working dashboard for active and paused contributors (projects with work, trust panel, earnings, feedback, gold trend), `/c/earnings`, `/c/training` (guidelines, score rules, worked examples, questions), nav links, work sizes on Tasks. Dev seed: trust history for Sample Contributor 007. Full-stack spec checks screen figures against the ledger. |
+| 12b | Merged | #42 | Working dashboard for active and paused contributors (projects with work, trust panel, earnings, feedback, gold trend), `/c/earnings`, `/c/training` (guidelines, score rules, worked examples, questions), nav links, work sizes on Tasks. Dev seed: trust history for Sample Contributor 007. Full-stack spec checks screen figures against the ledger. |
+| 13a | PR open | — | Migration 00020 (`invoices` with RLS, `invoice.manage`, `org.invoice.read`). `internal/portal`: `/projects/{id}/progress` (stages, weekly throughput, pace), `/projects/{id}/workforce` (per-client codes, D-123), `/activity` (allowlist, D-124), `/team`, invoices upload, list, paid/void, download. Screens: client home, progress and quality panels and workforce on the project page (Ops too), Datasets heading, `/w/activity`, `/w/team`, `/w/invoices`. AC-10 done across DB, API and UI. |
 
 ## Notes for the next session
 
@@ -119,6 +121,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Done in 9b: task screen uses `/v1/me/projects`, `/next`, `/me/tasks/{id}` (+ `/draft`, `/submit` with `Idempotency-Key`, `/skip`, `/report`); QA settings come with the project (`qa_checks`, `min_rationale_chars`) for client-side hints; `qa_blocked` answers list `issues`. Ops content-report screen also belongs to 9b (API: `/v1/content-reports`).
 - Local databases seeded before 7c/9a: run the fix-up SQL in the 9b PR notes (verified identities, sample qualifications), or re-seed a fresh volume. Contributors who accepted 0.1 legal documents see the 0.2 consent prompt first.
 - Stage 10: gold scoring reads gold-ness from `gold_items.item_id`; submissions on gold items stay out of consensus. Stage 14: require `mpesa_name_checked_at` before a contributor's first payout (D-092). Stage 17: decide whether deletion keeps the ID fingerprint (A-053).
+- The full-stack suite signs `ops@sample.invalid` in 9 times; the per-email limit is 10 per 15 minutes, so new specs use `superadmin@sample.invalid` for Ops steps. Repeated local runs: `docker compose restart api`.
 - Sign-up allows 10 an hour per IP: repeated full-stack runs hit it; `docker compose restart api` resets it locally.
 - Contributor endpoints call `contributorOf(p)`: Super Admin holds every permission but has no contributor profile.
 - Qualification answers use the task templates' submission shapes; reuse `quality.Parse` and `quality.Matches` for gold in Stages 9 and 10.
