@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -271,7 +272,33 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 		if status == "active" || status == "paused" {
 			s.qualified = append(s.qualified, cp.ID)
 		}
+		if n == sampleTrustContributor {
+			if err := s.trustHistory(cp.ID); err != nil {
+				return err
+			}
+		}
 		s.sum.Contributors++
+	}
+	return nil
+}
+
+// sampleTrustContributor gets a made-up 14-day trust history so the
+// contributor dashboard's score and trend can be seen in development. No
+// test signs in as this contributor. Review acceptance is left empty and the
+// score is still "building" (no gold results), as for any new contributor.
+const sampleTrustContributor = 7
+
+func (s *seeder) trustHistory(id uuid.UUID) error {
+	gold := []float64{0.70, 0.72, 0.75, 0.74, 0.78, 0.80, 0.79, 0.82, 0.84, 0.83, 0.86, 0.85, 0.88, 0.87}
+	weights := []byte(`{"gold_accuracy": 0.5, "agreement": 0.3, "review_acceptance": 0.2}`)
+	for i, g := range gold {
+		a := 0.80 + float64(i%3)*0.03
+		score := math.Round((0.5*g+0.3*a)/0.8*10000) / 10000
+		at := s.now.AddDate(0, 0, i-len(gold)).Add(-2 * time.Hour)
+		if err := s.q.SeedTrustScore(s.ctx, store.SeedTrustScoreParams{ContributorID: id, Score: &score, GoldAccuracy: &g,
+			AgreementRate: &a, GoldCount: int32(2 + i), Weights: weights, CreatedAt: at}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

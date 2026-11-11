@@ -125,3 +125,8 @@ SELECT
   (SELECT count(*) FROM gold_results g JOIN gold_items gi ON gi.id = g.gold_item_id
      WHERE gi.project_id = @project_id AND g.created_at > now() - interval '30 days' AND g.correct)::int AS gold_correct,
   (SELECT count(DISTINCT s.contributor_id) FROM submissions s WHERE s.project_id = @project_id AND s.status <> 'draft')::int AS contributors;
+
+-- name: SeedTrustScore :exec
+-- Sample history for the development seed only (backend/seed).
+INSERT INTO trust_scores (contributor_id, score, gold_accuracy, agreement_rate, gold_count, window_days, weights, created_at)
+VALUES (@contributor_id, @score, @gold_accuracy, @agreement_rate, @gold_count, 30, @weights, @created_at);
