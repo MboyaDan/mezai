@@ -178,7 +178,7 @@ func TestNoScopeSeesNothing(t *testing.T) {
 			return err
 		}
 		var n int
-		for _, table := range []string{"organisations", "projects", "items", "deliverables", "gold_items", "submissions"} {
+		for _, table := range []string{"organisations", "projects", "items", "deliverables", "gold_items", "submissions", "invoices"} {
 			if err := tx.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
 				return err
 			}
@@ -353,4 +353,44 @@ func wantCode(t *testing.T, err error, code string) {
 	if !errors.As(err, &pg) || pg.Code != code {
 		t.Fatalf("want SQLSTATE %s, got %v", code, err)
 	}
+}
+
+// Invoices (Stage 13a): a client reads only its own organisation's, and
+// cannot write any, not even its own (AC-10).
+func TestInvoiceIsolation(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	var admin uuid.UUID
+	staff(t, f.pool, func(q *store.Queries, tx pgx.Tx) {
+		must(t, tx.QueryRow(ctx, `SELECT id FROM users WHERE email = 'superadmin@sample.invalid'`).Scan(&admin))
+		for i, org := range []uuid.UUID{f.sampleOrg, f.otherOrg} {
+			_, err := q.CreateInvoice(ctx, store.CreateInvoiceParams{OrgID: org, Number: "INV-" + string(rune('A'+i)),
+				IssuedOn: time.Now(), AmountCents: 100, Currency: "KES", FileKey: "test/invoice", FileName: "invoice.pdf",
+				ByteSize: 10, ChecksumSha256: sha64, UploadedBy: admin})
+			must(t, err)
+		}
+	})
+	for _, org := range []uuid.UUID{f.sampleOrg, f.otherOrg} {
+		must(t, f.pool.InScope(ctx, db.Org(org), func(tx pgx.Tx) error {
+			rows, err := store.New(tx).ListInvoices(ctx, nil)
+			must(t, err)
+			if len(rows) != 1 || rows[0].OrgID != org {
+				t.Errorf("org %s reads %d invoices: %+v", org, len(rows), rows)
+			}
+			return nil
+		}))
+	}
+	err := f.pool.InScope(ctx, db.Org(f.sampleOrg), func(tx pgx.Tx) error {
+		_, err := store.New(tx).CreateInvoice(ctx, store.CreateInvoiceParams{OrgID: f.sampleOrg, Number: "INV-X",
+			IssuedOn: time.Now(), Currency: "KES", FileKey: "k", FileName: "x.pdf", ByteSize: 1, ChecksumSha256: sha64, UploadedBy: admin})
+		return err
+	})
+	wantCode(t, err, "42501")
+	must(t, f.pool.InScope(ctx, db.Org(f.sampleOrg), func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE invoices SET status = 'paid', paid_on = now()`)
+		if err == nil && tag.RowsAffected() != 0 {
+			t.Errorf("client updated %d invoices", tag.RowsAffected())
+		}
+		return err
+	}))
 }
