@@ -48,6 +48,12 @@ export type DeliverableVersion = Schemas["DeliverableVersion"];
 export type DeliverableFile = Schemas["DeliverableFile"];
 export type DeliverableManifest = Schemas["DeliverableManifest"];
 export type DeliverableLink = Schemas["DeliverableLink"];
+export type EarningsSummary = Schemas["EarningsSummary"];
+export type EarningsTotals = EarningsSummary["totals"][number];
+export type Statement = Schemas["Statement"];
+export type StatementLine = Statement["lines"][number];
+export type Payout = Schemas["Payout"];
+export type MyQuality = Schemas["MyQuality"];
 
 /** An error answer from the API, or a network failure (status 0). */
 export class ApiError extends Error {

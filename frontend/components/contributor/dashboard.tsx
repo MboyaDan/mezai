@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { useLoad } from "@/lib/use-load";
 import { useProfile } from "./portal";
 import { StatusBadge } from "./status";
+import { WorkingDashboard } from "./working";
 
 type Row = { id: string; title: string; body: ReactNode; action?: ReactNode };
 
@@ -36,6 +37,8 @@ export function Dashboard() {
   if (tests.status === "error") return <Alert tone="danger" title={errorMessage(tests.error)} />;
 
   const step = currentStep(profile, tests.data);
+  // Active (and paused, who keep their record) see the working dashboard.
+  if (step === "active" || step === "paused") return <WorkingDashboard paused={step === "paused"} />;
   const waiting = tests.data.filter((t) => t.state === "awaiting_review");
   const rejected = tests.data.filter((t) => t.state === "not_passed");
 
@@ -137,12 +140,6 @@ export function Dashboard() {
         </p>
       </header>
 
-      {step === "paused" && (
-        <Alert tone="warning" title="Your account is paused">
-          You cannot take tests or tasks while paused. The MezAI team will contact you by email about next
-          steps.
-        </Alert>
-      )}
       {step === "declined" && (
         <Alert tone="warning" title="We are not going ahead with your application">
           {profile.screening_note} Thank you for your interest in MezAI.
@@ -158,11 +155,11 @@ export function Dashboard() {
       <div className="grid gap-10 lg:grid-cols-12">
         <section aria-labelledby="steps" className="lg:col-span-7">
           <h2 id="steps" className="mb-5 font-display text-lg font-semibold">
-            {step === "active" ? "You are active" : "Getting started"}
+            Getting started
           </h2>
           <ol className="grid">
             {rows.map((r, i) => {
-              const state = step === "active" || i < at ? "done" : i === at ? "current" : "next";
+              const state = i < at ? "done" : i === at ? "current" : "next";
               return (
                 <li key={r.id} className="relative grid grid-cols-[2rem_1fr] gap-4 pb-8 last:pb-0">
                   {i < rows.length - 1 && (
@@ -215,15 +212,9 @@ export function Dashboard() {
           <Card className="p-5">
             <h2 className="font-display text-lg font-semibold">What happens next</h2>
             <p className="mt-2 text-sm text-fg-muted">
-              {step === "active"
-                ? "Projects that match your qualified skills are on the Tasks page, with the pay per task. Approved work is paid through M-Pesa."
-                : "Once you are approved, projects that match your skills appear on the Tasks page with the pay per task. We pay approved work through M-Pesa."}
+              Once you are approved, projects that match your skills appear on the Tasks page with the pay per
+              task. We pay approved work through M-Pesa.
             </p>
-            {step === "active" && (
-              <ButtonLink href="/c/work" className="mt-4" arrow>
-                Go to tasks
-              </ButtonLink>
-            )}
           </Card>
           {waiting.length > 0 && (
             <Card className="flex items-center justify-between gap-4 p-5">

@@ -641,6 +641,35 @@ func (q *Queries) ReviewStats(ctx context.Context, arg ReviewStatsParams) (Revie
 	return i, err
 }
 
+const seedTrustScore = `-- name: SeedTrustScore :exec
+INSERT INTO trust_scores (contributor_id, score, gold_accuracy, agreement_rate, gold_count, window_days, weights, created_at)
+VALUES ($1, $2, $3, $4, $5, 30, $6, $7)
+`
+
+type SeedTrustScoreParams struct {
+	ContributorID uuid.UUID
+	Score         *float64
+	GoldAccuracy  *float64
+	AgreementRate *float64
+	GoldCount     int32
+	Weights       []byte
+	CreatedAt     time.Time
+}
+
+// Sample history for the development seed only (backend/seed).
+func (q *Queries) SeedTrustScore(ctx context.Context, arg SeedTrustScoreParams) error {
+	_, err := q.db.Exec(ctx, seedTrustScore,
+		arg.ContributorID,
+		arg.Score,
+		arg.GoldAccuracy,
+		arg.AgreementRate,
+		arg.GoldCount,
+		arg.Weights,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const setItemQualityStatus = `-- name: SetItemQualityStatus :exec
 UPDATE items SET status = $1 WHERE id = $2 AND status = 'awaiting_consensus'
 `
