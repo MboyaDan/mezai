@@ -311,6 +311,7 @@ test("AC-04: sign up, consent, profile, qualify, approval", async ({ page }) => 
   // 9. The contributor is active.
   await signIn(page, email, password);
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "You are active" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Trust score" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Work available" })).toBeVisible();
   await shot(page, "dashboard-active");
 });
