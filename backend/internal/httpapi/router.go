@@ -14,6 +14,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/delivery"
 	"github.com/MboyaDan/mezai/backend/internal/earnings"
+	"github.com/MboyaDan/mezai/backend/internal/portal"
 	"github.com/MboyaDan/mezai/backend/internal/projects"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -235,6 +236,19 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/projects/:id/deliverables/:version/publish", Perm("deliverable.publish"), dh.publish)
 		a.handle(http.MethodPost, "/deliverables/:id/links", readDeliverables, perMinute(60), dh.link)
 		a.handle(http.MethodGet, "/deliverables/:id/download", readDeliverables, perMinute(60), dh.download)
+
+		// Client portal (Stage 13a). Clients read their own organisation
+		// only; staff name the organisation (D-122 to D-124).
+		pth := &portalHandlers{log: d.Log, svc: portal.NewService(d.Auth.Pool, d.Auth.Files, d.Auth.IdentityKey, d.Log)}
+		a.handle(http.MethodGet, "/projects/:id/progress", Perm("project.manage", "org.project.read"), pth.progress)
+		a.handle(http.MethodGet, "/projects/:id/workforce", Perm("project.manage", "org.project.read"), pth.workforce)
+		a.handle(http.MethodGet, "/activity", Perm("audit.read", "org.project.read"), pth.activity)
+		a.handle(http.MethodGet, "/team", Perm("user.manage", "org.user.invite"), pth.members)
+		readInvoices := Perm("invoice.manage", "org.invoice.read")
+		a.handle(http.MethodGet, "/invoices", readInvoices, pth.listInvoices)
+		a.handle(http.MethodPost, "/invoices", Perm("invoice.manage"), rateLimit(newLimiter(60, time.Hour)), pth.uploadInvoice)
+		a.handle(http.MethodPost, "/invoices/:id/status", Perm("invoice.manage"), pth.setInvoiceStatus)
+		a.handle(http.MethodGet, "/invoices/:id/download", readInvoices, perMinute(60), pth.downloadInvoice)
 		rules = a.rules
 	}
 
