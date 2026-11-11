@@ -10,6 +10,7 @@ import { formatKes, rateToPercent, readiness, taskTypeLabel } from "@/lib/projec
 import { useLoad } from "@/lib/use-load";
 import { shortDate } from "../contributors";
 import { useCan } from "../workspace";
+import { ProjectFigures, WorkforcePanel } from "./figures";
 import { useProject } from "./frame";
 import { ImportHistory } from "./imports";
 import { Reviewers } from "./reviewers";
@@ -125,7 +126,7 @@ function Files() {
   return (
     <section aria-labelledby="files-h" className="grid gap-3">
       <h2 id="files-h" className="font-display font-semibold">
-        Item files
+        Datasets
       </h2>
       {list.status === "loading" && <Skeleton className="h-24 w-full" />}
       {list.status === "error" && <Alert tone="danger" title={errorMessage(list.error)} />}
@@ -139,11 +140,10 @@ export function ProjectOverview() {
   const can = useCan();
   return (
     <div className="grid gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-3">
+        <ProjectFigures />
+      </div>
       <div className="grid content-start gap-6 lg:col-span-2">
-        <Alert tone="info" title="Progress and quality figures start when contributors begin work">
-          Completed items, throughput, gold accuracy and agreement appear here once the project is live and
-          submissions arrive.
-        </Alert>
         <section aria-labelledby="instr-h" className="grid gap-3">
           <h2 id="instr-h" className="font-display font-semibold">
             Contributor instructions
@@ -157,6 +157,7 @@ export function ProjectOverview() {
           )}
         </section>
         <Files />
+        <WorkforcePanel />
       </div>
       <div className="grid content-start gap-6">
         <Readiness />

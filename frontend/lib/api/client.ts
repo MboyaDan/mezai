@@ -135,3 +135,11 @@ async function send<T>(
   }
   return data as T;
 }
+export type ProjectQuality = Schemas["ProjectQuality"];
+export type ProjectProgress = Schemas["ProjectProgress"];
+export type Workforce = Schemas["Workforce"];
+export type ActivityList = Schemas["ActivityList"];
+export type ActivityEntry = ActivityList["entries"][number];
+export type Member = Schemas["Member"];
+export type Invoice = Schemas["Invoice"];
+export type Invitation = Schemas["Invitation"];

@@ -995,6 +995,147 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{id}/progress": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Items by stage, weekly throughput and finishing pace (`project.manage` or `org.project.read`).
+     * @description Gold check items are never counted. Throughput is items made final per Nairobi week (Monday start) over the last eight weeks. The pace projects a finishing day from the last 14 days (A-074). A client reads its own organisation's projects only.
+     */
+    get: operations["getProjectProgress"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/workforce": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Who works on the project, by per-organisation code only (`project.manage` or `org.project.read`).
+     * @description Contributor codes are stable within one organisation and cannot be matched across organisations (D-123). No name, contact or profile detail is returned.
+     */
+    get: operations["getProjectWorkforce"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/activity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * An organisation's activity log, newest first (`audit.read` or `org.project.read`).
+     * @description A client user reads its own organisation (an `org_id` for another is 404); staff must pass `org_id`. Only project, dataset, deliverable, request and team actions are listed, plus invoice actions for people who may read invoices (D-124). ELS staff appear as "MezAI team".
+     */
+    get: operations["listActivity"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/team": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * People in the organisation and their roles (`user.manage` or `org.user.invite`).
+     * @description A client admin reads its own organisation; staff pass `org_id`.
+     */
+    get: operations["listTeam"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/invoices": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Invoices, newest first (`invoice.manage` or `org.invoice.read`).
+     * @description A client admin sees its own organisation's invoices only (row-level security); staff may filter by `org_id`.
+     */
+    get: operations["listInvoices"];
+    put?: never;
+    /** Upload an invoice PDF issued outside MezAI (`invoice.manage`). */
+    post: operations["uploadInvoice"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/invoices/{id}/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark an invoice paid or void (`invoice.manage`).
+     * @description issued → paid or void; paid → void. A void invoice stays void.
+     */
+    post: operations["setInvoiceStatus"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/invoices/{id}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download an invoice PDF (`invoice.manage` or `org.invoice.read`).
+     * @description Checked against its stored checksum; each download is recorded in the audit log.
+     */
+    get: operations["downloadInvoice"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/review/items": {
     parameters: {
       query?: never;
@@ -2724,6 +2865,125 @@ export interface components {
       project_id: string | null;
       /** Format: date-time */
       decided_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    ProjectProgress: {
+      /** Format: uuid */
+      project_id: string;
+      /** @description Items imported */
+      total: number;
+      not_started: number;
+      /** @description Being answered or waiting for enough answers. */
+      in_progress: number;
+      in_review: number;
+      final: number;
+      rejected: number;
+      target: number | null;
+      /** Format: date */
+      deadline: string | null;
+      throughput: {
+        /**
+         * Format: date
+         * @description The Monday of the Nairobi week.
+         */
+        week: string;
+        final: number;
+      }[];
+      pace: {
+        /** @description The target when set */
+        goal: number;
+        remaining: number;
+        /** @description Items made final per day over the last 14 days. */
+        per_day: number;
+        /** Format: date */
+        projected_finish: string | null;
+        /** @enum {string} */
+        state: "done" | "on_track" | "at_risk" | "no_pace" | "no_deadline";
+      };
+    };
+    Workforce: {
+      contributors: number;
+      active_last_7_days: number;
+      workers: {
+        /** @description Per-organisation contributor code, for example C-K7F3Q (D-123). */
+        code: string;
+        tasks: number;
+        /** Format: date-time */
+        last_submitted_at: string;
+      }[];
+      skills: {
+        /** @enum {string} */
+        kind: "language" | "domain";
+        value: string;
+        contributors: number;
+      }[];
+    };
+    ActivityList: {
+      /**
+       * Format: date-time
+       * @description Pass as `before` for the next page; null on the last page.
+       */
+      before: string | null;
+      entries: {
+        /** Format: uuid */
+        id: string;
+        /** Format: date-time */
+        at: string;
+        action: string;
+        actor: {
+          /** @enum {string} */
+          kind: "member" | "mezai";
+          name: string;
+        };
+        /** Format: uuid */
+        project_id: string | null;
+        project_name: string | null;
+        subject: string;
+        status?: string;
+        version?: string;
+        file?: string;
+        rows?: string;
+      }[];
+    };
+    Member: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      /** @enum {string} */
+      status: "active" | "disabled";
+      /** Format: date-time */
+      joined_at: string;
+      /** Format: date-time */
+      last_login_at: string | null;
+    };
+    Invoice: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      org_id: string;
+      org_name: string;
+      /** Format: uuid */
+      project_id: string | null;
+      project_name: string | null;
+      number: string;
+      /** Format: date */
+      issued_on: string;
+      /** Format: date */
+      due_on: string | null;
+      /** Format: int64 */
+      amount_cents: number;
+      currency: string;
+      description: string;
+      file_name: string;
+      bytes: number;
+      /** @enum {string} */
+      status: "issued" | "paid" | "void";
+      /** Format: date */
+      paid_on: string | null;
+      void_reason: string | null;
       /** Format: date-time */
       created_at: string;
     };
@@ -4524,6 +4784,261 @@ export interface operations {
         };
       };
       404: components["responses"]["Error"];
+    };
+  };
+  getProjectProgress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Progress */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectProgress"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  getProjectWorkforce: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Workforce */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Workforce"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  listActivity: {
+    parameters: {
+      query?: {
+        org_id?: string;
+        /** @description The `before` cursor of the previous page. */
+        before?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Activity */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ActivityList"];
+        };
+      };
+      404: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  listTeam: {
+    parameters: {
+      query?: {
+        org_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Members */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            members: components["schemas"]["Member"][];
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  listInvoices: {
+    parameters: {
+      query?: {
+        org_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Invoices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            invoices: components["schemas"]["Invoice"][];
+          };
+        };
+      };
+      422: components["responses"]["Error"];
+    };
+  };
+  uploadInvoice: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": {
+          /**
+           * Format: binary
+           * @description PDF, up to 5 MB
+           */
+          file: string;
+          /** Format: uuid */
+          org_id: string;
+          /** Format: uuid */
+          project_id?: string;
+          number: string;
+          /** Format: date */
+          issued_on: string;
+          /** Format: date */
+          due_on?: string;
+          amount_cents: number;
+          /** @enum {string} */
+          currency?: "KES";
+          description?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Uploaded */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Invoice"];
+        };
+      };
+      /** @description `conflict` (the number is already used for this organisation) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      413: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+      /** @description `storage_unavailable` */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  setInvoiceStatus: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          status: "paid" | "void";
+          /**
+           * Format: date
+           * @description Required for paid.
+           */
+          paid_on?: string;
+          /** @description Required for void; the client sees it. */
+          reason?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Invoice"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  downloadInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The PDF */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/pdf": string;
+        };
+      };
+      404: components["responses"]["Error"];
+      503: components["responses"]["Error"];
     };
   };
   listReviewQueue: {
