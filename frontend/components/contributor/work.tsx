@@ -7,6 +7,7 @@ import { Alert, Breadcrumb, Card, EmptyState, Skeleton, Tag } from "@/components
 import { labelFor } from "@/content/profile";
 import { api, type ApiError, type WorkProject } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
+import { minutesText, tasksLeftText } from "@/lib/earnings";
 import { formatKes, taskTypeLabel } from "@/lib/projects";
 import { useLoad } from "@/lib/use-load";
 import { useProfile } from "./portal";
@@ -84,6 +85,8 @@ export function WorkList() {
                       {formatKes(p.pay_per_task_cents, p.currency)} a task
                     </span>
                     <span>{p.my_submitted} submitted by you</span>
+                    {minutesText(p.minutes_per_task) && <span>{minutesText(p.minutes_per_task)}</span>}
+                    {tasksLeftText(p.tasks_left) && <span>{tasksLeftText(p.tasks_left)}</span>}
                   </p>
                   {p.skills.length > 0 && (
                     <ul className="flex flex-wrap gap-1.5" aria-label="Skills needed">
