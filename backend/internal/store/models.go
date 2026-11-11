@@ -370,6 +370,28 @@ type Invitation struct {
 	UpdatedAt  time.Time
 }
 
+type Invoice struct {
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	ProjectID      *uuid.UUID
+	Number         string
+	IssuedOn       time.Time
+	DueOn          *time.Time
+	AmountCents    int64
+	Currency       string
+	Description    string
+	FileKey        string
+	FileName       string
+	ByteSize       int64
+	ChecksumSha256 string
+	Status         string
+	PaidOn         *time.Time
+	VoidReason     *string
+	UploadedBy     uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type Item struct {
 	ID              uuid.UUID
 	OrgID           uuid.UUID
