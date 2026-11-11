@@ -6,6 +6,7 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/display";
 import { api, type AttemptSummary, type ContributorSummary } from "@/lib/api/client";
 import { useUser } from "@/lib/session";
 import { useLoad } from "@/lib/use-load";
+import { ClientHome } from "./client-home";
 import { PageTitle, useCan } from "./workspace";
 
 function Count({ label, value, href }: { label: string; value: number | null; href: string }) {
@@ -57,7 +58,9 @@ export function Overview() {
       <PageTitle title={`Hello, ${user.display_name.split(/\s+/)[0]}`}>
         {user.kind === "staff" ? "What needs attention today." : "Your organisation's work on MezAI."}
       </PageTitle>
-      {ops ? (
+      {user.kind === "client" ? (
+        <ClientHome />
+      ) : ops ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Count
             label="Qualification attempts to review"
@@ -71,10 +74,8 @@ export function Overview() {
           />
         </div>
       ) : (
-        <EmptyState title={user.kind === "client" ? "No projects yet" : "Nothing here for your role yet"}>
-          {user.kind === "client"
-            ? "Projects your organisation runs with MezAI will appear here with progress and quality figures."
-            : "More of the workspace opens in the coming stages."}
+        <EmptyState title="Nothing here for your role yet">
+          More of the workspace opens in the coming stages.
         </EmptyState>
       )}
     </>

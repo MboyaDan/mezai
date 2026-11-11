@@ -1,7 +1,18 @@
 "use client";
 
 import { Suspense, type ReactNode } from "react";
-import { Building2, ClipboardCheck, Flag, FolderKanban, Inbox, LayoutGrid, Users } from "lucide-react";
+import {
+  Building2,
+  ClipboardCheck,
+  Flag,
+  FolderKanban,
+  History,
+  Inbox,
+  LayoutGrid,
+  Receipt,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { initialsOf, SignOutButton } from "@/components/shells/account-menu";
 import { WorkspaceShell, type WorkspaceNavItem } from "@/components/shells/workspace-shell";
 import { brand } from "@/lib/brand";
@@ -38,6 +49,9 @@ const items: Array<WorkspaceNavItem & { perms?: string[] }> = [
   },
   { href: "/w/reports", label: "Reports", icon: Flag, perms: ["project.manage"] },
   { href: "/w/organisations", label: "Organisations", icon: Building2, perms: ["org.manage"] },
+  { href: "/w/invoices", label: "Invoices", icon: Receipt, perms: ["invoice.manage", "org.invoice.read"] },
+  { href: "/w/team", label: "Team", icon: UserPlus, perms: ["org.user.invite"] },
+  { href: "/w/activity", label: "Activity", icon: History, perms: ["org.project.read", "audit.read"] },
 ];
 
 function Shell({ children }: { children: ReactNode }) {
