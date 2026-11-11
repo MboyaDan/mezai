@@ -168,7 +168,8 @@ test("12b: dashboard, earnings and training match the ledger", async ({ page }) 
   expect(quality.trust, "seeded trust history").not.toBeNull();
   await expect(page.getByText(quality.trust.score.toFixed(2), { exact: true })).toBeVisible();
   const card = page.getByRole("region", { name: "Earnings" });
-  const figure = (label: string, c: number) => new RegExp(`${label}(?:(?!KES).)*${kes(c).replace(/[.]/g, "\\.")}`);
+  const figure = (label: string, c: number) =>
+    new RegExp(`${label}(?:(?!KES).)*${kes(c).replace(/[.]/g, "\\.")}`);
   const figures = card.locator("dl");
   await expect(figures).toContainText(figure("Approved", kesTotals.approved_cents));
   await expect(figures).toContainText(figure("Pending", kesTotals.pending_cents));
