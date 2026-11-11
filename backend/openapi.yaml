@@ -856,6 +856,112 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
         "204": { description: Marked }
+  /v1/me/earnings:
+    get:
+      operationId: getMyEarnings
+      summary: The caller's earnings card (`earnings.read_own`).
+      description: >-
+        Totals per currency from the append-only ledger: approved is the balance (accepted work and
+        adjustments not yet paid), paid is payouts net of reversals, earned is accruals plus
+        adjustments, so earned - paid = approved. Pending is an estimate: undecided answers at the
+        project's current rate. Next payout date is null unless Ops has set one (D-119).
+      tags: [earnings]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EarningsSummary" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/me/earnings/statement:
+    get:
+      operationId: getMyStatement
+      summary: The caller's statement, 30 days with entries per page, newest first (`earnings.read_own`).
+      description: >-
+        Accepted work is one line per Nairobi day and project (never per task, so a line cannot be
+        matched to a gold item); payouts, reversals and adjustments are one line each. The lines of
+        every page together sum to the approved balance.
+      tags: [earnings]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: Nairobi date (YYYY-MM-DD); only days before it. The `before` of the previous page.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Statement page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Statement" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/payouts:
+    get:
+      operationId: listMyPayouts
+      summary: The caller's payout lines in batches past draft, newest first (`earnings.read_own`).
+      tags: [earnings]
+      responses:
+        "200":
+          description: Payouts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payouts]
+                properties:
+                  payouts: { type: array, items: { $ref: "#/components/schemas/Payout" } }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/me/quality:
+    get:
+      operationId: getMyQuality
+      summary: The caller's trust score, its inputs and a 30-day trend (`earnings.read_own`).
+      description: >-
+        As of the start of today in Nairobi (`as_of`): today's work shows tomorrow, like gold
+        feedback and gold earnings, so the score never moves straight after a gold task (D-120).
+        Weights, floor, window and minimum gold results are the live settings.
+      tags: [earnings]
+      responses:
+        "200":
+          description: Quality record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyQuality" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/me/training:
+    get:
+      operationId: listMyTraining
+      summary: Instructions and guidelines of the live projects the caller may work on (`task.submit`).
+      description: Empty for a contributor who is not active and verified.
+      tags: [tasks]
+      responses:
+        "200":
+          description: Training projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, task_type, instructions_md, guidelines]
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        task_type: { type: string }
+                        instructions_md: { type: string }
+                        guidelines:
+                          type: array
+                          items:
+                            type: object
+                            required: [title, body_md]
+                            properties:
+                              title: { type: string }
+                              body_md: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
   /v1/projects/{id}/quality:
     get:
       operationId: getProjectQuality
@@ -2077,7 +2183,7 @@ components:
         trust:
           type: [object, "null"]
           description: >-
-            Latest trust score (brief 8.4): 0.5 × gold accuracy + 0.3 × agreement with the final
+            Ops only (null for the contributor, who reads /v1/me/quality; D-120). Latest trust score (brief 8.4): 0.5 × gold accuracy + 0.3 × agreement with the final
             answer + 0.2 × review acceptance over 30 days; inputs without data are left out and
             the weights rescaled (D-106). While building (fewer gold results than the minimum) it
             never pauses anyone. Null until the first gold result or agreement.
@@ -2204,6 +2310,102 @@ components:
               other: { $ref: "#/components/schemas/ContributorRef" }
               at: { type: string, format: date-time }
         same_name: { type: array, items: { $ref: "#/components/schemas/ContributorRef" }, description: Other accounts with the same name }
+    EarningsSummary:
+      type: object
+      required: [totals, tasks, next_payout_date, min_payout_cents, payout_schedule]
+      properties:
+        totals:
+          type: array
+          items:
+            type: object
+            required: [currency, pending_cents, pending_tasks, approved_cents, paid_cents, earned_cents]
+            properties:
+              currency: { type: string }
+              pending_cents: { type: integer, format: int64 }
+              pending_tasks: { type: integer }
+              approved_cents: { type: integer, format: int64 }
+              paid_cents: { type: integer, format: int64 }
+              earned_cents: { type: integer, format: int64 }
+        tasks:
+          type: object
+          required: [submitted, waiting, accepted, not_accepted]
+          properties:
+            submitted: { type: integer }
+            waiting: { type: integer }
+            accepted: { type: integer }
+            not_accepted: { type: integer }
+        next_payout_date: { type: [string, "null"], format: date }
+        min_payout_cents: { type: integer, format: int64 }
+        payout_schedule: { type: string }
+    Statement:
+      type: object
+      required: [lines, before]
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            required: [day, type, currency, project_id, project_name, tasks, amount_cents, reason, mpesa_receipt]
+            properties:
+              day: { type: string, format: date }
+              type: { type: string, enum: [accrual, payout, payout_reversal, adjustment] }
+              currency: { type: string }
+              project_id: { type: [string, "null"], format: uuid }
+              project_name: { type: [string, "null"] }
+              tasks: { type: integer, description: Accepted answers on an accrual line; 0 otherwise }
+              amount_cents: { type: integer, format: int64, description: Signed; payouts are negative }
+              reason: { type: [string, "null"] }
+              mpesa_receipt: { type: [string, "null"] }
+        before: { type: [string, "null"], format: date, description: Cursor for the next older page }
+    Payout:
+      type: object
+      required: [id, period_start, period_end, amount_cents, currency, status, mpesa_receipt, failure_reason, phone_masked, recorded_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string }
+        status: { type: string, enum: [processing, paid, failed] }
+        mpesa_receipt: { type: [string, "null"] }
+        failure_reason: { type: [string, "null"] }
+        phone_masked: { type: string }
+        recorded_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    MyQuality:
+      type: object
+      required: [as_of, trust, trend, weights, floor, window_days, min_gold_results]
+      properties:
+        as_of: { type: string, format: date-time }
+        trust:
+          type: [object, "null"]
+          required: [score, gold_accuracy, agreement, review_acceptance, building, calculated_at]
+          properties:
+            score: { type: [number, "null"] }
+            gold_accuracy: { type: [number, "null"] }
+            agreement: { type: [number, "null"] }
+            review_acceptance: { type: [number, "null"] }
+            building: { type: boolean }
+            calculated_at: { type: string, format: date-time }
+        trend:
+          type: array
+          items:
+            type: object
+            required: [day, score, gold_accuracy]
+            properties:
+              day: { type: string, format: date }
+              score: { type: [number, "null"] }
+              gold_accuracy: { type: [number, "null"] }
+        weights:
+          type: object
+          required: [gold_accuracy, agreement, review_acceptance]
+          properties:
+            gold_accuracy: { type: number }
+            agreement: { type: number }
+            review_acceptance: { type: number }
+        floor: { type: number }
+        window_days: { type: integer }
+        min_gold_results: { type: integer }
     WorkProject:
       type: object
       description: A live project as a contributor sees it. No gold, overlap or other contributors.
@@ -2231,6 +2433,14 @@ components:
         qa_checks: { $ref: "#/components/schemas/QAChecks" }
         min_rationale_chars: { type: integer }
         my_submitted: { type: integer }
+        tasks_left:
+          type: integer
+          description: >-
+            List only. About how many more tasks the caller could get: regular items short of k
+            answers that they have not seen. Gold checks come on top and are never counted apart.
+        minutes_per_task:
+          type: number
+          description: List only. Median time on task over the last 30 days, rounded up to the half minute; absent below 10 answers.
     Task:
       type: object
       description: One reserved item. The ID is the assignment's; gold and other items look the same.

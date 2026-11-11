@@ -77,7 +77,7 @@ type Profile struct {
 	ScreeningStatus     string          `json:"screening_status"`
 	ScreeningNote       *string         `json:"screening_note"` // shown for waitlist and decline
 	InterviewPassed     bool            `json:"interview_passed"`
-	Trust               *Trust          `json:"trust"` // null until the first gold result or agreement
+	Trust               *Trust          `json:"trust"` // Ops only (loadStaffProfile); contributors use /me/quality (D-120)
 	Languages           []Language      `json:"languages"`
 	Domains             []string        `json:"domains"`
 	Missing             []string        `json:"missing"` // fields still needed before qualification
@@ -161,9 +161,6 @@ func loadProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, 
 	}
 	_ = json.Unmarshal(cp.Experience, &out.Experience)
 	if out.InterviewPassed, err = q.HasPassedInterview(ctx, id); err != nil {
-		return Profile{}, err
-	}
-	if out.Trust, err = loadTrust(ctx, q, id); err != nil {
 		return Profile{}, err
 	}
 	langs, err := q.ListContributorLanguages(ctx, id)
@@ -526,6 +523,16 @@ func transition(ctx context.Context, q *store.Queries, m auth.Meta, id uuid.UUID
 	}
 	return auth.Audit(ctx, q, m, auth.Entry{Actor: by, Action: "contributor.status_changed", EntityType: "contributor", EntityID: &id,
 		Reason: reason, Before: map[string]string{"status": from}, After: map[string]string{"status": to}})
+}
+
+// loadStaffProfile is loadProfile plus the live trust score, for Ops.
+func loadStaffProfile(ctx context.Context, q *store.Queries, id uuid.UUID) (Profile, error) {
+	out, err := loadProfile(ctx, q, id)
+	if err != nil {
+		return out, err
+	}
+	out.Trust, err = loadTrust(ctx, q, id)
+	return out, err
 }
 
 func loadTrust(ctx context.Context, q *store.Queries, id uuid.UUID) (*Trust, error) {

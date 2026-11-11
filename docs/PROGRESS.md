@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 11b (deliverables: exports with manifest, publishing, signed downloads). Branch `stage-11b-deliverables`, PR open. 11a merged as #39.
-- **Next stage:** 12 (contributor dashboard, quality and earnings, DESIGN.md section 11): available projects, task counts, trust score with explanation, gold accuracy trend, recent feedback, earnings pending/approved/paid from the ledger, payout history, training page. Done when a contributor sees only their own data and every number matches the ledger in a reconciliation test.
+- **Last stage:** 12a (contributor read APIs: earnings summary, statement, payouts, quality as of start of day, work sizes, training). Branch `stage-12a-earnings-api`, PR open. 11b merged as #40.
+- **Next stage:** 12b (screens, DESIGN.md section 11): dashboard for active contributors (projects with pay, time and tasks left; trust score with explanation and three inputs; earnings card; latest feedback; gold accuracy trend), `/c/earnings` (statement and payout history), `/c/training` (project instructions and guidelines, worked examples, FAQs from `frontend/content/`), nav links, screenshots at 1440 and 390, design quality gate.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -64,6 +64,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Contributor portal (dashboard, profile, qualification) | `frontend/app/(contributor)/c/`, `components/contributor/`, answer inputs in `components/qualification/` |
 | Workspace (overview, contributors, attempt review) | `frontend/app/(workspace)/w/`, `components/workspace/` |
 | Project screens (frame, tabs, form, imports, gold) | `frontend/components/workspace/projects/`, helpers in `frontend/lib/projects.ts`; requests and organisations in `components/workspace/{requests,organisations}.tsx` |
+| Contributor earnings (summary, statement, payouts) | `backend/internal/earnings/`, queries `backend/queries/earnings.sql`, handlers `backend/internal/httpapi/earnings.go` |
+| Contributor quality record, work sizes, training | `backend/internal/tasks/portal.go` (`/me/quality`, `/me/training`; `tasks_left`, `minutes_per_task` on `/me/projects`) |
 | Full-stack tests | `frontend/tests/full/` (`npm run test:full`, needs `make up migrate seed`) |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -98,7 +100,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 10a | Merged | #37 | `quality/agreement.go` (Cohen, Fleiss, percent, MAD, majority, Jaccard, spread, bands, trust formula) with textbook tests; brief 8.1 gold rules. Migration 00015 (`agrees_with_final`, one consensus per item, probation settings). On submit: gold scored, consensus or review routing, agreement per rater, trust recalculated, auto-pause below 0.70 with Ops email; probation gold rate. Profile shows the latest trust score. |
 | 10b | Merged | #38 | `internal/jobs` runner on the Postgres `jobs` table (daily jobs per Nairobi date, SKIP LOCKED, backoff). Nightly agreement snapshots (percent, Cohen or Fleiss kappa per project and label, rubric MAD); daily gold-miss feedback that never names items; per-project warm-up gold rate; `GET /projects/{id}/quality` (aggregates, kappa bands) and Ops recompute; `/me/feedback`. Migration 00016 (warm-up settings, indexes). |
 | 11a | Merged | #39 | Migration 00017 (`decision_source`, `review_id`, one review per item, `project_reviewers`; Stage 10 consensus items made final and paid). Consensus items become final and every answer earns; gold work accepted in the daily batch (D-110). Review queue and item API, decisions (accept consensus, choose, write final, reject item) with idempotency, per-answer rejection with reason shown to the contributor, feedback, agreement and trust; reviewer assignment per project (D-111, D-112). Screens `/w/review`, `/w/review/[id]`, reviewers panel; `/c/profile/complete` after the first complete profile (D-113). Fixed: gold feedback named the date and project in swapped places. |
-| 11b | PR open | #40 | Migration 00018 (deliverable versions, size, creator; download file). `internal/delivery`: export of final regular items as JSONL and CSV with the brief 8.5 manifest in object storage, publish per version, five-minute links signed per user, checksum check and a `deliverable_downloads` row plus audit on every download (D-115, D-116). Export schema per task type with CSV formula guard (D-117). Deliverables tab for Ops and clients. AC-09 done. |
+| 11b | Merged | #40 | Migration 00018 (deliverable versions, size, creator; download file). `internal/delivery`: export of final regular items as JSONL and CSV with the brief 8.5 manifest in object storage, publish per version, five-minute links signed per user, checksum check and a `deliverable_downloads` row plus audit on every download (D-115, D-116). Export schema per task type with CSV formula guard (D-117). Deliverables tab for Ops and clients. AC-09 done. |
+| 12a | PR open | #41 | Migration 00019 (`earnings.read_own`, `payout.next_date`, payout line index). `/me/earnings` (approved = ledger balance, paid, earned, pending estimate, task counts, payout settings), `/me/earnings/statement` (per day and project, paged by 30 days), `/me/payouts`, `/me/quality` (trust and 30-day trend as of the start of the Nairobi day, D-120), `/me/training`; `tasks_left` and `minutes_per_task` on `/me/projects`. Profile trust now Ops only (it leaked gold timing and was always "building" for contributors). Reconciliation and isolation tests (D-119). |
 
 ## Notes for the next session
 
@@ -142,3 +145,5 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Review radio groups need per-instance names (`useId`): Next keeps the previous item mounted while hidden.
 - Deliverables: `internal/delivery` (service, files, links). Add a task type's CSV columns in `quality.ExportColumns`/`ExportValues`; raise `quality.ExportSchemaVersion` when a field changes meaning. The deliverables list offers the manifest through the JSONL row (`file: manifest`).
 - Full-stack specs sign in with `signIn` / `apiSignIn` from `frontend/tests/full/auth.ts`: in CI every login comes from one IP (20 a minute), so a refused sign-in waits for the window and retries once. Projects keep a 5% audit sample, so a spec that needs every item final must accept audit-sampled items first (see `deliverables.spec.ts`).
+- Stage 12b: use `/v1/me/earnings`, `/me/earnings/statement?before=`, `/me/payouts`, `/me/quality`, `/me/training`, `/me/feedback`; never read `profile.trust` in the contributor portal (null there, D-120). Pending is an estimate: say so on screen. Show `tasks_left` as "about N".
+- Stage 14: write `payout` ledger entries when a line is recorded paid (the statement shows the receipt from `payout_lines`), set `payout.next_date`, and tell Ops that adjustment and failure reasons are shown to the contributor (A-073).

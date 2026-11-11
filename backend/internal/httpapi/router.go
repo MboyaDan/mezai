@@ -13,6 +13,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/delivery"
+	"github.com/MboyaDan/mezai/backend/internal/earnings"
 	"github.com/MboyaDan/mezai/backend/internal/projects"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -175,6 +176,14 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/me/tasks/:id/report", Perm("task.submit"), perMinute(30), th.report)
 		a.handle(http.MethodGet, "/me/feedback", Perm("task.submit"), th.myFeedback)
 		a.handle(http.MethodPost, "/me/feedback/:id/read", Perm("task.submit"), th.readFeedback)
+		// Contributor dashboard (Stage 12a): own records only, readable while
+		// paused (earnings.read_own, brief 4). Training lists eligible projects.
+		eah := &earningsHandlers{svc: earnings.NewService(d.Auth.Pool), log: d.Log}
+		a.handle(http.MethodGet, "/me/earnings", Perm("earnings.read_own"), eah.summary)
+		a.handle(http.MethodGet, "/me/earnings/statement", Perm("earnings.read_own"), eah.statement)
+		a.handle(http.MethodGet, "/me/payouts", Perm("earnings.read_own"), eah.payouts)
+		a.handle(http.MethodGet, "/me/quality", Perm("earnings.read_own"), th.myQuality)
+		a.handle(http.MethodGet, "/me/training", Perm("task.submit"), th.myTraining)
 		// Quality picture: aggregates only, so a project's client may read it too.
 		a.handle(http.MethodGet, "/projects/:id/quality", Perm("project.manage", "org.project.read"), th.projectQuality)
 		a.handle(http.MethodPost, "/projects/:id/quality/snapshot", Perm("project.manage"), th.snapshotNow)
