@@ -1136,6 +1136,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/ops/overview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The Ops home page (`project.manage`).
+     * @description Every project that is not closed with its pace against the deadline (A-074), the queues waiting for ELS staff, and contributor health. Staff only.
+     */
+    get: operations["getOpsOverview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/review/items": {
     parameters: {
       query?: never;
@@ -2890,16 +2910,97 @@ export interface components {
         week: string;
         final: number;
       }[];
-      pace: {
-        /** @description The target when set */
-        goal: number;
-        remaining: number;
-        /** @description Items made final per day over the last 14 days. */
-        per_day: number;
-        /** Format: date */
-        projected_finish: string | null;
+      pace: components["schemas"]["Pace"];
+    };
+    /** @description The finishing pace (A-074). */
+    Pace: {
+      /** @description The target when set */
+      goal: number;
+      remaining: number;
+      /** @description Items made final per day over the last 14 days. */
+      per_day: number;
+      /** Format: date */
+      projected_finish: string | null;
+      /** @enum {string} */
+      state: "done" | "on_track" | "at_risk" | "no_pace" | "no_deadline";
+    };
+    OpsOverview: {
+      /** Format: date-time */
+      generated_at: string;
+      /** @description Counts waiting for ELS staff; each matches the list it links to. */
+      queues: {
+        /** @description Items in review across every project. */
+        review: number;
+        /** Format: date-time */
+        oldest_review_at: string | null;
+        /** @description Open content reports. */
+        reports: number;
+        /** @description Scored qualification attempts waiting for a decision. */
+        attempts: number;
+        /** @description Applications waiting for screening. */
+        applications: number;
+        /** @description Shortlisted */
+        interviews: number;
+        /** @description National ID numbers given and not yet checked. */
+        identity_checks: number;
+        /** @description Client project requests not yet converted or declined. */
+        project_requests: number;
+      };
+      /** @description Every project that is not closed, at-risk first, then by deadline. */
+      projects: {
+        /** Format: uuid */
+        id: string;
+        name: string;
         /** @enum {string} */
-        state: "done" | "on_track" | "at_risk" | "no_pace" | "no_deadline";
+        status: "draft" | "ready" | "live" | "paused";
+        task_type: string;
+        /** Format: uuid */
+        org_id: string;
+        org_name: string;
+        /** Format: date */
+        deadline: string | null;
+        /** @description Items imported */
+        total: number;
+        final: number;
+        in_review: number;
+        /** @description Contributors who submitted in the last 7 days. */
+        active_contributors: number;
+        /** @description Tasks reserved now and not yet expired. */
+        reserved: number;
+        /** @description Gold checks in the last 30 days. */
+        gold_results: number;
+        gold_accuracy: number | null;
+        pace: components["schemas"]["Pace"];
+      }[];
+      contributors: {
+        applied: number;
+        qualifying: number;
+        active: number;
+        paused: number;
+        removed: number;
+        worked_last_7_days: number;
+        auto_paused_last_30_days: number;
+        /** @description Active with a settled trust score under the floor (paused at the next recalculation). */
+        active_below_floor: number;
+        /** @description Active */
+        building: number;
+        floor: number;
+        min_gold_results: number;
+        /** @description Active and paused contributors with the lowest settled trust scores (at most 8). */
+        watch: {
+          /** Format: uuid */
+          id: string;
+          public_code: string;
+          name: string;
+          /** @enum {string} */
+          status: "active" | "paused";
+          score: number;
+          gold_accuracy: number | null;
+          /** Format: date-time */
+          scored_at: string;
+          /** @description Paused */
+          auto_paused: boolean;
+        }[];
       };
     };
     Workforce: {
@@ -5039,6 +5140,27 @@ export interface operations {
       };
       404: components["responses"]["Error"];
       503: components["responses"]["Error"];
+    };
+  };
+  getOpsOverview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Overview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpsOverview"];
+        };
+      };
+      403: components["responses"]["Error"];
     };
   };
   listReviewQueue: {

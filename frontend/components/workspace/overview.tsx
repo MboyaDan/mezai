@@ -3,22 +3,27 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, EmptyState, Skeleton } from "@/components/ui/display";
-import { api, type AttemptSummary, type ContributorSummary } from "@/lib/api/client";
+import { api } from "@/lib/api/client";
 import { useUser } from "@/lib/session";
 import { useLoad } from "@/lib/use-load";
 import { ClientHome } from "./client-home";
+import { OpsHome } from "./ops-home";
 import { PageTitle, useCan } from "./workspace";
 
-function Count({ label, value, href }: { label: string; value: number | null; href: string }) {
+/** A reviewer's home: the items waiting in their projects. */
+function ReviewerHome() {
+  const queue = useLoad(() =>
+    api<{ items: unknown[] }>("GET", "/v1/review/items").then((r) => r.items.length),
+  );
   return (
-    <Link href={href} className="group">
+    <Link href="/w/review" className="group max-w-sm">
       <Card interactive className="grid gap-2 p-5">
-        <span className="text-sm text-fg-muted">{label}</span>
+        <span className="text-sm text-fg-muted">Items waiting for review in your projects</span>
         <span className="flex items-end justify-between">
-          {value == null ? (
-            <Skeleton className="h-9 w-12" />
+          {queue.status === "ready" ? (
+            <span className="font-mono text-3xl font-medium tabular">{queue.data}</span>
           ) : (
-            <span className="font-mono text-3xl font-medium tabular">{value}</span>
+            <Skeleton className="h-9 w-12" />
           )}
           <ArrowRight
             aria-hidden="true"
@@ -33,25 +38,6 @@ function Count({ label, value, href }: { label: string; value: number | null; hr
 export function Overview() {
   const user = useUser();
   const can = useCan();
-  const ops = can("contributor.approve");
-  const queue = useLoad(() =>
-    ops
-      ? api<{ attempts: AttemptSummary[] }>("GET", "/v1/qualification/attempts").then(
-          (r) => r.attempts.length,
-        )
-      : Promise.resolve(0),
-  );
-  const applicants = useLoad(() =>
-    can("contributor.approve", "contributor.pause")
-      ? Promise.all(
-          (["applied", "qualifying"] as const).map((s) =>
-            api<{ contributors: ContributorSummary[] }>("GET", `/v1/contributors?status=${s}`).then(
-              (r) => r.contributors.length,
-            ),
-          ),
-        ).then(([a, q]) => a + q)
-      : Promise.resolve(0),
-  );
 
   return (
     <>
@@ -60,19 +46,10 @@ export function Overview() {
       </PageTitle>
       {user.kind === "client" ? (
         <ClientHome />
-      ) : ops ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Count
-            label="Qualification attempts to review"
-            value={queue.status === "ready" ? queue.data : null}
-            href="/w/contributors"
-          />
-          <Count
-            label="Applicants not yet active"
-            value={applicants.status === "ready" ? applicants.data : null}
-            href="/w/contributors?tab=all"
-          />
-        </div>
+      ) : can("project.manage") ? (
+        <OpsHome />
+      ) : can("review.read") ? (
+        <ReviewerHome />
       ) : (
         <EmptyState title="Nothing here for your role yet">
           More of the workspace opens in the coming stages.
