@@ -143,3 +143,5 @@ export type ActivityEntry = ActivityList["entries"][number];
 export type Member = Schemas["Member"];
 export type Invoice = Schemas["Invoice"];
 export type Invitation = Schemas["Invitation"];
+export type OpsOverview = Schemas["OpsOverview"];
+export type OpsProject = OpsOverview["projects"][number];
