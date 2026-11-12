@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -248,8 +249,19 @@ func TestPayoutsManualPath(t *testing.T) {
 	if code, _ := result(l2.ID, map[string]string{"status": "paid", "receipt": "SAMPLE0A01"}); code != http.StatusConflict {
 		t.Fatalf("receipt reused: %d", code)
 	}
+	// The seed's sample balances (006, 008) are in the batch too; pay them.
+	paid := int64(120000)
+	for i, l := range b.Lines {
+		if l.ID == l1.ID || l.ID == l2.ID {
+			continue
+		}
+		if code, _ := result(l.ID, map[string]string{"status": "paid", "receipt": fmt.Sprintf("SAMPLE0B%02d", i)}); code != http.StatusOK {
+			t.Fatalf("paid %s: %d", l.PublicCode, code)
+		}
+		paid += l.AmountCents
+	}
 	code, out = result(l2.ID, map[string]string{"status": "failed", "reason": "Number not registered for M-Pesa (Sample)"})
-	if code != http.StatusOK || out.Status != "settled" || out.PaidCents != 120000 {
+	if code != http.StatusOK || out.Status != "settled" || out.PaidCents != paid {
 		t.Fatalf("failed and settled: %d %+v", code, out)
 	}
 
