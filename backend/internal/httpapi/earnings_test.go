@@ -71,8 +71,10 @@ func (e *env) payContributor(contributor string, amount int64, receipt string) {
 		ctx := context.Background()
 		batch := func(key string) (string, error) {
 			var id string
-			err := tx.QueryRow(ctx, `INSERT INTO payout_batches (period_start, period_end, status, idempotency_key, created_by, approved_by, approved_at)
-				VALUES (current_date - 7, current_date - 1, 'settled', $1, $2, $3, now()) RETURNING id`, key, ops, admin).Scan(&id)
+			err := tx.QueryRow(ctx, `INSERT INTO payout_batches (period_start, period_end, status, idempotency_key, created_by, approved_by, approved_at,
+				  exported_at, export_file_key, export_checksum, settled_at)
+				VALUES (current_date - 7, current_date - 1, 'settled', $1, $2, $3, now(), now(), 'test/' || $1, repeat('0', 64), now())
+				RETURNING id`, key, ops, admin).Scan(&id)
 			return id, err
 		}
 		paid, err := batch("test-paid-" + receipt)
@@ -94,7 +96,7 @@ func (e *env) payContributor(contributor string, amount int64, receipt string) {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO payout_lines (batch_id, contributor_id, amount_cents, currency, mpesa_phone, status, failure_reason, recorded_by, recorded_at)
-			SELECT $1, id, 999, 'KES', mpesa_phone, 'failed', 'Number not registered (Sample)', $2, now() FROM contributor_profiles WHERE id = $3`,
+			SELECT $1, id, 1000, 'KES', mpesa_phone, 'failed', 'Number not registered (Sample)', $2, now() FROM contributor_profiles WHERE id = $3`,
 			failed, ops, contributor)
 		return err
 	})
