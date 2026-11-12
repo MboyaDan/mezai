@@ -105,6 +105,7 @@ var expectedAccess = map[string]string{
 	"POST /v1/invoices":                                   "invoice.manage",
 	"POST /v1/invoices/:id/status":                        "invoice.manage",
 	"GET /v1/invoices/:id/download":                       "invoice.manage|org.invoice.read",
+	"GET /v1/ops/overview":                                 "project.manage",
 	"POST /v1/contributors/:id/mpesa-name-check":          "payout.create",
 	"GET /v1/qualification/attempts":                      "contributor.approve",
 	"GET /v1/qualification/attempts/:id":                  "contributor.approve",

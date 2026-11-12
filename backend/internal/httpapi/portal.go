@@ -191,3 +191,14 @@ func (h *portalHandlers) downloadInvoice(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "application/pdf", out.Data)
 }
+
+// opsOverview is the Ops home page (Stage 13b): open projects with their
+// pace, the queues and contributor health.
+func (h *portalHandlers) opsOverview(c *gin.Context) {
+	out, err := h.svc.GetOpsOverview(c.Request.Context(), PrincipalFrom(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}

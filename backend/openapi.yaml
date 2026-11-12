@@ -1240,6 +1240,17 @@ paths:
         "200": { description: The PDF, as an attachment, content: { application/pdf: { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+  /v1/ops/overview:
+    get:
+      operationId: getOpsOverview
+      summary: The Ops home page (`project.manage`).
+      description: >-
+        Every project that is not closed with its pace against the deadline (A-074), the queues waiting
+        for ELS staff, and contributor health. Staff only.
+      tags: [portal]
+      responses:
+        "200": { description: Overview, content: { application/json: { schema: { $ref: "#/components/schemas/OpsOverview" } } } }
+        "403": { $ref: "#/components/responses/Error" }
   /v1/review/items:
     get:
       operationId: listReviewQueue
@@ -3260,15 +3271,87 @@ components:
             properties:
               week: { type: string, format: date, description: The Monday of the Nairobi week. }
               final: { type: integer }
-        pace:
+        pace: { $ref: "#/components/schemas/Pace" }
+    Pace:
+      type: object
+      description: The finishing pace (A-074).
+      required: [goal, remaining, per_day, projected_finish, state]
+      properties:
+        goal: { type: integer, description: The target when set, otherwise every item imported. }
+        remaining: { type: integer }
+        per_day: { type: number, description: Items made final per day over the last 14 days. }
+        projected_finish: { type: [string, "null"], format: date }
+        state: { type: string, enum: [done, on_track, at_risk, no_pace, no_deadline] }
+    OpsOverview:
+      type: object
+      required: [generated_at, queues, projects, contributors]
+      properties:
+        generated_at: { type: string, format: date-time }
+        queues:
           type: object
-          required: [goal, remaining, per_day, projected_finish, state]
+          description: Counts waiting for ELS staff; each matches the list it links to.
+          required: [review, oldest_review_at, reports, attempts, applications, interviews, identity_checks, project_requests]
           properties:
-            goal: { type: integer, description: The target when set, otherwise every item imported. }
-            remaining: { type: integer }
-            per_day: { type: number, description: Items made final per day over the last 14 days. }
-            projected_finish: { type: [string, "null"], format: date }
-            state: { type: string, enum: [done, on_track, at_risk, no_pace, no_deadline] }
+            review: { type: integer, description: Items in review across every project. }
+            oldest_review_at: { type: [string, "null"], format: date-time }
+            reports: { type: integer, description: Open content reports. }
+            attempts: { type: integer, description: Scored qualification attempts waiting for a decision. }
+            applications: { type: integer, description: Applications waiting for screening. }
+            interviews: { type: integer, description: Shortlisted, qualified contributors without a passed interview. }
+            identity_checks: { type: integer, description: National ID numbers given and not yet checked. }
+            project_requests: { type: integer, description: Client project requests not yet converted or declined. }
+        projects:
+          type: array
+          description: Every project that is not closed, at-risk first, then by deadline.
+          items:
+            type: object
+            required: [id, name, status, task_type, org_id, org_name, deadline, total, final, in_review, active_contributors, reserved, gold_results, gold_accuracy, pace]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              status: { type: string, enum: [draft, ready, live, paused] }
+              task_type: { type: string }
+              org_id: { type: string, format: uuid }
+              org_name: { type: string }
+              deadline: { type: [string, "null"], format: date }
+              total: { type: integer, description: Items imported, without gold checks. }
+              final: { type: integer }
+              in_review: { type: integer }
+              active_contributors: { type: integer, description: Contributors who submitted in the last 7 days. }
+              reserved: { type: integer, description: Tasks reserved now and not yet expired. }
+              gold_results: { type: integer, description: Gold checks in the last 30 days. }
+              gold_accuracy: { type: [number, "null"] }
+              pace: { $ref: "#/components/schemas/Pace" }
+        contributors:
+          type: object
+          required: [applied, qualifying, active, paused, removed, worked_last_7_days, auto_paused_last_30_days, active_below_floor, building, floor, min_gold_results, watch]
+          properties:
+            applied: { type: integer }
+            qualifying: { type: integer }
+            active: { type: integer }
+            paused: { type: integer }
+            removed: { type: integer }
+            worked_last_7_days: { type: integer }
+            auto_paused_last_30_days: { type: integer }
+            active_below_floor: { type: integer, description: Active with a settled trust score under the floor (paused at the next recalculation). }
+            building: { type: integer, description: Active, still building a trust score. }
+            floor: { type: number }
+            min_gold_results: { type: integer }
+            watch:
+              type: array
+              description: Active and paused contributors with the lowest settled trust scores (at most 8).
+              items:
+                type: object
+                required: [id, public_code, name, status, score, gold_accuracy, scored_at, auto_paused]
+                properties:
+                  id: { type: string, format: uuid }
+                  public_code: { type: string }
+                  name: { type: string }
+                  status: { type: string, enum: [active, paused] }
+                  score: { type: number }
+                  gold_accuracy: { type: [number, "null"] }
+                  scored_at: { type: string, format: date-time }
+                  auto_paused: { type: boolean, description: Paused, and the last status change was automatic. }
     Workforce:
       type: object
       required: [contributors, active_last_7_days, workers, skills]

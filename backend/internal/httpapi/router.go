@@ -249,6 +249,8 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/invoices", Perm("invoice.manage"), rateLimit(newLimiter(60, time.Hour)), pth.uploadInvoice)
 		a.handle(http.MethodPost, "/invoices/:id/status", Perm("invoice.manage"), pth.setInvoiceStatus)
 		a.handle(http.MethodGet, "/invoices/:id/download", readInvoices, perMinute(60), pth.downloadInvoice)
+		// Ops overview (Stage 13b).
+		a.handle(http.MethodGet, "/ops/overview", Perm("project.manage"), perMinute(60), pth.opsOverview)
 		rules = a.rules
 	}
 
