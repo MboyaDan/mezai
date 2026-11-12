@@ -4,7 +4,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 14b (payout screens, AC-11 done). Branch `stage-14b-payout-screens`, PR open. 14a merged as #45.
+- **Last stage:** 14b (payout screens, AC-11 done). Branch `stage-14b-payout-screens`, PR #46 open. 14a merged as #45.
 - **Next stage:** 15 (M-Pesa B2C) is behind DG-02: ask first, and skip to 16 (notifications) if it is not cleared. DG-03 (CSV columns), A-007 (real second approver) and A-077 (receipt format) are still open before the first real payout.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
@@ -110,7 +110,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 13a | Merged | #43 | Migration 00020 (`invoices` with RLS, `invoice.manage`, `org.invoice.read`). `internal/portal`: `/projects/{id}/progress` (stages, weekly throughput, pace), `/projects/{id}/workforce` (per-client codes, D-123), `/activity` (allowlist, D-124), `/team`, invoices upload, list, paid/void, download. Screens: client home, progress and quality panels and workforce on the project page (Ops too), Datasets heading, `/w/activity`, `/w/team`, `/w/invoices`. AC-10 done across DB, API and UI. |
 | 13b | Merged | #44 | No migration. `GET /v1/ops/overview` (`project.manage`): queue counts equal to their lists, open projects with the 13a pace (at-risk first), contributor health and the lowest settled trust scores. Ops home at `/w` (10 projects, "Show all"); reviewers see their review count. First dark-theme screenshot of a workspace page (`data-theme="dark"`, axe clean). |
 | 14a | Merged | #45 | Migration 00021 (cancelled state, one open batch, export checksum, payee snapshot, whole-shilling lines, guard trigger, no deletes, `payout.export_format`). `internal/payouts`: preview with held reasons, create (idempotent), submit, approve (never the creator), return, cancel, export and download, results per line, next payout date. Paid line writes the payout entry; failed moves nothing (D-127 to D-129). |
-| 14b | PR open | | `/w/payouts` (open batch or new-batch preview with held reasons, batch list, next payout date) and `/w/payouts/[id]` (steps, next-step panel per person, lines, send back and cancel with reason, export with format warning, download, record paid or failed). List API returns `next_date`. Seed: sample balances for C-0006, C-0008, C-0011 (D-130, D-131). |
+| 14b | PR open | #46 | `/w/payouts` (open batch or new-batch preview with held reasons, batch list, next payout date) and `/w/payouts/[id]` (steps, next-step panel per person, lines, send back and cancel with reason, export with format warning, download, record paid or failed). List API returns `next_date`. Seed: sample balances for C-0006, C-0008, C-0011 (D-130, D-131). |
 
 ## Notes for the next session
 
