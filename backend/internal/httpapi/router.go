@@ -14,6 +14,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/delivery"
 	"github.com/MboyaDan/mezai/backend/internal/earnings"
+	"github.com/MboyaDan/mezai/backend/internal/payouts"
 	"github.com/MboyaDan/mezai/backend/internal/portal"
 	"github.com/MboyaDan/mezai/backend/internal/projects"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
@@ -251,6 +252,22 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/invoices/:id/download", readInvoices, perMinute(60), pth.downloadInvoice)
 		// Ops overview (Stage 13b).
 		a.handle(http.MethodGet, "/ops/overview", Perm("project.manage"), perMinute(60), pth.opsOverview)
+
+		// Payouts, manual M-Pesa path (Stage 14a, AC-11, D-127 and D-128).
+		poh := &payoutHandlers{log: d.Log, svc: payouts.NewService(d.Auth.Pool, d.Auth.Files, d.Log)}
+		readPayouts := Perm("payout.create", "payout.approve")
+		a.handle(http.MethodGet, "/payouts/preview", Perm("payout.create"), poh.preview)
+		a.handle(http.MethodGet, "/payouts/batches", readPayouts, poh.list)
+		a.handle(http.MethodPost, "/payouts/batches", Perm("payout.create"), perMinute(10), poh.create)
+		a.handle(http.MethodGet, "/payouts/batches/:id", readPayouts, poh.get)
+		a.handle(http.MethodPost, "/payouts/batches/:id/submit", Perm("payout.create"), poh.action(poh.submit))
+		a.handle(http.MethodPost, "/payouts/batches/:id/approve", Perm("payout.approve"), poh.action(poh.approve))
+		a.handle(http.MethodPost, "/payouts/batches/:id/return", Perm("payout.approve"), poh.action(poh.sendBack))
+		a.handle(http.MethodPost, "/payouts/batches/:id/cancel", Perm("payout.create"), poh.action(poh.cancel))
+		a.handle(http.MethodPost, "/payouts/batches/:id/export", Perm("payout.create"), poh.action(poh.export))
+		a.handle(http.MethodGet, "/payouts/batches/:id/file", readPayouts, perMinute(30), poh.download)
+		a.handle(http.MethodPost, "/payouts/lines/:id/result", Perm("payout.create"), perMinute(240), poh.result)
+		a.handle(http.MethodPut, "/payouts/next-date", Perm("payout.create"), poh.nextDate)
 		rules = a.rules
 	}
 
