@@ -231,6 +231,8 @@ export function errorMessage(e: ApiError): string {
     link_expired: "That download link has expired. Choose Download again.",
     identity_incomplete:
       "The contributor has not given a confirmed M-Pesa number and National ID number yet.",
+    email_in_use: "That email address already has a MezAI account.",
+    conflict: "That change clashes with what is already saved. Reload and check.",
   };
   return m[e.code] ?? "Something went wrong. Try again in a moment.";
 }
