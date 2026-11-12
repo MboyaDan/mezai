@@ -5519,6 +5519,11 @@ export interface operations {
         content: {
           "application/json": {
             batches: components["schemas"]["PayoutBatchSummary"][];
+            /**
+             * Format: date
+             * @description The next payout date contributors see
+             */
+            next_date: string | null;
           };
         };
       };
