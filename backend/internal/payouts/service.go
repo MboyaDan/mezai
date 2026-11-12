@@ -318,20 +318,34 @@ func mapPg(err error) error {
 	return err
 }
 
-// List returns the latest batches.
-func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Summary, error) {
+// List returns the latest batches and the next payout date contributors
+// see (null when hidden or malformed).
+func (s *Service) List(ctx context.Context, p *auth.Principal) ([]Summary, *string, error) {
 	out := []Summary{}
+	var next *string
 	err := s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
-		rows, err := store.New(tx).ListPayoutBatches(ctx)
+		q := store.New(tx)
+		rows, err := q.ListPayoutBatches(ctx)
 		for _, r := range rows {
 			out = append(out, Summary{ID: r.ID, PeriodStart: day(r.PeriodStart), PeriodEnd: day(r.PeriodEnd),
 				Currency: r.Currency, Status: r.Status, TotalCents: r.TotalCents, LineCount: r.LineCount,
 				PaidLines: r.PaidLines, FailedLines: r.FailedLines, PaidCents: r.PaidCents, CreatedAt: r.CreatedAt,
 				CreatedByName: r.CreatedByName, ApprovedByName: r.ApprovedByName})
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		if v, err := q.GetSetting(ctx, "payout.next_date"); err == nil {
+			var d string
+			if json.Unmarshal(v, &d) == nil {
+				if _, err := time.Parse(time.DateOnly, d); err == nil {
+					next = &d
+				}
+			}
+		}
+		return nil
 	})
-	return out, err
+	return out, next, err
 }
 
 // Get returns one batch with its lines.

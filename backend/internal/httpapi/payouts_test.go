@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -326,5 +327,12 @@ func TestPayoutsManualPath(t *testing.T) {
 	next := time.Now().AddDate(0, 0, 7).Format(time.DateOnly)
 	if code := e.do(http.MethodPut, "/v1/payouts/next-date", map[string]string{"date": next}, ops, nil).Code; code != http.StatusOK {
 		t.Fatalf("next date: %d", code)
+	}
+	var list struct {
+		NextDate *string `json:"next_date"`
+	}
+	w = e.do(http.MethodGet, "/v1/payouts/batches", nil, ops, nil)
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil || list.NextDate == nil || *list.NextDate != next {
+		t.Fatalf("list next_date = %v (%v), want %s", list.NextDate, err, next)
 	}
 }

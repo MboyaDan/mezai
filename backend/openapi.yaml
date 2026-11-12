@@ -1276,9 +1276,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [batches]
+                required: [batches, next_date]
                 properties:
                   batches: { type: array, items: { $ref: "#/components/schemas/PayoutBatchSummary" } }
+                  next_date: { type: [string, "null"], format: date, description: The next payout date contributors see, or null when hidden. }
     post:
       operationId: createPayoutBatch
       summary: Create a draft batch for a period (`payout.create`).

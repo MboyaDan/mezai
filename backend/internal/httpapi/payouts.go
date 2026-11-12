@@ -65,12 +65,12 @@ func (h *payoutHandlers) preview(c *gin.Context) {
 }
 
 func (h *payoutHandlers) list(c *gin.Context) {
-	out, err := h.svc.List(c.Request.Context(), PrincipalFrom(c))
+	out, next, err := h.svc.List(c.Request.Context(), PrincipalFrom(c))
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"batches": out})
+	c.JSON(http.StatusOK, gin.H{"batches": out, "next_date": next})
 }
 
 func (h *payoutHandlers) create(c *gin.Context) {
