@@ -480,6 +480,16 @@ type PayoutBatch struct {
 	SettledAt      *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	CutoffAt       *time.Time
+	SubmittedAt    *time.Time
+	ReturnedNote   *string
+	CancelledBy    *uuid.UUID
+	CancelledAt    *time.Time
+	CancelReason   *string
+	ExportFileName *string
+	ExportChecksum *string
+	ExportFormat   []byte
+	ExportedBy     *uuid.UUID
 }
 
 type PayoutLine struct {
@@ -496,6 +506,7 @@ type PayoutLine struct {
 	RecordedAt    *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	PayeeName     string
 }
 
 type Permission struct {

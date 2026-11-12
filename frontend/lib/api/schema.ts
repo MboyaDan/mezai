@@ -1156,6 +1156,224 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/payouts/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What a batch ending on a day would pay and hold (`payout.create`).
+     * @description The period starts the day after the last batch. Each contributor is paid the smaller of their balance now and at the end of the period, in whole shillings, if it is at least `payout.min_cents` and their M-Pesa number is confirmed, identity verified and name checked; everyone else owed money is listed as held, with the reason (D-128).
+     */
+    get: operations["previewPayoutBatch"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The latest payout batches (`payout.create` or `payout.approve`). */
+    get: operations["listPayoutBatches"];
+    put?: never;
+    /**
+     * Create a draft batch for a period (`payout.create`).
+     * @description Only one batch is open (not settled or cancelled) at a time. A replay with the same Idempotency-Key returns the same batch with 200.
+     */
+    post: operations["createPayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One batch with its lines (`payout.create` or `payout.approve`).
+     * @description Phone numbers are masked; the full numbers are only in the exported file.
+     */
+    get: operations["getPayoutBatch"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/submit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a draft to the approver (`payout.create`).
+     * @description Draft to pending approval.
+     */
+    post: operations["submitPayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Approve a batch (`payout.approve`).
+     * @description Two-person rule - the creator gets 403 own_batch. 409 balance_changed when a line is more than the contributor's balance now.
+     */
+    post: operations["approvePayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/return": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a batch back to its creator (`payout.approve`).
+     * @description Pending approval to draft, with a note.
+     */
+    post: operations["returnPayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancel a batch before approval (`payout.create`).
+     * @description Kept with the reason; the money stays owed.
+     */
+    post: operations["cancelPayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Write the bulk payment file (`payout.create`).
+     * @description Approved to exported. The columns come from the payout.export_format setting (DG-03 not yet confirmed).
+     */
+    post: operations["exportPayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/file": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download the bulk payment CSV (`payout.create` or `payout.approve`).
+     * @description Checked against its stored checksum; each download is audited. Holds full phone numbers; never cached.
+     */
+    get: operations["downloadPayoutFile"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/lines/{id}/result": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record a line as paid or failed (`payout.create`).
+     * @description Paid writes the payout ledger entry (the money leaves the balance only now, D-127); failed moves no money and its reason is shown to the contributor. The same result again changes nothing; a different one is 409. The batch is settled when every line has a result.
+     */
+    post: operations["recordPayoutResult"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/next-date": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Set or hide the next payout date contributors see (`payout.create`). */
+    put: operations["setNextPayoutDate"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/review/items": {
     parameters: {
       query?: never;
@@ -3002,6 +3220,104 @@ export interface components {
           auto_paused: boolean;
         }[];
       };
+    };
+    PayoutLine: {
+      /**
+       * Format: uuid
+       * @description Empty UUID in a preview.
+       */
+      id: string;
+      /** Format: uuid */
+      contributor_id: string;
+      public_code: string;
+      name: string;
+      contributor_status: string;
+      phone_masked: string;
+      /**
+       * Format: int64
+       * @description Whole shillings.
+       */
+      amount_cents: number;
+      currency: string;
+      /**
+       * Format: int64
+       * @description The contributor's ledger balance now.
+       */
+      balance_cents: number;
+      /** @enum {string} */
+      status: "pending" | "paid" | "failed";
+      mpesa_receipt: string | null;
+      failure_reason: string | null;
+      /** Format: date-time */
+      recorded_at: string | null;
+      recorded_by_name: string | null;
+    };
+    PayoutHeld: {
+      /** Format: uuid */
+      contributor_id: string;
+      public_code: string;
+      name: string;
+      /** Format: int64 */
+      owed_cents: number;
+      /** @enum {string} */
+      reason: "no_phone" | "phone_unconfirmed" | "identity_unverified" | "name_unchecked" | "below_minimum";
+    };
+    PayoutPreview: {
+      /** Format: date */
+      period_start: string;
+      /** Format: date */
+      period_end: string;
+      /** Format: int64 */
+      min_cents: number;
+      /** Format: int64 */
+      total_cents: number;
+      lines: components["schemas"]["PayoutLine"][];
+      held: components["schemas"]["PayoutHeld"][];
+    };
+    PayoutBatchSummary: {
+      /** Format: uuid */
+      id: string;
+      /** Format: date */
+      period_start: string;
+      /** Format: date */
+      period_end: string;
+      currency: string;
+      /** @enum {string} */
+      status: "draft" | "pending_approval" | "approved" | "exported" | "settled" | "cancelled";
+      /** Format: int64 */
+      total_cents: number;
+      line_count: number;
+      paid_lines: number;
+      failed_lines: number;
+      /** Format: int64 */
+      paid_cents: number;
+      /** Format: date-time */
+      created_at: string;
+      created_by_name: string;
+      approved_by_name: string | null;
+    };
+    PayoutBatch: components["schemas"]["PayoutBatchSummary"] & {
+      /** Format: uuid */
+      created_by: string;
+      /** Format: date-time */
+      cutoff_at: string | null;
+      /** Format: date-time */
+      submitted_at: string | null;
+      /** Format: date-time */
+      approved_at: string | null;
+      returned_note: string | null;
+      /** Format: date-time */
+      cancelled_at: string | null;
+      cancelled_by_name: string | null;
+      cancel_reason: string | null;
+      /** Format: date-time */
+      exported_at: string | null;
+      export_file_name: string | null;
+      /** @description False until DG-03 confirms the column layout. */
+      format_confirmed: boolean | null;
+      /** Format: date-time */
+      settled_at: string | null;
+      lines: components["schemas"]["PayoutLine"][];
     };
     Workforce: {
       contributors: number;
@@ -5161,6 +5477,350 @@ export interface operations {
         };
       };
       403: components["responses"]["Error"];
+    };
+  };
+  previewPayoutBatch: {
+    parameters: {
+      query: {
+        period_end: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Preview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutPreview"];
+        };
+      };
+      422: components["responses"]["Error"];
+    };
+  };
+  listPayoutBatches: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Batches, newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            batches: components["schemas"]["PayoutBatchSummary"][];
+          };
+        };
+      };
+    };
+  };
+  createPayoutBatch: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /**
+           * Format: date
+           * @description Before today
+           */
+          period_end: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  getPayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  submitPayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  approvePayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  returnPayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  cancelPayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  exportPayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  downloadPayoutFile: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      404: components["responses"]["Error"];
+      503: components["responses"]["Error"];
+    };
+  };
+  recordPayoutResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          status: "paid" | "failed";
+          /** @description The M-Pesa receipt */
+          receipt?: string;
+          /** @description Required for failed; the contributor sees it. */
+          reason?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  setNextPayoutDate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @description YYYY-MM-DD */
+          date?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: date */
+            date: string | null;
+          };
+        };
+      };
+      422: components["responses"]["Error"];
     };
   };
   listReviewQueue: {

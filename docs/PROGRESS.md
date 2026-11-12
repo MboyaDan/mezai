@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 13b (Ops overview). Branch `stage-13b-ops-overview`, PR open. 13a merged as #43.
-- **Next stage:** 14 (payouts, manual path: batches, two-person approval, M-Pesa bulk CSV per DG-03, results, reconciliation; AC-11).
+- **Last stage:** 14a (payouts API, AC-11). Branch `stage-14a-payouts-api`, PR open. 13b merged as #44.
+- **Next stage:** 14b (payout screens: batch list, preview with held reasons, create, approve or send back, export and download, record results, next payout date; e2e and screenshots). DG-03 (CSV columns) and A-007 (real second approver) still open.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
 ## Where things are
@@ -69,6 +69,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Contributor quality record, work sizes, training | `backend/internal/tasks/portal.go` (`/me/quality`, `/me/training`; `tasks_left`, `minutes_per_task` on `/me/projects`) |
 | Client portal (progress, workforce, activity, team, invoices) | `backend/internal/portal/`, queries `backend/queries/portal.sql`, handlers `backend/internal/httpapi/portal.go`; screens `frontend/components/workspace/{client-home,activity,team,invoices}.tsx`, `projects/figures.tsx`, helpers `frontend/lib/portal.ts` |
 | Ops overview (queues, open projects, contributor health) | `backend/internal/portal/ops.go`, queries `backend/queries/ops.sql`; screen `frontend/components/workspace/ops-home.tsx`, helpers `frontend/lib/ops.ts` |
+| Payouts (batches, eligibility, CSV, results) | `backend/internal/payouts/`, queries `backend/queries/payouts.sql`, handlers `backend/internal/httpapi/payouts.go`; CSV columns in setting `payout.export_format` |
 | Full-stack tests | `frontend/tests/full/` (`npm run test:full`, needs `make up migrate seed`) |
 | Decisions / assumptions / AC map | `docs/DECISIONS.md`, `docs/ASSUMPTIONS.md`, `docs/traceability.md` |
 
@@ -107,7 +108,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 12a | Merged | #41 | Migration 00019 (`earnings.read_own`, `payout.next_date`, payout line index). `/me/earnings` (approved = ledger balance, paid, earned, pending estimate, task counts, payout settings), `/me/earnings/statement` (per day and project, paged by 30 days), `/me/payouts`, `/me/quality` (trust and 30-day trend as of the start of the Nairobi day, D-120), `/me/training`; `tasks_left` and `minutes_per_task` on `/me/projects`. Profile trust now Ops only (it leaked gold timing and was always "building" for contributors). Reconciliation and isolation tests (D-119). |
 | 12b | Merged | #42 | Working dashboard for active and paused contributors (projects with work, trust panel, earnings, feedback, gold trend), `/c/earnings`, `/c/training` (guidelines, score rules, worked examples, questions), nav links, work sizes on Tasks. Dev seed: trust history for Sample Contributor 007. Full-stack spec checks screen figures against the ledger. |
 | 13a | Merged | #43 | Migration 00020 (`invoices` with RLS, `invoice.manage`, `org.invoice.read`). `internal/portal`: `/projects/{id}/progress` (stages, weekly throughput, pace), `/projects/{id}/workforce` (per-client codes, D-123), `/activity` (allowlist, D-124), `/team`, invoices upload, list, paid/void, download. Screens: client home, progress and quality panels and workforce on the project page (Ops too), Datasets heading, `/w/activity`, `/w/team`, `/w/invoices`. AC-10 done across DB, API and UI. |
-| 13b | PR open | #44 | No migration. `GET /v1/ops/overview` (`project.manage`): queue counts equal to their lists, open projects with the 13a pace (at-risk first), contributor health and the lowest settled trust scores. Ops home at `/w` (10 projects, "Show all"); reviewers see their review count. First dark-theme screenshot of a workspace page (`data-theme="dark"`, axe clean). |
+| 13b | Merged | #44 | No migration. `GET /v1/ops/overview` (`project.manage`): queue counts equal to their lists, open projects with the 13a pace (at-risk first), contributor health and the lowest settled trust scores. Ops home at `/w` (10 projects, "Show all"); reviewers see their review count. First dark-theme screenshot of a workspace page (`data-theme="dark"`, axe clean). |
+| 14a | PR open | #45 | Migration 00021 (cancelled state, one open batch, export checksum, payee snapshot, whole-shilling lines, guard trigger, no deletes, `payout.export_format`). `internal/payouts`: preview with held reasons, create (idempotent), submit, approve (never the creator), return, cancel, export and download, results per line, next payout date. Paid line writes the payout entry; failed moves nothing (D-127 to D-129). |
 
 ## Notes for the next session
 

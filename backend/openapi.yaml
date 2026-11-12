@@ -1251,6 +1251,210 @@ paths:
       responses:
         "200": { description: Overview, content: { application/json: { schema: { $ref: "#/components/schemas/OpsOverview" } } } }
         "403": { $ref: "#/components/responses/Error" }
+  /v1/payouts/preview:
+    get:
+      operationId: previewPayoutBatch
+      summary: What a batch ending on a day would pay and hold (`payout.create`).
+      description: >-
+        The period starts the day after the last batch. Each contributor is paid the smaller of their balance now and
+        at the end of the period, in whole shillings, if it is at least `payout.min_cents` and their M-Pesa number is
+        confirmed, identity verified and name checked; everyone else owed money is listed as held, with the reason (D-128).
+      tags: [payouts]
+      parameters: [{ name: period_end, in: query, required: true, schema: { type: string, format: date } }]
+      responses:
+        "200": { description: Preview, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutPreview" } } } }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches:
+    get:
+      operationId: listPayoutBatches
+      summary: The latest payout batches (`payout.create` or `payout.approve`).
+      tags: [payouts]
+      responses:
+        "200":
+          description: Batches, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batches]
+                properties:
+                  batches: { type: array, items: { $ref: "#/components/schemas/PayoutBatchSummary" } }
+    post:
+      operationId: createPayoutBatch
+      summary: Create a draft batch for a period (`payout.create`).
+      description: >-
+        Only one batch is open (not settled or cancelled) at a time. A replay with the same Idempotency-Key returns the
+        same batch with 200.
+      tags: [payouts]
+      parameters: [{ name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 200 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period_end]
+              properties:
+                period_end: { type: string, format: date, description: Before today, Nairobi time. }
+      responses:
+        "200": { description: Replay, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}:
+    get:
+      operationId: getPayoutBatch
+      summary: One batch with its lines (`payout.create` or `payout.approve`).
+      description: Phone numbers are masked; the full numbers are only in the exported file.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/submit:
+    post:
+      operationId: submitPayoutBatch
+      summary: Send a draft to the approver (`payout.create`).
+      description: Draft to pending approval.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/approve:
+    post:
+      operationId: approvePayoutBatch
+      summary: Approve a batch (`payout.approve`).
+      description: Two-person rule - the creator gets 403 own_batch. 409 balance_changed when a line is more than the contributor's balance now.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/return:
+    post:
+      operationId: returnPayoutBatch
+      summary: Send a batch back to its creator (`payout.approve`).
+      description: Pending approval to draft, with a note.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/cancel:
+    post:
+      operationId: cancelPayoutBatch
+      summary: Cancel a batch before approval (`payout.create`).
+      description: Kept with the reason; the money stays owed.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/export:
+    post:
+      operationId: exportPayoutBatch
+      summary: Write the bulk payment file (`payout.create`).
+      description: Approved to exported. The columns come from the payout.export_format setting (DG-03 not yet confirmed).
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/file:
+    get:
+      operationId: downloadPayoutFile
+      summary: Download the bulk payment CSV (`payout.create` or `payout.approve`).
+      description: Checked against its stored checksum; each download is audited. Holds full phone numbers; never cached.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: The CSV, content: { text/csv: { schema: { type: string } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /v1/payouts/lines/{id}/result:
+    post:
+      operationId: recordPayoutResult
+      summary: Record a line as paid or failed (`payout.create`).
+      description: >-
+        Paid writes the payout ledger entry (the money leaves the balance only now, D-127); failed moves no money and its
+        reason is shown to the contributor. The same result again changes nothing; a different one is 409. The batch is
+        settled when every line has a result.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [paid, failed] }
+                receipt: { type: string, description: The M-Pesa receipt, required for paid. }
+                reason: { type: string, maxLength: 500, description: Required for failed; the contributor sees it. }
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/next-date:
+    put:
+      operationId: setNextPayoutDate
+      summary: Set or hide the next payout date contributors see (`payout.create`).
+      tags: [payouts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date: { type: string, description: YYYY-MM-DD, today or later; empty hides it. }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date]
+                properties:
+                  date: { type: [string, "null"], format: date }
+        "422": { $ref: "#/components/responses/Error" }
   /v1/review/items:
     get:
       operationId: listReviewQueue
@@ -3352,6 +3556,79 @@ components:
                   gold_accuracy: { type: [number, "null"] }
                   scored_at: { type: string, format: date-time }
                   auto_paused: { type: boolean, description: Paused, and the last status change was automatic. }
+    PayoutLine:
+      type: object
+      required: [id, contributor_id, public_code, name, contributor_status, phone_masked, amount_cents, currency, balance_cents, status, mpesa_receipt, failure_reason, recorded_at, recorded_by_name]
+      properties:
+        id: { type: string, format: uuid, description: Empty UUID in a preview. }
+        contributor_id: { type: string, format: uuid }
+        public_code: { type: string }
+        name: { type: string }
+        contributor_status: { type: string }
+        phone_masked: { type: string }
+        amount_cents: { type: integer, format: int64, description: Whole shillings. }
+        currency: { type: string }
+        balance_cents: { type: integer, format: int64, description: The contributor's ledger balance now. }
+        status: { type: string, enum: [pending, paid, failed] }
+        mpesa_receipt: { type: [string, "null"] }
+        failure_reason: { type: [string, "null"] }
+        recorded_at: { type: [string, "null"], format: date-time }
+        recorded_by_name: { type: [string, "null"] }
+    PayoutHeld:
+      type: object
+      required: [contributor_id, public_code, name, owed_cents, reason]
+      properties:
+        contributor_id: { type: string, format: uuid }
+        public_code: { type: string }
+        name: { type: string }
+        owed_cents: { type: integer, format: int64 }
+        reason: { type: string, enum: [no_phone, phone_unconfirmed, identity_unverified, name_unchecked, below_minimum] }
+    PayoutPreview:
+      type: object
+      required: [period_start, period_end, min_cents, total_cents, lines, held]
+      properties:
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        min_cents: { type: integer, format: int64 }
+        total_cents: { type: integer, format: int64 }
+        lines: { type: array, items: { $ref: "#/components/schemas/PayoutLine" } }
+        held: { type: array, items: { $ref: "#/components/schemas/PayoutHeld" } }
+    PayoutBatchSummary:
+      type: object
+      required: [id, period_start, period_end, currency, status, total_cents, line_count, paid_lines, failed_lines, paid_cents, created_at, created_by_name, approved_by_name]
+      properties:
+        id: { type: string, format: uuid }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        currency: { type: string }
+        status: { type: string, enum: [draft, pending_approval, approved, exported, settled, cancelled] }
+        total_cents: { type: integer, format: int64 }
+        line_count: { type: integer }
+        paid_lines: { type: integer }
+        failed_lines: { type: integer }
+        paid_cents: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        created_by_name: { type: string }
+        approved_by_name: { type: [string, "null"] }
+    PayoutBatch:
+      allOf:
+        - { $ref: "#/components/schemas/PayoutBatchSummary" }
+        - type: object
+          required: [created_by, cutoff_at, submitted_at, approved_at, returned_note, cancelled_at, cancelled_by_name, cancel_reason, exported_at, export_file_name, format_confirmed, settled_at, lines]
+          properties:
+            created_by: { type: string, format: uuid }
+            cutoff_at: { type: [string, "null"], format: date-time }
+            submitted_at: { type: [string, "null"], format: date-time }
+            approved_at: { type: [string, "null"], format: date-time }
+            returned_note: { type: [string, "null"] }
+            cancelled_at: { type: [string, "null"], format: date-time }
+            cancelled_by_name: { type: [string, "null"] }
+            cancel_reason: { type: [string, "null"] }
+            exported_at: { type: [string, "null"], format: date-time }
+            export_file_name: { type: [string, "null"] }
+            format_confirmed: { type: [boolean, "null"], description: False until DG-03 confirms the column layout. }
+            settled_at: { type: [string, "null"], format: date-time }
+            lines: { type: array, items: { $ref: "#/components/schemas/PayoutLine" } }
     Workforce:
       type: object
       required: [contributors, active_last_7_days, workers, skills]
