@@ -12,6 +12,7 @@ import {
   Receipt,
   UserPlus,
   Users,
+  Wallet,
 } from "lucide-react";
 import { initialsOf, SignOutButton } from "@/components/shells/account-menu";
 import { WorkspaceShell, type WorkspaceNavItem } from "@/components/shells/workspace-shell";
@@ -49,6 +50,7 @@ const items: Array<WorkspaceNavItem & { perms?: string[] }> = [
   },
   { href: "/w/reports", label: "Reports", icon: Flag, perms: ["project.manage"] },
   { href: "/w/organisations", label: "Organisations", icon: Building2, perms: ["org.manage"] },
+  { href: "/w/payouts", label: "Payouts", icon: Wallet, perms: ["payout.create", "payout.approve"] },
   { href: "/w/invoices", label: "Invoices", icon: Receipt, perms: ["invoice.manage", "org.invoice.read"] },
   { href: "/w/team", label: "Team", icon: UserPlus, perms: ["org.user.invite"] },
   { href: "/w/activity", label: "Activity", icon: History, perms: ["org.project.read", "audit.read"] },

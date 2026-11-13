@@ -272,6 +272,11 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 		if status == "active" || status == "paused" {
 			s.qualified = append(s.qualified, cp.ID)
 		}
+		if cents, ok := sampleBalances[n]; ok {
+			if err := s.balance(cp.ID, admin, cents, n != sampleHeldContributor); err != nil {
+				return err
+			}
+		}
 		if n == sampleTrustContributor {
 			if err := s.trustHistory(cp.ID); err != nil {
 				return err
@@ -280,6 +285,25 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 		s.sum.Contributors++
 	}
 	return nil
+}
+
+// sampleBalances are made-up amounts owed to three contributors no test
+// signs in as, dated five days back, so the payout screens have a batch to
+// preview in development (Stage 14b). 011 is paused and its M-Pesa name is
+// not checked, so the preview holds it.
+var sampleBalances = map[int]int64{6: 125000, 8: 83050, 11: 64000}
+
+const sampleHeldContributor = 11
+
+func (s *seeder) balance(id, admin uuid.UUID, cents int64, nameChecked bool) error {
+	if err := s.q.SeedLedgerAdjustment(s.ctx, store.SeedLedgerAdjustmentParams{ContributorID: id, AmountCents: cents,
+		Reason: ptr("Sample opening balance (Sample)"), CreatedBy: &admin, CreatedAt: s.now.AddDate(0, 0, -5)}); err != nil {
+		return err
+	}
+	if !nameChecked {
+		return nil
+	}
+	return s.q.RecordMpesaNameCheck(s.ctx, store.RecordMpesaNameCheckParams{ID: id, CheckedBy: &admin})
 }
 
 // sampleTrustContributor gets a made-up 14-day trust history so the

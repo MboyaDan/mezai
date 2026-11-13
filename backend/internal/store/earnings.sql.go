@@ -368,6 +368,32 @@ func (q *Queries) OpenItemCounts(ctx context.Context, arg OpenItemCountsParams) 
 	return items, nil
 }
 
+const seedLedgerAdjustment = `-- name: SeedLedgerAdjustment :exec
+INSERT INTO earnings_ledger (contributor_id, entry_type, amount_cents, currency, reason, created_by, created_at)
+VALUES ($1, 'adjustment', $2, 'KES', $3, $4, $5)
+`
+
+type SeedLedgerAdjustmentParams struct {
+	ContributorID uuid.UUID
+	AmountCents   int64
+	Reason        *string
+	CreatedBy     *uuid.UUID
+	CreatedAt     time.Time
+}
+
+// Sample balances for the development seed only (backend/seed), dated in
+// the past so a payout batch can include them.
+func (q *Queries) SeedLedgerAdjustment(ctx context.Context, arg SeedLedgerAdjustmentParams) error {
+	_, err := q.db.Exec(ctx, seedLedgerAdjustment,
+		arg.ContributorID,
+		arg.AmountCents,
+		arg.Reason,
+		arg.CreatedBy,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const trustScoreBefore = `-- name: TrustScoreBefore :one
 
 SELECT id, contributor_id, score, gold_accuracy, agreement_rate, review_acceptance, gold_count, window_days, weights, created_at FROM trust_scores WHERE contributor_id = $1 AND created_at < $2::timestamptz

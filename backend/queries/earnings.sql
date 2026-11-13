@@ -113,3 +113,9 @@ GROUP BY project_id;
 SELECT project_id, title, body_md FROM project_guidelines
 WHERE project_id = ANY(@ids::uuid[])
 ORDER BY project_id, position, created_at;
+
+-- name: SeedLedgerAdjustment :exec
+-- Sample balances for the development seed only (backend/seed), dated in
+-- the past so a payout batch can include them.
+INSERT INTO earnings_ledger (contributor_id, entry_type, amount_cents, currency, reason, created_by, created_at)
+VALUES (@contributor_id, 'adjustment', @amount_cents, 'KES', @reason, @created_by, @created_at);
