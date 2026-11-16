@@ -243,6 +243,12 @@ func TestReviewAndAdjudication(t *testing.T) {
 		{"trust counts the review", `SELECT count(*) FROM trust_scores t JOIN submissions s ON s.contributor_id = t.contributor_id
 			WHERE s.id = $1 AND t.review_acceptance = 0`, []any{no}, 1},
 		{"audited without answers", `SELECT count(*) FROM audit_log WHERE action = 'review.decided' AND entity_id = $1 AND after::text NOT LIKE '%Yes%'`, []any{item}, 1},
+		// Stage 16: both contributors are emailed once; the email names the
+		// project and carries neither the reason nor the feedback text.
+		{"one feedback email each", `SELECT count(*) FROM email_outbox o JOIN contributor_profiles cp ON cp.user_id = o.user_id
+			JOIN submissions s ON s.contributor_id = cp.id WHERE s.id IN ($1, $2) AND o.template = 'feedback_received'`, []any{yes, no}, 2},
+		{"feedback email without the text", `SELECT count(*) FROM email_outbox WHERE template = 'feedback_received'
+			AND (data::text LIKE '%Good call%' OR data::text LIKE '%' || $1 || '%')`, []any{reason}, 0},
 	}
 	for _, c := range checks {
 		if n := e.count(c.sql, c.args...); n != c.want {

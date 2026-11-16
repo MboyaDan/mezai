@@ -489,6 +489,19 @@ func (s *Service) SetStatus(ctx context.Context, p *auth.Principal, id uuid.UUID
 		if _, err := q.SetProjectStatus(ctx, store.SetProjectStatusParams{ID: id, Status: act.to, PublishedAt: published, ClosedAt: closed}); err != nil {
 			return err
 		}
+		// First time live: eligible contributors are told by email from the
+		// job queue (Stage 16), once per project.
+		if act.to == StatusLive && pr.PublishedAt == nil {
+			key := "project_available:" + id.String()
+			payload, err := json.Marshal(map[string]any{"project_id": id})
+			if err != nil {
+				return err
+			}
+			if err := q.EnqueueJob(ctx, store.EnqueueJobParams{Kind: "project_available", Payload: payload, RunAt: now,
+				DedupeKey: &key, MaxAttempts: 5}); err != nil {
+				return err
+			}
+		}
 		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: "project.status_changed", EntityType: "project",
 			EntityID: &id, OrgID: &pr.OrgID, Reason: reason,
 			Before: map[string]any{"status": pr.Status}, After: map[string]any{"status": act.to}}); err != nil {

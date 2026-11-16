@@ -19,7 +19,7 @@ const (
 	TemplateTrustPause     = "trust_pause"
 )
 
-// Plain text for now; Stage 16 adds HTML versions and preferences.
+// Plain text only (D-141): readable in every client and on a basic phone.
 var templates = map[string]struct{ subject, body string }{
 	TemplateVerifyEmail: {
 		subject: "Confirm your email address",
@@ -102,6 +102,69 @@ Open it to convert it into a draft project or decline it:
 {{.Link}}
 
 Reference: {{.ID}}
+`,
+	},
+	// Contributor notifications (Stage 16). {{.Origin}} is added by the worker.
+	TemplateQualificationResult: {
+		subject: "Your {{.Test}} result",
+		body: `Hello {{.Name}},
+
+{{if eq .Passed "yes"}}You passed the {{.Test}}. Projects that need this skill can now offer you tasks.{{else}}You did not pass the {{.Test}} this time.{{end}}
+{{- if .Note}}
+
+Note from the operations team:
+{{.Note}}
+{{- end}}
+
+Your tests page shows your result and when you can try again:
+{{.Origin}}/c/qualify
+`,
+	},
+	TemplateProjectAvailable: {
+		subject: "New project open to you: {{.Project}}",
+		body: `Hello {{.Name}},
+
+A new project you qualify for is open:
+
+{{.Project}}
+Task type:  {{.TaskType}}
+Pay:        {{.Pay}} for each accepted task
+{{- if .Deadline}}
+Open until: {{.Deadline}}{{end}}
+
+Read the brief and start when you are ready:
+{{.Origin}}/c/projects/{{.ProjectID}}
+
+You get this email because "New projects" is on. Change it on your profile:
+{{.Origin}}/c/profile#notifications
+`,
+	},
+	TemplateFeedbackReceived: {
+		subject: "New feedback on your work",
+		body: `Hello {{.Name}},
+
+A reviewer left feedback on your work in {{.Project}}. Read it on your dashboard:
+{{.Origin}}/c
+
+We send at most one of these emails a day, however much feedback arrives.
+
+You get this email because "Feedback" is on. Change it on your profile:
+{{.Origin}}/c/profile#notifications
+`,
+	},
+	TemplatePayoutSent: {
+		subject: "Payout sent: {{.Amount}}",
+		body: `Hello {{.Name}},
+
+{{.Amount}} was sent to your M-Pesa number ending {{.PhoneEnd}}.
+
+M-Pesa receipt:  {{.Receipt}}
+Recorded on:     {{.Date}}
+
+Your earnings statement shows this payout and your balance:
+{{.Origin}}/c/earnings
+
+If the money has not arrived, reply to the operations team with the receipt above.
 `,
 	},
 }

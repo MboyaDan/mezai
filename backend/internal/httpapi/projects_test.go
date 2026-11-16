@@ -213,6 +213,10 @@ func TestProjectImportAC05(t *testing.T) {
 	if p.Status != "live" || p.ItemCount != 3 || p.Staff.GoldCount != 2 || !p.Staff.ConfigLocked {
 		t.Fatalf("live project = %+v %+v", p, p.Staff)
 	}
+	// Stage 16: the first publish queues one "new project" email job.
+	if n := e.count(`SELECT count(*) FROM jobs WHERE kind = 'project_available' AND dedupe_key = $1`, "project_available:"+p.ID); n != 1 {
+		t.Fatalf("project_available jobs: %d", n)
+	}
 	// Labels are fixed once there is gold.
 	edit["config"] = map[string]any{"labels": []string{"Billing", "Network"}}
 	if w := e.do(http.MethodPatch, "/v1/projects/"+p.ID, edit, ops, nil); w.Code != http.StatusUnprocessableEntity {

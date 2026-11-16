@@ -73,7 +73,7 @@ func run() error {
 	}
 
 	// Email outbox worker. Every API instance runs one; SKIP LOCKED keeps them apart.
-	mailer := &mail.Worker{Pool: pool, Log: log, Sender: mail.SMTP{
+	mailer := &mail.Worker{Pool: pool, Log: log, Origin: cfg.AppOrigin, Sender: mail.SMTP{
 		Addr: cfg.SMTPAddr, From: cfg.MailFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
 	}}
 	go mailer.Run(ctx, 5*time.Second)

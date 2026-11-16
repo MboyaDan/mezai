@@ -32,6 +32,8 @@ type Worker struct {
 	Pool   *db.Pool
 	Sender Sender
 	Log    *slog.Logger
+	// Origin is the site's address; notification links are paths under it.
+	Origin string
 }
 
 // Run polls the outbox until ctx ends.
@@ -66,6 +68,11 @@ func (w *Worker) SendDue(ctx context.Context) (int, error) {
 			m := rows[0]
 			var data map[string]string
 			sendErr := json.Unmarshal(m.Data, &data)
+			if data != nil {
+				if _, ok := data["Origin"]; !ok {
+					data["Origin"] = w.Origin
+				}
+			}
 			var r Rendered
 			if sendErr == nil {
 				r, sendErr = Render(m.Template, data)

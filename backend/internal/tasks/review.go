@@ -13,6 +13,8 @@ import (
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/jobs"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/quality"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
@@ -420,7 +422,7 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, itemID uuid.UUI
 		}
 
 		// Each answer: accepted and paid, or rejected with the reason shown.
-		touched := map[uuid.UUID]bool{}
+		touched, told := map[uuid.UUID]bool{}, map[uuid.UUID]bool{}
 		accepted, rejected := 0, 0
 		for _, r := range rows {
 			st, why := "accepted", (*string)(nil)
@@ -441,6 +443,7 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, itemID uuid.UUI
 					SubmissionID: &r.ID, AuthorUserID: &p.UserID, Body: "This answer was not accepted, so it does not earn. Reason: " + *why}); err != nil {
 					return err
 				}
+				told[r.ContributorID] = true
 			}
 			if agree, ok := agrees[r.ID]; ok && len(rows) > 1 {
 				if err := q.SetSubmissionAgreement(ctx, store.SetSubmissionAgreementParams{ID: r.ID, Agrees: &agree}); err != nil {
@@ -452,6 +455,7 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, itemID uuid.UUI
 					SubmissionID: &r.ID, AuthorUserID: &p.UserID, Body: t}); err != nil {
 					return err
 				}
+				told[r.ContributorID] = true
 			}
 			touched[r.ContributorID] = true
 		}
@@ -459,6 +463,9 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, itemID uuid.UUI
 			if _, err := s.recomputeTrust(ctx, q, m, c); err != nil {
 				return err
 			}
+		}
+		if err := s.notifyFeedback(ctx, q, item.ProjectID, told); err != nil {
+			return err
 		}
 		out = DecisionResult{ReviewID: rv.ID, Decision: in.Decision, ItemStatus: status}
 		// The audit names the decision and counts, never the answers.
@@ -607,4 +614,25 @@ func (s *Service) SetProjectReviewer(ctx context.Context, p *auth.Principal, pro
 		return auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: action, EntityType: "project", EntityID: &projectID,
 			OrgID: &pr.OrgID, After: map[string]any{"user_id": userID}})
 	})
+}
+
+// notifyFeedback emails each contributor who got feedback or a rejection,
+// at most once a Nairobi day (Stage 16). The email names the project only;
+// the feedback itself stays in the portal.
+func (s *Service) notifyFeedback(ctx context.Context, q *store.Queries, projectID uuid.UUID, told map[uuid.UUID]bool) error {
+	if len(told) == 0 {
+		return nil
+	}
+	pr, err := q.GetProjectForWork(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	day := time.Now().In(jobs.Nairobi).Format(time.DateOnly)
+	for c := range told {
+		if _, err := mail.Notify(ctx, q, mail.Notice{Contributor: &c, Template: mail.TemplateFeedbackReceived,
+			Key: c.String() + ":" + day, Data: map[string]string{"Project": pr.Name}}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

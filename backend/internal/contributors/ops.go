@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/pii"
 	"github.com/MboyaDan/mezai/backend/internal/quality"
 	"github.com/MboyaDan/mezai/backend/internal/store"
@@ -371,13 +372,19 @@ func (s *Service) Decide(ctx context.Context, p *auth.Principal, id uuid.UUID, d
 			EntityID: &id, Reason: note, After: map[string]any{"status": status, "score": a.Score}}); err != nil {
 			return err
 		}
+		t, err := q.GetQualificationTest(ctx, a.TestID)
+		if err != nil {
+			return err
+		}
+		// The result goes to the contributor by email, once per attempt (Stage 16).
+		passed := map[bool]string{true: "yes", false: "no"}[status == AttemptApproved]
+		if _, err := mail.Notify(ctx, q, mail.Notice{Contributor: &a.ContributorID, Template: mail.TemplateQualificationResult,
+			Key: id.String(), Data: map[string]string{"Test": t.Title, "Passed": passed, "Note": note}}); err != nil {
+			return err
+		}
 		if status == AttemptApproved {
 			// Active needs a verified identity too (D-078); whichever of the
 			// two comes last makes the contributor active.
-			t, err := q.GetQualificationTest(ctx, a.TestID)
-			if err != nil {
-				return err
-			}
 			return activateIfQualified(ctx, q, m, a.ContributorID, &p.UserID, "Qualified: "+t.Title)
 		}
 		return nil

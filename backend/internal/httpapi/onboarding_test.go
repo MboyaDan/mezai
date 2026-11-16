@@ -293,6 +293,11 @@ func TestContributorOnboarding(t *testing.T) {
 	if w := e.do(http.MethodPost, "/v1/qualification/attempts/"+att.ID+"/decision", map[string]string{"decision": "approve"}, ops, nil); errorCode(w) != "attempt_closed" {
 		t.Fatalf("second decision: %d %s", w.Code, w.Body)
 	}
+	// Stage 16: the result is emailed once, whatever else happens to the attempt.
+	if n := e.count(`SELECT count(*) FROM email_outbox WHERE template = 'qualification_result' AND dedupe_key = $1
+		AND data->>'Passed' = 'yes'`, "qualification_result:"+att.ID); n != 1 {
+		t.Fatalf("pass email: %d", n)
+	}
 	w = e.do(http.MethodGet, "/v1/me/contributor", nil, s, nil)
 	decode(t, w, &p)
 	if p.Status != "qualifying" || p.IdentityStatus != "pending" || len(p.Qualifications) != 2 { // core check + routing skill
@@ -345,6 +350,10 @@ func TestContributorOnboarding(t *testing.T) {
 	note := "Both answers preferred the unsafe response. Read the safety guideline and try again."
 	if w := e.do(http.MethodPost, "/v1/qualification/attempts/"+att.ID+"/decision", map[string]string{"decision": "reject", "note": note}, ops, nil); w.Code != http.StatusOK {
 		t.Fatalf("reject: %d %s", w.Code, w.Body)
+	}
+	if n := e.count(`SELECT count(*) FROM email_outbox WHERE template = 'qualification_result' AND dedupe_key = $1
+		AND data->>'Passed' = 'no' AND data->>'Note' = $2`, "qualification_result:"+att.ID, note); n != 1 {
+		t.Fatalf("not-passed email with the note: %d", n)
 	}
 	got := e.tests(s)["Response comparison test (Sample)"]
 	if got.State != "not_passed" || got.DecisionNote == nil || *got.DecisionNote != note || got.RetakeAfter == nil || got.CanStart {

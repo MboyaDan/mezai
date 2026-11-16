@@ -21,6 +21,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/jobs"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/pii"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/store"
@@ -677,6 +678,9 @@ func (s *Service) RecordResult(ctx context.Context, p *auth.Principal, lineID uu
 				AmountCents: l.AmountCents, Currency: l.Currency, PayoutLineID: &lineID, CreatedBy: &p.UserID}); err != nil {
 				return err
 			}
+			if err := notifyPaid(ctx, q, lineID, l.ContributorID, l.AmountCents, l.Currency, in.Receipt); err != nil {
+				return err
+			}
 		} else if _, err := q.RecordPayoutLineFailed(ctx, store.RecordPayoutLineFailedParams{Reason: &in.Reason, RecordedBy: &p.UserID, ID: lineID}); err != nil {
 			return err
 		}
@@ -730,4 +734,22 @@ func (s *Service) SetNextDate(ctx context.Context, p *auth.Principal, date strin
 			After: map[string]any{"date": out}})
 	})
 	return out, err
+}
+
+// notifyPaid tells the contributor their payout went out, once per line
+// (Stage 16). The email carries the amount, the receipt and the last three
+// digits of the number paid.
+func notifyPaid(ctx context.Context, q *store.Queries, lineID, contributorID uuid.UUID, cents int64, currency, receipt string) error {
+	l, err := q.PayoutLineForNotice(ctx, lineID)
+	if err != nil {
+		return err
+	}
+	date := time.Now().In(jobs.Nairobi)
+	if l.RecordedAt != nil {
+		date = l.RecordedAt.In(jobs.Nairobi)
+	}
+	_, err = mail.Notify(ctx, q, mail.Notice{Contributor: &contributorID, Template: mail.TemplatePayoutSent, Key: lineID.String(),
+		Data: map[string]string{"Amount": mail.Money(cents, currency), "Receipt": receipt, "PhoneEnd": l.PhoneEnd,
+			"Date": date.Format("2 Jan 2006")}})
+	return err
 }

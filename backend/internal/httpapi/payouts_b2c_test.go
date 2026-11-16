@@ -309,6 +309,12 @@ func TestPayoutsB2C(t *testing.T) {
 		WHERE l.batch_id = $1 AND e.entry_type = 'payout'`, batch); n != 4+len(paidSeedLines(b, codes)) {
 		t.Fatalf("payout entries: %d", n)
 	}
+	// Stage 16: one "payout sent" email per paid line, including the one
+	// whose duplicate callback arrived, and none for failed or late lines.
+	if n := e.count(`SELECT count(*) FROM email_outbox o JOIN payout_lines l ON o.dedupe_key = 'payout_sent:' || l.id
+		WHERE l.batch_id = $1`, batch); n != 4+len(paidSeedLines(b, codes)) {
+		t.Fatalf("payout emails: %d", n)
+	}
 	for _, n := range []string{"002", "003", "006", "009"} {
 		if bal := e.count(`SELECT coalesce(sum(amount_cents), 0) FROM earnings_ledger WHERE contributor_id = $1`, ids[n]); bal < 100000 {
 			t.Fatalf("%s failed but balance is %d", n, bal)
