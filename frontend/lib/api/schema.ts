@@ -2420,6 +2420,11 @@ export interface components {
       mpesa_name_checked_at: string | null;
       /** @description Display name */
       mpesa_name_checked_by: string | null;
+      /**
+       * Format: date-time
+       * @description When an M-Pesa B2C payment showed a registered name that is not the profile's (D-139). Payouts are held until Ops records the name check again, which clears it.
+       */
+      mpesa_name_mismatch_at: string | null;
       /** @description Tries to put a number on a profile while another account held it */
       flags: {
         /** @enum {string} */
@@ -3493,6 +3498,11 @@ export interface components {
       result_desc: string | null;
       receipt: string | null;
       status_queries: number;
+      /**
+       * @description How M-Pesa's registered name compared with the payee's name. The name itself is not stored.
+       * @enum {string|null}
+       */
+      name_check: "match" | "mismatch" | "unavailable" | null;
     };
     PayoutReconciliation: {
       b2c: components["schemas"]["B2CStatus"];
@@ -3526,7 +3536,7 @@ export interface components {
       }[];
       exceptions: {
         /** @enum {string} */
-        kind: "stuck" | "late_success" | "callback";
+        kind: "stuck" | "late_success" | "name_mismatch" | "callback";
         /** Format: uuid */
         transaction_id: string | null;
         /** Format: uuid */
