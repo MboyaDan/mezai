@@ -148,6 +148,25 @@ test("14b: prepare, approve, export and settle a payout batch", async ({ page, b
     await expect(lines.getByRole("row", { name: new RegExp(l.public_code) })).toContainText("Failed");
   }
   await expect(page.getByText(/^Settled on /)).toBeVisible();
+  // Stage 16: C-0006 gets a real "payout sent" email (mailpit), with the
+  // receipt and only the end of the number.
+  const mailpit = process.env.MAILPIT_URL ?? "http://localhost:8025";
+  await expect
+    .poll(
+      async () => {
+        const found = await (
+          await fetch(
+            `${mailpit}/api/v1/search?query=${encodeURIComponent('to:contributor006@sample.invalid subject:"Payout sent"')}`,
+          )
+        ).json();
+        const m = (found.messages ?? [])[0];
+        if (!m) return "";
+        const msg = await (await fetch(`${mailpit}/api/v1/message/${m.ID}`)).json();
+        return `${msg.Subject}\n${msg.Text}`;
+      },
+      { timeout: 30_000 },
+    )
+    .toMatch(new RegExp(`Payout sent: KES [\\d,.]+[\\s\\S]*ending 006[\\s\\S]*${receipt}`));
   await expect(page.getByRole("button", { name: /Record result/ })).toHaveCount(0);
   await axe(page, "settled");
   await shot(page, "payout-settled");
