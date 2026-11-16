@@ -4,7 +4,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 15a (M-Pesa B2C API against a fake Daraja). Branch `stage-15a-mpesa-b2c`, PR open. 14b merged as #46.
+- **Last stage:** 15a (M-Pesa B2C API against a fake Daraja). Branch `stage-15a-mpesa-b2c`, PR #47 open. 14b merged as #46.
 - **Next stage:** 15b (B2C on the payout screens: "Pay through M-Pesa" on an approved batch, live transaction list, stop an unsent line, reconciliation page). DG-02 is **not** cleared: Dan has sandbox consumer key, secret and shortcode only; the initiator name and security credential are still needed for a sandbox run (A-078, A-079). DG-03 (CSV columns), A-007 (real second approver) and A-077 (receipt format) are still open before the first real payout.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
@@ -112,7 +112,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 13b | Merged | #44 | No migration. `GET /v1/ops/overview` (`project.manage`): queue counts equal to their lists, open projects with the 13a pace (at-risk first), contributor health and the lowest settled trust scores. Ops home at `/w` (10 projects, "Show all"); reviewers see their review count. First dark-theme screenshot of a workspace page (`data-theme="dark"`, axe clean). |
 | 14a | Merged | #45 | Migration 00021 (cancelled state, one open batch, export checksum, payee snapshot, whole-shilling lines, guard trigger, no deletes, `payout.export_format`). `internal/payouts`: preview with held reasons, create (idempotent), submit, approve (never the creator), return, cancel, export and download, results per line, next payout date. Paid line writes the payout entry; failed moves nothing (D-127 to D-129). |
 | 14b | Merged | #46 | `/w/payouts` (open batch or new-batch preview with held reasons, batch list, next payout date) and `/w/payouts/[id]` (steps, next-step panel per person, lines, send back and cancel with reason, export with format warning, download, record paid or failed). List API returns `next_date`. Seed: sample balances for C-0006, C-0008, C-0011 (D-130, D-131). |
-| 15a | PR open | (see PR) | Migration 00022 (`disbursing` state, `recorded_via`, `mpesa_transactions` one per line, `mpesa_callbacks` stored with a verdict). `internal/mpesa` Daraja client (token cache, B2C v3, transaction status, callback parsing, answers sorted by what they mean for money) and a fake Daraja. Disburse, send job (mark then send: never twice), status-query chains, callbacks (token, optional IP list, match, amount), stop unsent, reconciliation, transactions list. `MPESA_ENV` off/fake/sandbox/production. Jobs runner every 30 s. DG-02 not cleared; not run against the sandbox (D-132 to D-135, A-078 to A-080). |
+| 15a | PR open | #47 | Migration 00022 (`disbursing` state, `recorded_via`, `mpesa_transactions` one per line, `mpesa_callbacks` stored with a verdict). `internal/mpesa` Daraja client (token cache, B2C v3, transaction status, callback parsing, answers sorted by what they mean for money) and a fake Daraja. Disburse, send job (mark then send: never twice), status-query chains, callbacks (token, optional IP list, match, amount), stop unsent, reconciliation, transactions list. `MPESA_ENV` off/fake/sandbox/production. Jobs runner every 30 s. DG-02 not cleared; not run against the sandbox (D-132 to D-135, A-078 to A-080). |
 
 ## Notes for the next session
 
