@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,8 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
 	"github.com/MboyaDan/mezai/backend/internal/jobs"
 	"github.com/MboyaDan/mezai/backend/internal/mail"
+	"github.com/MboyaDan/mezai/backend/internal/mpesa"
+	"github.com/MboyaDan/mezai/backend/internal/payouts"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
 )
@@ -81,7 +84,22 @@ func run() error {
 	// Nightly quality jobs (agreement snapshots, gold feedback) from the
 	// Postgres job queue; safe with several instances (Stage 10b).
 	qualityJobs := tasks.NewService(pool)
-	go (&jobs.Runner{Pool: pool, Log: log, Handlers: qualityJobs.Handlers(), Daily: tasks.DailyJobs}).Run(ctx, 5*time.Minute)
+	handlers := qualityJobs.Handlers()
+	// M-Pesa B2C (Stage 15, DG-02): sends, status queries and callback
+	// processing run from the same queue. Off unless MPESA_ENV is set.
+	mpesaDeps, err := mpesaSetup(ctx, cfg, log)
+	if err != nil {
+		return err
+	}
+	if mpesaDeps != nil {
+		b2c := payouts.NewService(pool, store, log).WithB2C(&payouts.B2C{Client: mpesaDeps.Client, Environment: mpesaDeps.Environment})
+		for k, h := range b2c.Handlers() {
+			handlers[k] = h
+		}
+		go b2c.RunCallbackSweep(ctx, 5*time.Minute)
+		log.Info("mpesa b2c on", slog.String("environment", mpesaDeps.Environment))
+	}
+	go (&jobs.Runner{Pool: pool, Log: log, Handlers: handlers, Daily: tasks.DailyJobs}).Run(ctx, 30*time.Second)
 
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
@@ -93,6 +111,7 @@ func run() error {
 				Enquiry:     enquiryDeps(cfg),
 				Files:       store,
 				IdentityKey: cfg.IdentityKey,
+				Mpesa:       mpesaDeps,
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -156,4 +175,34 @@ func enquiryDeps(cfg config.Config) httpapi.EnquiryDeps {
 		d.Turnstile = httpapi.Turnstile{Secret: cfg.TurnstileSecret}
 	}
 	return d
+}
+
+// mpesaSetup builds the Daraja client from MPESA_ENV. In fake mode a fake
+// Daraja listens on a loopback port of this process and posts its results
+// back to the API, so the whole callback path runs locally (A-078).
+func mpesaSetup(ctx context.Context, cfg config.Config, log *slog.Logger) (*httpapi.MpesaDeps, error) {
+	m := cfg.Mpesa
+	if !m.Enabled() {
+		return nil, nil
+	}
+	dc := mpesa.Config{BaseURL: m.BaseURL, ConsumerKey: m.ConsumerKey, ConsumerSecret: m.ConsumerSecret,
+		ShortCode: m.ShortCode, InitiatorName: m.InitiatorName, SecurityCredential: m.SecurityCredential,
+		CallbackBase: m.CallbackBaseURL + "/v1/mpesa/callbacks/" + m.CallbackToken}
+	if m.Env == config.MpesaFake {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return nil, fmt.Errorf("fake daraja: %w", err)
+		}
+		fake := mpesa.NewFake()
+		fake.Delay = 2 * time.Second
+		srv := &http.Server{Handler: fake, ReadHeaderTimeout: 5 * time.Second}
+		go func() { _ = srv.Serve(ln) }()
+		go func() { <-ctx.Done(); _ = srv.Close() }()
+		dc.BaseURL = "http://" + ln.Addr().String()
+		dc.ConsumerKey, dc.ConsumerSecret, dc.ShortCode = "fake", "fake", "600000"
+		dc.InitiatorName, dc.SecurityCredential = "fake", "fake"
+		log.Warn("mpesa: using the fake Daraja; no money moves", slog.String("addr", dc.BaseURL))
+	}
+	return &httpapi.MpesaDeps{Client: mpesa.NewDaraja(dc, nil), Environment: m.Env,
+		CallbackToken: m.CallbackToken, CallbackIPs: m.CallbackIPs}, nil
 }

@@ -85,3 +85,77 @@ func TestIdentityKey(t *testing.T) {
 		t.Fatalf("valid key: %v", err)
 	}
 }
+
+func TestMpesaModes(t *testing.T) {
+	base := func(extra map[string]string) map[string]string {
+		m := map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b"}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	full := map[string]string{
+		"MPESA_CONSUMER_KEY": "k", "MPESA_CONSUMER_SECRET": "s", "MPESA_SHORTCODE": "600000",
+		"MPESA_INITIATOR_NAME": "i", "MPESA_SECURITY_CREDENTIAL": "c",
+		"MPESA_CALLBACK_BASE_URL": "https://api.example.invalid", "MPESA_CALLBACK_TOKEN": strings.Repeat("t", 32),
+	}
+
+	c, err := FromLookup(lookup(base(nil)))
+	if err != nil || c.Mpesa.Enabled() {
+		t.Fatalf("default must be off: %v %+v", err, c.Mpesa)
+	}
+	// Keys alone (no MPESA_ENV) keep it off.
+	if c, err := FromLookup(lookup(base(map[string]string{"MPESA_CONSUMER_KEY": "k"}))); err != nil || c.Mpesa.Enabled() {
+		t.Fatalf("keys without MPESA_ENV: %v", err)
+	}
+	c, err = FromLookup(lookup(base(map[string]string{"MPESA_ENV": "fake"})))
+	if err != nil || !c.Mpesa.Enabled() || c.Mpesa.CallbackToken != DevCallbackToken {
+		t.Fatalf("fake in development: %v %+v", err, c.Mpesa.Env)
+	}
+
+	sandbox := base(full)
+	sandbox["MPESA_ENV"] = "sandbox"
+	sandbox["MPESA_CALLBACK_IPS"] = "196.201.214.200, 196.201.212.0/24"
+	c, err = FromLookup(lookup(sandbox))
+	if err != nil || c.Mpesa.BaseURL != "https://sandbox.safaricom.co.ke" || len(c.Mpesa.CallbackIPs) != 2 {
+		t.Fatalf("sandbox: %v %+v", err, c.Mpesa)
+	}
+
+	refused := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"fake in staging", map[string]string{"APP_ENV": "staging", "MPESA_ENV": "fake"}, "development and test only"},
+		{"sandbox missing keys", map[string]string{"MPESA_ENV": "sandbox"}, "MPESA_INITIATOR_NAME"},
+		{"production outside production", func() map[string]string { m := base(full); m["MPESA_ENV"] = "production"; return m }(), "needs APP_ENV=production"},
+		{"sandbox in production", func() map[string]string {
+			m := base(full)
+			m["MPESA_ENV"] = "sandbox"
+			m["APP_ENV"] = "production"
+			return m
+		}(), "cannot run with APP_ENV=production"},
+		{"plain http callbacks", func() map[string]string {
+			m := base(full)
+			m["MPESA_ENV"] = "sandbox"
+			m["MPESA_CALLBACK_BASE_URL"] = "http://x"
+			return m
+		}(), "https://"},
+		{"short token", func() map[string]string {
+			m := base(full)
+			m["MPESA_ENV"] = "sandbox"
+			m["MPESA_CALLBACK_TOKEN"] = "short"
+			return m
+		}(), "32 characters"},
+		{"bad ip", map[string]string{"MPESA_CALLBACK_IPS": "nope"}, "MPESA_CALLBACK_IPS"},
+		{"unknown mode", map[string]string{"MPESA_ENV": "live"}, "MPESA_ENV must be"},
+	}
+	for _, r := range refused {
+		t.Run(r.name, func(t *testing.T) {
+			_, err := FromLookup(lookup(base(r.env)))
+			if err == nil || !strings.Contains(err.Error(), r.want) {
+				t.Fatalf("want error with %q, got %v", r.want, err)
+			}
+		})
+	}
+}

@@ -435,6 +435,46 @@ type Job struct {
 	UpdatedAt   time.Time
 }
 
+type MpesaCallback struct {
+	ID                       uuid.UUID
+	Kind                     string
+	OriginatorConversationID *string
+	ConversationID           *string
+	TransactionID            *uuid.UUID
+	ResultCode               *string
+	Body                     []byte
+	RemoteIp                 *netip.Addr
+	Verdict                  string
+	Note                     *string
+	ProcessedAt              *time.Time
+	ProcessError             *string
+	CreatedAt                time.Time
+}
+
+type MpesaTransaction struct {
+	ID                       uuid.UUID
+	PayoutLineID             uuid.UUID
+	OriginatorConversationID string
+	ConversationID           *string
+	Environment              string
+	AmountCents              int64
+	Currency                 string
+	Status                   string
+	SendAttempts             int32
+	SentAt                   *time.Time
+	ResponseCode             *string
+	ResponseDescription      *string
+	ResultCode               *string
+	ResultDesc               *string
+	Receipt                  *string
+	StatusQueries            int32
+	NotFoundCount            int32
+	CompletedAt              *time.Time
+	CreatedBy                uuid.UUID
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
 type OrgMember struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
@@ -490,6 +530,8 @@ type PayoutBatch struct {
 	ExportChecksum *string
 	ExportFormat   []byte
 	ExportedBy     *uuid.UUID
+	DisbursedAt    *time.Time
+	DisbursedBy    *uuid.UUID
 }
 
 type PayoutLine struct {
@@ -507,6 +549,7 @@ type PayoutLine struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	PayeeName     string
+	RecordedVia   string
 }
 
 type Permission struct {
