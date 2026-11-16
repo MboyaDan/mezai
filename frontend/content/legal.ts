@@ -34,8 +34,8 @@ export const legalDocs: LegalDoc[] = [
     slug: "privacy",
     title: "Privacy notice",
     short: "Privacy notice",
-    version: "0.3",
-    updated: "2026-11-09",
+    version: "0.4",
+    updated: "2026-11-16",
     approved: false,
     summary: `How ${entity} collects, uses and protects personal data on ${brand.name}, under Kenya's Data Protection Act, 2019.`,
     sections: [
@@ -70,7 +70,7 @@ export const legalDocs: LegalDoc[] = [
               "To reply to enquiries and plan projects (our legitimate interest in answering people who contact us).",
               "To run the contributor relationship: qualification, assigning tasks, measuring quality, paying for approved work (performing our agreement with you).",
               "To decide whether to offer you work: a person on our team reads your application, your test results and the interview scores and makes every decision; no decision is made by software alone (steps you ask us to take before an agreement, and our legitimate interest in choosing contributors).",
-              "To make sure each person has only one contributor account and is paid under their own name: we compare the code made from your National ID number, and your M-Pesa number, with other accounts, and before your first payment our operations team checks that the name M-Pesa shows for your number matches your profile name. We do not store the name M-Pesa shows (legitimate interest in preventing fraud, and performing our agreement with you).",
+              "To make sure each person has only one contributor account and is paid under their own name: we compare the code made from your National ID number, and your M-Pesa number, with other accounts. Before your first payment our operations team checks that the name M-Pesa shows for your number matches your profile name. When we pay through M-Pesa directly, M-Pesa tells us the name your number is registered to with each payment; we compare it with your profile name automatically, keep only whether they matched, and do not store the name. If they do not match, the payment already made stands, further payments wait, and our team contacts you (legitimate interest in preventing fraud, and performing our agreement with you).",
               "To keep the platform secure: sign-in protection, rate limits and audit records (legitimate interest and legal obligation).",
               "To keep payment and tax records (legal obligation).",
               "Where we rely on your consent, we record which version you accepted and when, and you can withdraw it at any time.",
@@ -143,6 +143,7 @@ export const legalDocs: LegalDoc[] = [
       "Confirm the 24-month retention for enquiries that do not proceed (an assumption, A-032).",
       "Add a dedicated data protection contact address once one exists (Q2).",
       "New in this draft: screening data (application answers, optional CV, interview scores and notes; D-100). Confirm the lawful basis and the 90-day CV retention.",
+      "Added in 0.4: the automatic comparison of M-Pesa's registered name with the profile name on each direct payment (D-139). Confirm the lawful basis and that keeping only the result is enough.",
       "Added in 0.2: the National ID number (D-078). The brief said “M-Pesa number only”: confirm the lawful basis for collecting it, the retention period for the code after an account closes, and whether a DPIA is needed.",
     ],
   },
@@ -203,8 +204,8 @@ export const legalDocs: LegalDoc[] = [
     slug: "contributor-terms",
     title: "Contributor terms",
     short: "Contributor terms",
-    version: "0.3",
-    updated: "2026-11-09",
+    version: "0.4",
+    updated: "2026-11-16",
     approved: false,
     summary: `The agreement between ${entity} and each person who does paid task work on ${brand.name}.`,
     sections: [
@@ -243,7 +244,7 @@ export const legalDocs: LegalDoc[] = [
       {
         heading: "Pay",
         body: [
-          "Each project states its rate per task before you start. You earn for each task that is approved. Approved earnings are paid to the M-Pesa number on your profile, which must be registered in your name, in batches. Before your first payment we check that the name M-Pesa shows matches your profile name. Your dashboard shows pending, approved and paid amounts, and every payment carries its M-Pesa reference. If we make a mistake, we correct it with a new entry you can see; we never silently change past records.",
+          "Each project states its rate per task before you start. You earn for each task that is approved. Approved earnings are paid to the M-Pesa number on your profile, which must be registered in your name, in batches. Before your first payment we check that the name M-Pesa shows matches your profile name, and when we pay through M-Pesa directly the name is compared again with each payment. If it does not match, the payment already made stands and later payments wait until we have spoken to you.",
         ],
       },
       {
@@ -271,6 +272,7 @@ export const legalDocs: LegalDoc[] = [
       "Payout schedule and minimum payout amount, once Stage 14 sets them.",
       "Whether contributors outside Kenya can join, and what changes for them.",
       "New in this draft: the screening steps (D-100).",
+      "Added in 0.4: the name check on each direct M-Pesa payment (D-139).",
       "Added in 0.2: the one-account rule and the M-Pesa name check (D-078).",
     ],
   },
