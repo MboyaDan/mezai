@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -74,4 +75,47 @@ func Recover(log *slog.Logger) gin.HandlerFunc {
 		log.Error("panic recovered", slog.String("request_id", RequestIDFrom(c)), slog.Any("error", err))
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
 	})
+}
+
+// SecurityHeaders sets the response headers every API answer carries
+// (Stage 17a, D-138). The API serves JSON and file downloads, never pages,
+// so nothing may be framed, sniffed, or loaded from it: the policy allows
+// nothing at all. Answers are not cached unless a handler says otherwise
+// (public stats do). HSTS is sent when hsts is true (outside development):
+// browsers then refuse plain HTTP for this host for a year.
+func SecurityHeaders(hsts bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+		h.Set("Cache-Control", "no-store")
+		if hsts {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		c.Next()
+	}
+}
+
+// MaxJSONBody is the most any request without a file may send. Handlers set
+// smaller limits for their own bodies; uploads (multipart) set their own.
+const MaxJSONBody = 1 << 20
+
+// BodyLimit caps request bodies, so no route can be made to read an
+// unbounded one because its handler forgot a limit.
+func BodyLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Body != nil && !strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/") {
+			if c.Request.ContentLength > MaxJSONBody {
+				abort(c, http.StatusRequestEntityTooLarge, "body_too_large")
+				return
+			}
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxJSONBody)
+		}
+		c.Next()
+	}
 }
