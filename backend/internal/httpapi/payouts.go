@@ -37,6 +37,8 @@ func (h *payoutHandlers) fail(c *gin.Context, err error) {
 		abort(c, http.StatusConflict, "balance_changed")
 	case errors.Is(err, payouts.ErrReceiptUsed):
 		abort(c, http.StatusConflict, "receipt_used")
+	case errors.Is(err, payouts.ErrB2COff):
+		abort(c, http.StatusConflict, "b2c_off")
 	case errors.Is(err, payouts.ErrEmpty):
 		abort(c, http.StatusUnprocessableEntity, "nothing_to_pay")
 	case errors.Is(err, payouts.ErrStorage):
@@ -70,7 +72,7 @@ func (h *payoutHandlers) list(c *gin.Context) {
 		h.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"batches": out, "next_date": next})
+	c.JSON(http.StatusOK, gin.H{"batches": out, "next_date": next, "b2c": h.svc.B2CInfo()})
 }
 
 func (h *payoutHandlers) create(c *gin.Context) {

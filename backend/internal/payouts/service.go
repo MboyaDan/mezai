@@ -53,6 +53,7 @@ type Service struct {
 	blobs storage.Blobs
 	now   func() time.Time
 	log   *slog.Logger
+	b2c   *B2C // nil while M-Pesa B2C is off (DG-02)
 }
 
 // NewService returns the payouts service.
@@ -80,6 +81,8 @@ type Line struct {
 	FailureReason     *string    `json:"failure_reason"`
 	RecordedAt        *time.Time `json:"recorded_at"`
 	RecordedByName    *string    `json:"recorded_by_name"`
+	// RecordedVia is "manual" (Ops typed the result) or "mpesa_b2c".
+	RecordedVia string `json:"recorded_via"`
 }
 
 // Held is someone owed money who is not in the batch, and why.
@@ -131,6 +134,7 @@ type Batch struct {
 	CancelReason    *string    `json:"cancel_reason"`
 	ExportedAt      *time.Time `json:"exported_at"`
 	ExportFileName  *string    `json:"export_file_name"`
+	DisbursedAt     *time.Time `json:"disbursed_at"`
 	FormatConfirmed *bool      `json:"format_confirmed"`
 	SettledAt       *time.Time `json:"settled_at"`
 	Lines           []Line     `json:"lines"`
@@ -366,7 +370,7 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Bat
 			CreatedBy: b.CreatedBy, CutoffAt: b.CutoffAt, SubmittedAt: b.SubmittedAt, ApprovedAt: b.ApprovedAt,
 			ReturnedNote: b.ReturnedNote, CancelledAt: b.CancelledAt, CancelledByName: b.CancelledByName,
 			CancelReason: b.CancelReason, ExportedAt: b.ExportedAt, ExportFileName: b.ExportFileName,
-			SettledAt: b.SettledAt, Lines: []Line{}}
+			DisbursedAt: b.DisbursedAt, SettledAt: b.SettledAt, Lines: []Line{}}
 		if b.ExportFormat != nil {
 			var f Format
 			if json.Unmarshal(b.ExportFormat, &f) == nil {
@@ -382,7 +386,7 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (Bat
 				Name: l.PayeeName, ContributorStatus: l.ContributorStatus, PhoneMasked: pii.MaskPhone(l.MpesaPhone),
 				AmountCents: l.AmountCents, Currency: l.Currency, BalanceCents: l.BalanceCents, Status: l.Status,
 				MpesaReceipt: l.MpesaReceipt, FailureReason: l.FailureReason, RecordedAt: l.RecordedAt,
-				RecordedByName: l.RecordedByName})
+				RecordedByName: l.RecordedByName, RecordedVia: l.RecordedVia})
 			switch l.Status {
 			case "paid":
 				out.PaidLines++

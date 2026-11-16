@@ -1276,8 +1276,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [batches, next_date]
+                required: [batches, next_date, b2c]
                 properties:
+                  b2c: { $ref: "#/components/schemas/B2CStatus" }
                   batches: { type: array, items: { $ref: "#/components/schemas/PayoutBatchSummary" } }
                   next_date: { type: [string, "null"], format: date, description: The next payout date contributors see, or null when hidden. }
     post:
@@ -1432,6 +1433,179 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/disburse:
+    post:
+      operationId: disbursePayoutBatch
+      summary: Pay an approved batch through M-Pesa B2C (`payout.create`).
+      description: >-
+        Approved to disbursing (instead of export). Each pending line gets one B2C transaction, never a second; its
+        OriginatorConversationID is the idempotency key. Payments go out from the job queue; lines are marked paid or
+        failed by Safaricom's results, and the batch settles when every line has one (D-132). 409 b2c_off while
+        MPESA_ENV is off (DG-02).
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /v1/payouts/batches/{id}/transactions:
+    get:
+      operationId: listPayoutTransactions
+      summary: A batch's M-Pesa B2C transactions (`payout.create` or `payout.approve`).
+      description: No phone numbers or payee names.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200":
+          description: Transactions by contributor code
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [b2c, transactions]
+                properties:
+                  b2c: { $ref: "#/components/schemas/B2CStatus" }
+                  transactions: { type: array, items: { $ref: "#/components/schemas/MpesaTransaction" } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/payouts/lines/{id}/stop:
+    post:
+      operationId: stopUnsentPayout
+      summary: Fail a B2C line M-Pesa never accepted (`payout.create`).
+      description: >-
+        Only while its transaction is still queued (never accepted, for example the gateway kept refusing). Nothing was
+        paid; the amount stays owed. The reason is shown to the contributor. 409 once it has been sent.
+      tags: [payouts]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: The batch, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutBatch" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/payouts/reconciliation:
+    get:
+      operationId: getPayoutReconciliation
+      summary: M-Pesa B2C reconciliation (`payout.create` or `payout.approve`).
+      description: >-
+        Per disbursed batch, paid lines, succeeded transactions and payout ledger entries must agree (balanced). Exceptions:
+        transactions waiting too long, payments M-Pesa reported after a line was recorded failed (record an adjustment),
+        and callbacks that did not match or contradicted a result.
+      tags: [payouts]
+      responses:
+        "200": { description: The report, content: { application/json: { schema: { $ref: "#/components/schemas/PayoutReconciliation" } } } }
+  /v1/mpesa/callbacks/{token}/b2c/result:
+    post:
+      operationId: mpesaCallbackB2cResult
+      summary: Safaricom Daraja B2C payment result callback (public, server to server).
+      description: >-
+        Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403
+        otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent.
+        Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+      tags: [payouts]
+      security: []
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResultCode: { type: integer }
+                  ResultDesc: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/mpesa/callbacks/{token}/b2c/timeout:
+    post:
+      operationId: mpesaCallbackB2cTimeout
+      summary: Safaricom Daraja B2C queue timeout callback (public, server to server).
+      description: >-
+        Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403
+        otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent.
+        Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+      tags: [payouts]
+      security: []
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResultCode: { type: integer }
+                  ResultDesc: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/mpesa/callbacks/{token}/status/result:
+    post:
+      operationId: mpesaCallbackStatusResult
+      summary: Safaricom Daraja transaction status result callback (public, server to server).
+      description: >-
+        Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403
+        otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent.
+        Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+      tags: [payouts]
+      security: []
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResultCode: { type: integer }
+                  ResultDesc: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/mpesa/callbacks/{token}/status/timeout:
+    post:
+      operationId: mpesaCallbackStatusTimeout
+      summary: Safaricom Daraja transaction status timeout callback (public, server to server).
+      description: >-
+        Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403
+        otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent.
+        Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+      tags: [payouts]
+      security: []
+      parameters: [{ name: token, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResultCode: { type: integer }
+                  ResultDesc: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /v1/payouts/next-date:
     put:
       operationId: setNextPayoutDate
@@ -3559,7 +3733,7 @@ components:
                   auto_paused: { type: boolean, description: Paused, and the last status change was automatic. }
     PayoutLine:
       type: object
-      required: [id, contributor_id, public_code, name, contributor_status, phone_masked, amount_cents, currency, balance_cents, status, mpesa_receipt, failure_reason, recorded_at, recorded_by_name]
+      required: [id, contributor_id, public_code, name, contributor_status, phone_masked, amount_cents, currency, balance_cents, status, mpesa_receipt, failure_reason, recorded_at, recorded_by_name, recorded_via]
       properties:
         id: { type: string, format: uuid, description: Empty UUID in a preview. }
         contributor_id: { type: string, format: uuid }
@@ -3575,6 +3749,7 @@ components:
         failure_reason: { type: [string, "null"] }
         recorded_at: { type: [string, "null"], format: date-time }
         recorded_by_name: { type: [string, "null"] }
+        recorded_via: { type: string, enum: [manual, mpesa_b2c], description: Typed by Ops, or set by an M-Pesa B2C result (no person). }
     PayoutHeld:
       type: object
       required: [contributor_id, public_code, name, owed_cents, reason]
@@ -3602,7 +3777,7 @@ components:
         period_start: { type: string, format: date }
         period_end: { type: string, format: date }
         currency: { type: string }
-        status: { type: string, enum: [draft, pending_approval, approved, exported, settled, cancelled] }
+        status: { type: string, enum: [draft, pending_approval, approved, exported, disbursing, settled, cancelled] }
         total_cents: { type: integer, format: int64 }
         line_count: { type: integer }
         paid_lines: { type: integer }
@@ -3611,11 +3786,79 @@ components:
         created_at: { type: string, format: date-time }
         created_by_name: { type: string }
         approved_by_name: { type: [string, "null"] }
+    B2CStatus:
+      type: object
+      required: [enabled, environment]
+      properties:
+        enabled: { type: boolean }
+        environment: { type: string, enum: ["off", fake, sandbox, production], description: Fake and sandbox move no money. }
+    MpesaTransaction:
+      type: object
+      required: [id, line_id, public_code, status, amount_cents, currency, environment, originator_conversation_id, sent_at, completed_at, response_code, response_description, result_code, result_desc, receipt, status_queries]
+      properties:
+        id: { type: string, format: uuid }
+        line_id: { type: string, format: uuid }
+        public_code: { type: string }
+        status: { type: string, enum: [queued, sending, accepted, unknown, succeeded, failed] }
+        amount_cents: { type: integer, format: int64 }
+        currency: { type: string }
+        environment: { type: string, enum: [fake, sandbox, production] }
+        originator_conversation_id: { type: string }
+        sent_at: { type: [string, "null"], format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        response_code: { type: [string, "null"] }
+        response_description: { type: [string, "null"] }
+        result_code: { type: [string, "null"] }
+        result_desc: { type: [string, "null"] }
+        receipt: { type: [string, "null"] }
+        status_queries: { type: integer }
+    PayoutReconciliation:
+      type: object
+      required: [b2c, batches, exceptions]
+      properties:
+        b2c: { $ref: "#/components/schemas/B2CStatus" }
+        batches:
+          type: array
+          items:
+            type: object
+            required: [id, period_start, period_end, status, total_cents, line_count, paid_lines, failed_lines, pending_lines, paid_cents, succeeded_cents, ledger_cents, open_transactions, disbursed_at, settled_at, balanced]
+            properties:
+              id: { type: string, format: uuid }
+              period_start: { type: string, format: date }
+              period_end: { type: string, format: date }
+              status: { type: string }
+              total_cents: { type: integer, format: int64 }
+              line_count: { type: integer }
+              paid_lines: { type: integer }
+              failed_lines: { type: integer }
+              pending_lines: { type: integer }
+              paid_cents: { type: integer, format: int64 }
+              succeeded_cents: { type: integer, format: int64 }
+              ledger_cents: { type: integer, format: int64 }
+              open_transactions: { type: integer }
+              disbursed_at: { type: [string, "null"], format: date-time }
+              settled_at: { type: [string, "null"], format: date-time }
+              balanced: { type: boolean, description: Paid lines = succeeded transactions = payout ledger entries. }
+        exceptions:
+          type: array
+          items:
+            type: object
+            required: [kind, transaction_id, callback_id, batch_id, public_code, status, amount_cents, note, at]
+            properties:
+              kind: { type: string, enum: [stuck, late_success, callback] }
+              transaction_id: { type: [string, "null"], format: uuid }
+              callback_id: { type: [string, "null"], format: uuid }
+              batch_id: { type: [string, "null"], format: uuid }
+              public_code: { type: [string, "null"] }
+              status: { type: string }
+              amount_cents: { type: [integer, "null"], format: int64 }
+              note: { type: string }
+              at: { type: string, format: date-time }
     PayoutBatch:
       allOf:
         - { $ref: "#/components/schemas/PayoutBatchSummary" }
         - type: object
-          required: [created_by, cutoff_at, submitted_at, approved_at, returned_note, cancelled_at, cancelled_by_name, cancel_reason, exported_at, export_file_name, format_confirmed, settled_at, lines]
+          required: [created_by, cutoff_at, submitted_at, approved_at, returned_note, cancelled_at, cancelled_by_name, cancel_reason, exported_at, export_file_name, disbursed_at, format_confirmed, settled_at, lines]
           properties:
             created_by: { type: string, format: uuid }
             cutoff_at: { type: [string, "null"], format: date-time }
@@ -3627,6 +3870,7 @@ components:
             cancel_reason: { type: [string, "null"] }
             exported_at: { type: [string, "null"], format: date-time }
             export_file_name: { type: [string, "null"] }
+            disbursed_at: { type: [string, "null"], format: date-time, description: When the batch was sent through M-Pesa B2C. }
             format_confirmed: { type: [boolean, "null"], description: False until DG-03 confirms the column layout. }
             settled_at: { type: [string, "null"], format: date-time }
             lines: { type: array, items: { $ref: "#/components/schemas/PayoutLine" } }

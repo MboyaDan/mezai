@@ -45,6 +45,8 @@ type AuthDeps struct {
 	Files storage.Blobs
 	// IdentityKey keys National ID fingerprints (config.IdentityKey).
 	IdentityKey []byte
+	// Mpesa switches on B2C payouts; nil keeps them off.
+	Mpesa *MpesaDeps
 }
 
 // RouteRule is one /v1 route and the access rule it declared.
@@ -254,7 +256,11 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/ops/overview", Perm("project.manage"), perMinute(60), pth.opsOverview)
 
 		// Payouts, manual M-Pesa path (Stage 14a, AC-11, D-127 and D-128).
-		poh := &payoutHandlers{log: d.Log, svc: payouts.NewService(d.Auth.Pool, d.Auth.Files, d.Log)}
+		payoutSvc := payouts.NewService(d.Auth.Pool, d.Auth.Files, d.Log)
+		if d.Auth.Mpesa != nil {
+			payoutSvc.WithB2C(&payouts.B2C{Client: d.Auth.Mpesa.Client, Environment: d.Auth.Mpesa.Environment})
+		}
+		poh := &payoutHandlers{log: d.Log, svc: payoutSvc}
 		readPayouts := Perm("payout.create", "payout.approve")
 		a.handle(http.MethodGet, "/payouts/preview", Perm("payout.create"), poh.preview)
 		a.handle(http.MethodGet, "/payouts/batches", readPayouts, poh.list)
@@ -268,6 +274,19 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/payouts/batches/:id/file", readPayouts, perMinute(30), poh.download)
 		a.handle(http.MethodPost, "/payouts/lines/:id/result", Perm("payout.create"), perMinute(240), poh.result)
 		a.handle(http.MethodPut, "/payouts/next-date", Perm("payout.create"), poh.nextDate)
+		// M-Pesa B2C (Stage 15a, DG-02): off unless MPESA_ENV is set.
+		a.handle(http.MethodPost, "/payouts/batches/:id/disburse", Perm("payout.create"), poh.action(poh.disburse))
+		a.handle(http.MethodGet, "/payouts/batches/:id/transactions", readPayouts, poh.transactions)
+		a.handle(http.MethodPost, "/payouts/lines/:id/stop", Perm("payout.create"), perMinute(60), poh.stopUnsent)
+		a.handle(http.MethodGet, "/payouts/reconciliation", readPayouts, poh.reconciliation)
+		// Daraja's server-to-server callbacks: no session, no browser headers,
+		// so the CSRF check passes them; the secret token and checks inside apply.
+		mh := &mpesaCallbacks{svc: payoutSvc, deps: d.Auth.Mpesa, log: d.Log}
+		perIPCallbacks := rateLimit(newLimiter(600, time.Minute))
+		a.handle(http.MethodPost, "/mpesa/callbacks/:token/b2c/result", Public(), perIPCallbacks, mh.handle(payouts.CallbackB2CResult))
+		a.handle(http.MethodPost, "/mpesa/callbacks/:token/b2c/timeout", Public(), perIPCallbacks, mh.handle(payouts.CallbackB2CTimeout))
+		a.handle(http.MethodPost, "/mpesa/callbacks/:token/status/result", Public(), perIPCallbacks, mh.handle(payouts.CallbackStatusResult))
+		a.handle(http.MethodPost, "/mpesa/callbacks/:token/status/timeout", Public(), perIPCallbacks, mh.handle(payouts.CallbackStatusTimeout))
 		rules = a.rules
 	}
 
