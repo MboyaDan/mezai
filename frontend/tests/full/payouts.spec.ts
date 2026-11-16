@@ -68,7 +68,10 @@ test("14b: prepare, approve, export and settle a payout batch", async ({ page, b
   await expect(page.getByRole("heading", { name: "Payouts", level: 1 })).toBeVisible();
 
   // A local re-run may find this test's earlier batch settled and nobody left
-  // to pay; CI always starts from a fresh seed.
+  // to pay; CI always starts from a fresh seed. The period ends two days ago
+  // (seed balances are five days old) so the 15b test can pay a batch ending
+  // yesterday: each batch must end after the last one.
+  await page.getByLabel("Period ends on").fill(nairobiDaysAgo(2));
   await page.getByRole("button", { name: "Preview" }).click();
   const toPay = page.getByRole("table", { name: "Contributors in this batch" });
   const nothing = page.getByText("Nobody is due a payout for this period");
@@ -108,7 +111,10 @@ test("14b: prepare, approve, export and settle a payout batch", async ({ page, b
 
   // Export: the file's total equals the batch.
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Export the payment file" })).toBeVisible();
+  // With MPESA_ENV=fake (CI) the panel offers B2C beside the file; this test takes the file.
+  await expect(
+    page.getByRole("heading", { name: /^(Export the payment file|Pay the batch)$/ }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Export payment file" }).click();
   await expect(page.getByRole("heading", { name: "Pay in M-Pesa, then record each result" })).toBeVisible();
   await expect(page.getByText("File columns not yet confirmed").first()).toBeVisible();
@@ -161,6 +167,118 @@ test("14b: prepare, approve, export and settle a payout batch", async ({ page, b
   await axe(page, "payouts list");
   await shot(page, "payouts-list");
 });
+
+// Stage 15b through the real UI with the fake Daraja (MPESA_ENV=fake, A-078):
+// a batch is prepared and approved as above, then paid through M-Pesa B2C.
+// C-0005 (seed balance; 14b recorded it failed, so it is owed again) is
+// paid by M-Pesa with no manual step, and M-Pesa's registered name differs
+// from the profile (D-139), which reconciliation lists. (A matching name is
+// covered by TestPayoutsB2C.) Other lines (C-0008 from 14b: a queue timeout settled by a status
+// query minutes later) may still be waiting when the test ends.
+test("15b: pay an approved batch through M-Pesa B2C and reconcile it", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  const b2cShots = "../docs/screenshots/stage-15b";
+  const snap = async (file: string) => {
+    mkdirSync(b2cShots, { recursive: true });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `${b2cShots}/${file}-1440.png`, fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(300);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+      `${file} overflows at 390`,
+    ).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: `${b2cShots}/${file}-390.png`, fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 900 });
+  };
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, "superadmin@sample.invalid", /\/w$/);
+  await page.goto("/w/payouts");
+  const list = await (await page.request.get("/api/v1/payouts/batches")).json();
+  test.skip(!process.env.CI && !list.b2c.enabled, "B2C is off: set MPESA_ENV=fake in backend/.env");
+  expect(list.b2c).toEqual({ enabled: true, environment: "fake" });
+  await expect(page.getByText("Automatic M-Pesa payments: Test M-Pesa.")).toBeVisible();
+  test.skip(
+    !process.env.CI &&
+      list.batches.some((b: { status: string }) => b.status !== "settled" && b.status !== "cancelled"),
+    "a batch is still open: re-seed to run this again",
+  );
+
+  await page.getByRole("button", { name: "Preview" }).click();
+  const toPay = page.getByRole("table", { name: "Contributors in this batch" });
+  await expect(toPay.getByRole("link", { name: "C-0005" })).toBeVisible();
+  await page.getByRole("button", { name: "Create draft batch" }).click();
+  await expect(page).toHaveURL(/\/w\/payouts\/[0-9a-f-]{36}$/);
+  const batchUrl = new URL(page.url()).pathname;
+  const id = batchUrl.split("/").pop()!;
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  await expect(page.getByText("You prepared this batch, so another person")).toBeVisible();
+  await asApprover(browser, batchUrl, async (p) => {
+    await p.getByRole("button", { name: "Approve batch" }).click();
+    await expect(p.getByText("Batch approved")).toBeVisible();
+    // The approver cannot send the money (payout.create).
+    await expect(p.getByRole("button", { name: "Pay through M-Pesa" })).toHaveCount(0);
+  });
+
+  // Pay: one way only, confirmed, and labelled as a test.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Pay the batch" })).toBeVisible();
+  await expect(page.getByText("Test M-Pesa: no money moves")).toBeVisible();
+  await axe(page, "pay choice");
+  await snap("batch-pay-choice");
+  await page.getByRole("button", { name: "Pay through M-Pesa" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("cannot be called back");
+  await axe(page, "pay dialog");
+  await dialog.getByRole("button", { name: "Send test payments" }).click();
+  await expect(page.getByRole("heading", { name: "Paying through M-Pesa" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export payment file" })).toHaveCount(0);
+  const again = await page.request.post(`/api/v1/payouts/batches/${id}/disburse`, {
+    headers: { "X-CSRF-Token": await csrf(page), Origin: base },
+  });
+  expect(again.status()).toBe(409);
+
+  // Results arrive by themselves (jobs every 30 s); the page refreshes itself.
+  const lines = page.getByRole("table", { name: "Lines in this batch" });
+  const row5 = lines.getByRole("row", { name: /C-0005/ });
+  await expect(row5).toContainText("Paid", { timeout: 150_000 });
+  await expect(row5).toContainText("by M-Pesa B2C");
+  await expect(row5).toContainText("Name differs");
+  await axe(page, "paying");
+  await snap("batch-paying");
+
+  // Exactly one payment per line; a paid line carries the payment's receipt.
+  const batch = await (await page.request.get(`/api/v1/payouts/batches/${id}`)).json();
+  const { transactions } = await (
+    await page.request.get(`/api/v1/payouts/batches/${id}/transactions`)
+  ).json();
+  expect(transactions).toHaveLength(batch.line_count);
+  expect(new Set(transactions.map((t: { line_id: string }) => t.line_id)).size).toBe(batch.line_count);
+  for (const l of batch.lines as Array<{ id: string; status: string; mpesa_receipt: string | null }>) {
+    const t = transactions.find((x: { line_id: string }) => x.line_id === l.id);
+    if (l.status === "paid") expect(t).toMatchObject({ status: "succeeded", receipt: l.mpesa_receipt });
+  }
+
+  // Reconciliation: the batch's totals and C-0005's name difference.
+  await page.getByRole("link", { name: "M-Pesa reconciliation" }).first().click();
+  await expect(page.getByRole("heading", { name: "M-Pesa reconciliation", level: 1 })).toBeVisible();
+  const needs = page.getByRole("table", { name: "Needs a person" });
+  await expect(needs.getByRole("row", { name: /C-0005/ })).toContainText("Registered name differs");
+  await expect(
+    page
+      .getByRole("table", { name: "Batches paid through M-Pesa" })
+      .getByRole("link", { name: /to/ })
+      .first(),
+  ).toBeVisible();
+  await axe(page, "reconciliation");
+  await snap("reconciliation");
+});
+
+/** A date n days back in Nairobi (UTC+3), as the period field takes it. */
+function nairobiDaysAgo(n: number): string {
+  return new Date(Date.now() + 3 * 3_600_000 - n * 86_400_000).toISOString().slice(0, 10);
+}
 
 async function csrf(page: Page): Promise<string> {
   const me = await (await page.request.get("/api/v1/auth/me")).json();

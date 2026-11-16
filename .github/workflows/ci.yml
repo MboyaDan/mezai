@@ -107,7 +107,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Start API, PostgreSQL, storage and mailpit
         working-directory: backend
-        run: cp .env.example .env && docker compose up -d --build --wait
+        # MPESA_ENV=fake: B2C payouts against the in-process fake Daraja (Stage 15b); no money, no network.
+        run: cp .env.example .env && sed -i 's/^MPESA_ENV=off$/MPESA_ENV=fake/' .env && grep -qx 'MPESA_ENV=fake' .env && docker compose up -d --build --wait
       - name: Migrate and load sample data
         working-directory: backend
         run: make migrate && make seed
