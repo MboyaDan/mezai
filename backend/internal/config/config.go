@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/mail"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -70,7 +71,42 @@ type Config struct {
 	// outside development and test. Changing it breaks duplicate detection
 	// for every number already stored, so it is never rotated casually.
 	IdentityKey []byte
+
+	// Mpesa configures automated payouts through Daraja B2C (Stage 15,
+	// DG-02). Off by default; the manual bulk file path always works.
+	Mpesa Mpesa
 }
+
+// M-Pesa B2C modes (MPESA_ENV).
+const (
+	MpesaOff        = "off"
+	MpesaFake       = "fake"       // in-process fake Daraja: development and test only
+	MpesaSandbox    = "sandbox"    // Safaricom's sandbox: never with APP_ENV=production
+	MpesaProduction = "production" // real money: only with APP_ENV=production and DG-02 cleared
+)
+
+// Mpesa is the B2C configuration. Secrets are never logged.
+type Mpesa struct {
+	Env                string
+	BaseURL            string
+	ConsumerKey        string
+	ConsumerSecret     string
+	ShortCode          string
+	InitiatorName      string
+	SecurityCredential string
+	// CallbackBaseURL is the API's public origin Daraja posts results to.
+	CallbackBaseURL string
+	// CallbackToken is a secret path segment in the callback URLs.
+	CallbackToken string
+	// CallbackIPs, when set, are the only source addresses accepted.
+	CallbackIPs []netip.Prefix
+}
+
+// Enabled reports whether B2C payouts are switched on.
+func (m Mpesa) Enabled() bool { return m.Env != "" && m.Env != MpesaOff }
+
+// DevCallbackToken is the callback token used with the fake in development.
+const DevCallbackToken = "dev-only-mpesa-callback-token-0000000000"
 
 // IsDevLike reports whether the environment allows development-only tools such as the seed command.
 func (c Config) IsDevLike() bool {
@@ -177,6 +213,10 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 	} else {
 		errs = append(errs, errors.New("IDENTITY_HMAC_KEY is required outside development and test (base64 of 32 random bytes: openssl rand -base64 32)"))
 	}
+	c.Mpesa, err = loadMpesa(get, c.Env)
+	if err != nil {
+		errs = append(errs, err)
+	}
 	if c.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))
 	}
@@ -188,4 +228,87 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 	}
 
 	return c, errors.Join(errs...)
+}
+
+func loadMpesa(get func(string, string) string, appEnv string) (Mpesa, error) {
+	m := Mpesa{
+		Env:                strings.ToLower(get("MPESA_ENV", MpesaOff)),
+		BaseURL:            strings.TrimRight(get("MPESA_BASE_URL", ""), "/"),
+		ConsumerKey:        get("MPESA_CONSUMER_KEY", ""),
+		ConsumerSecret:     get("MPESA_CONSUMER_SECRET", ""),
+		ShortCode:          get("MPESA_SHORTCODE", ""),
+		InitiatorName:      get("MPESA_INITIATOR_NAME", ""),
+		SecurityCredential: get("MPESA_SECURITY_CREDENTIAL", ""),
+		CallbackBaseURL:    strings.TrimRight(get("MPESA_CALLBACK_BASE_URL", ""), "/"),
+		CallbackToken:      get("MPESA_CALLBACK_TOKEN", ""),
+	}
+	var errs []error
+	for _, p := range strings.Split(get("MPESA_CALLBACK_IPS", ""), ",") {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		if !strings.Contains(p, "/") {
+			if a, err := netip.ParseAddr(p); err == nil {
+				p = netip.PrefixFrom(a, a.BitLen()).String()
+			}
+		}
+		pr, err := netip.ParsePrefix(p)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("MPESA_CALLBACK_IPS: %q is not an address or CIDR range", p))
+			continue
+		}
+		m.CallbackIPs = append(m.CallbackIPs, pr.Masked())
+	}
+	devLike := appEnv == EnvDevelopment || appEnv == EnvTest
+	switch m.Env {
+	case MpesaOff:
+		return m, errors.Join(errs...)
+	case MpesaFake:
+		if !devLike {
+			errs = append(errs, errors.New("MPESA_ENV=fake is for development and test only"))
+		}
+		if m.CallbackBaseURL == "" {
+			m.CallbackBaseURL = "http://localhost:8080"
+		}
+		if m.CallbackToken == "" {
+			m.CallbackToken = DevCallbackToken
+		}
+		return m, errors.Join(errs...)
+	case MpesaSandbox:
+		if appEnv == EnvProduction {
+			errs = append(errs, errors.New("MPESA_ENV=sandbox cannot run with APP_ENV=production"))
+		}
+		if m.BaseURL == "" {
+			m.BaseURL = "https://sandbox.safaricom.co.ke"
+		}
+	case MpesaProduction:
+		if appEnv != EnvProduction {
+			errs = append(errs, errors.New("MPESA_ENV=production needs APP_ENV=production"))
+		}
+		if m.BaseURL == "" {
+			m.BaseURL = "https://api.safaricom.co.ke"
+		}
+	default:
+		return m, fmt.Errorf("MPESA_ENV must be off, fake, sandbox or production, got %q", m.Env)
+	}
+	var missing []string
+	for _, f := range []struct{ name, v string }{
+		{"MPESA_CONSUMER_KEY", m.ConsumerKey}, {"MPESA_CONSUMER_SECRET", m.ConsumerSecret}, {"MPESA_SHORTCODE", m.ShortCode},
+		{"MPESA_INITIATOR_NAME", m.InitiatorName}, {"MPESA_SECURITY_CREDENTIAL", m.SecurityCredential},
+		{"MPESA_CALLBACK_BASE_URL", m.CallbackBaseURL}, {"MPESA_CALLBACK_TOKEN", m.CallbackToken},
+	} {
+		if f.v == "" {
+			missing = append(missing, f.name)
+		}
+	}
+	if len(missing) > 0 {
+		errs = append(errs, fmt.Errorf("MPESA_ENV=%s needs %s", m.Env, strings.Join(missing, ", ")))
+	}
+	if m.CallbackBaseURL != "" && !strings.HasPrefix(m.CallbackBaseURL, "https://") {
+		errs = append(errs, errors.New("MPESA_CALLBACK_BASE_URL must be https:// (Daraja only calls public HTTPS URLs)"))
+	}
+	if m.CallbackToken != "" && len(m.CallbackToken) < 32 {
+		errs = append(errs, errors.New("MPESA_CALLBACK_TOKEN must be at least 32 characters (openssl rand -hex 24)"))
+	}
+	return m, errors.Join(errs...)
 }
