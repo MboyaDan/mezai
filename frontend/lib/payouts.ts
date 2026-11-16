@@ -87,7 +87,8 @@ export type NextStep =
   | "export" // write the payment file
   | "wait_export" // approver view of an approved batch
   | "record" // pay in M-Pesa and record each line
-  | "watch" // exported, but this person cannot record results
+  | "watch" // exported or disbursing, and this person cannot act on lines
+  | "b2c" // paying through M-Pesa B2C: watch results, stop a line M-Pesa never accepted
   | "done";
 
 export function nextStep(b: Pick<PayoutBatch, "status" | "created_by">, who: Who): NextStep {
@@ -102,10 +103,101 @@ export function nextStep(b: Pick<PayoutBatch, "status" | "created_by">, who: Who
     case "exported":
       return who.canCreate ? "record" : "watch";
     case "disbursing":
-      return "watch"; // M-Pesa B2C results arrive by themselves (Stage 15)
+      // M-Pesa B2C results arrive by themselves; Ops may stop an unsent line.
+      return who.canCreate ? "b2c" : "watch";
     default:
       return "done";
   }
+}
+
+export type B2CStatus = Schemas["B2CStatus"];
+export type MpesaTransaction = Schemas["MpesaTransaction"];
+export type Reconciliation = Schemas["PayoutReconciliation"];
+export type ReconBatch = Reconciliation["batches"][number];
+export type ReconException = Reconciliation["exceptions"][number];
+export type BatchTransactions = { b2c: B2CStatus; transactions: MpesaTransaction[] };
+
+/** Where B2C payments go, in words Ops cannot misread (honesty rule 3: test modes move no money). */
+export function b2cMode(b2c: B2CStatus): { label: string; real: boolean; note: string } {
+  switch (b2c.environment) {
+    case "production":
+      return {
+        label: "M-Pesa",
+        real: true,
+        note: "Payments go out from the ELS business account. This is real money.",
+      };
+    case "sandbox":
+      return {
+        label: "Safaricom sandbox",
+        real: false,
+        note: "Test mode: payments go to Safaricom's sandbox. No money moves.",
+      };
+    case "fake":
+      return {
+        label: "Test M-Pesa",
+        real: false,
+        note: "Test mode: a simulated M-Pesa on this server answers. No money moves.",
+      };
+    default:
+      return {
+        label: "Off",
+        real: false,
+        note: "Automatic M-Pesa payments are switched off. Batches are paid with the bulk payment file.",
+      };
+  }
+}
+
+/** One B2C payment's state for the lines table. */
+export const txLabel: Record<MpesaTransaction["status"], string> = {
+  queued: "Waiting to send",
+  sending: "Sending",
+  accepted: "Accepted",
+  unknown: "Unclear",
+  succeeded: "Paid",
+  failed: "Failed",
+};
+
+export const txTone: Record<MpesaTransaction["status"], Tone> = {
+  queued: "neutral",
+  sending: "info",
+  accepted: "info",
+  unknown: "warning",
+  succeeded: "success",
+  failed: "danger",
+};
+
+/** What a payment's state means for the money, under its pill. */
+export function txNote(t: Pick<MpesaTransaction, "status" | "status_queries">): string | null {
+  switch (t.status) {
+    case "queued":
+      return "Not sent yet; can be stopped.";
+    case "sending":
+      return null;
+    case "accepted":
+      return "Waiting for M-Pesa's result.";
+    case "unknown":
+      return `Never sent again. ${t.status_queries === 1 ? "1 status check" : `${t.status_queries} status checks`} so far.`;
+    default:
+      return null;
+  }
+}
+
+export const nameCheckLabel: Record<NonNullable<MpesaTransaction["name_check"]>, string> = {
+  match: "Name matches",
+  mismatch: "Name differs",
+  unavailable: "No name returned",
+};
+
+export const exceptionLabel: Record<ReconException["kind"], string> = {
+  stuck: "Waiting too long",
+  late_success: "Paid after recorded failed",
+  name_mismatch: "Registered name differs",
+  callback: "Unexpected M-Pesa message",
+};
+
+/** True while results can still change, so the batch page refreshes itself. */
+export function stillPaying(txs: MpesaTransaction[]): boolean {
+  return txs.some((t) => t.status !== "succeeded" && t.status !== "failed");
 }
 
 /** Lines whose amount is now more than the contributor's balance (approval and export refuse them). */
@@ -162,6 +254,7 @@ export function payoutError(e: ApiError): string {
       "A contributor's balance is now less than their line, after a correction. Cancel this batch and create a new one.",
     receipt_used: "That M-Pesa receipt is already recorded on another line. Check the receipt and try again.",
     nothing_to_pay: "Nobody is due a payout for this period.",
+    b2c_off: "Automatic M-Pesa payments are switched off. Export the payment file instead.",
   };
   if (m[e.code]) return m[e.code];
   if (e.code === "invalid_input" && e.field === "period_end")
