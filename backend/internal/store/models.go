@@ -144,6 +144,7 @@ type ContributorProfile struct {
 	ScreeningNote         *string
 	ScreeningDecidedBy    *uuid.UUID
 	ScreeningDecidedAt    *time.Time
+	NationalIDFpV         *int16
 }
 
 type ContributorStatusHistory struct {

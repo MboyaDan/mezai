@@ -198,16 +198,17 @@ func (q *Queries) ClearMpesaNameCheck(ctx context.Context, id uuid.UUID) error {
 }
 
 const contributorHoldingNationalID = `-- name: ContributorHoldingNationalID :one
-SELECT id FROM contributor_profiles WHERE national_id_fp = $1 AND id <> $2
+SELECT id FROM contributor_profiles WHERE national_id_fp = ANY($1::bytea[]) AND id <> $2 LIMIT 1
 `
 
 type ContributorHoldingNationalIDParams struct {
-	NationalIDFp []byte
-	ID           uuid.UUID
+	Fps [][]byte
+	ID  uuid.UUID
 }
 
+// fps holds the number's fingerprint under every scheme (identity.Prints.All).
 func (q *Queries) ContributorHoldingNationalID(ctx context.Context, arg ContributorHoldingNationalIDParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, contributorHoldingNationalID, arg.NationalIDFp, arg.ID)
+	row := q.db.QueryRow(ctx, contributorHoldingNationalID, arg.Fps, arg.ID)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -229,6 +230,23 @@ func (q *Queries) ContributorHoldingPhone(ctx context.Context, arg ContributorHo
 	return id, err
 }
 
+const countRecentIdentityFlags = `-- name: CountRecentIdentityFlags :one
+SELECT count(*)::int FROM identity_flags WHERE contributor_id = $1 AND created_at > $2
+`
+
+type CountRecentIdentityFlagsParams struct {
+	ContributorID uuid.UUID
+	Since         time.Time
+}
+
+// Numbers this contributor tried that another account holds, since a time.
+func (q *Queries) CountRecentIdentityFlags(ctx context.Context, arg CountRecentIdentityFlagsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countRecentIdentityFlags, arg.ContributorID, arg.Since)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createContributorProfile = `-- name: CreateContributorProfile :one
 INSERT INTO contributor_profiles (
   user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at
@@ -236,7 +254,7 @@ INSERT INTO contributor_profiles (
   $1, 'C-' || lpad(nextval('contributor_public_code_seq')::text, 4, '0'),
   $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at
+RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at, national_id_fp_v
 `
 
 type CreateContributorProfileParams struct {
@@ -293,6 +311,7 @@ func (q *Queries) CreateContributorProfile(ctx context.Context, arg CreateContri
 		&i.ScreeningNote,
 		&i.ScreeningDecidedBy,
 		&i.ScreeningDecidedAt,
+		&i.NationalIDFpV,
 	)
 	return i, err
 }
@@ -400,7 +419,7 @@ func (q *Queries) DecideScreening(ctx context.Context, arg DecideScreeningParams
 }
 
 const getContributorProfile = `-- name: GetContributorProfile :one
-SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, cp.experience, cp.linkedin_url, cp.cv_file_key, cp.cv_file_name, cp.cv_uploaded_at, cp.cv_delete_after, cp.screening_status, cp.screening_note, cp.screening_decided_by, cp.screening_decided_at, u.email, u.display_name
+SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, cp.experience, cp.linkedin_url, cp.cv_file_key, cp.cv_file_name, cp.cv_uploaded_at, cp.cv_delete_after, cp.screening_status, cp.screening_note, cp.screening_decided_by, cp.screening_decided_at, cp.national_id_fp_v, u.email, u.display_name
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
 WHERE cp.id = $1
 `
@@ -436,6 +455,7 @@ type GetContributorProfileRow struct {
 	ScreeningNote         *string
 	ScreeningDecidedBy    *uuid.UUID
 	ScreeningDecidedAt    *time.Time
+	NationalIDFpV         *int16
 	Email                 string
 	DisplayName           string
 }
@@ -474,6 +494,7 @@ func (q *Queries) GetContributorProfile(ctx context.Context, id uuid.UUID) (GetC
 		&i.ScreeningNote,
 		&i.ScreeningDecidedBy,
 		&i.ScreeningDecidedAt,
+		&i.NationalIDFpV,
 		&i.Email,
 		&i.DisplayName,
 	)
@@ -900,7 +921,7 @@ func (q *Queries) ListSameNameContributors(ctx context.Context, arg ListSameName
 }
 
 const lockContributorProfile = `-- name: LockContributorProfile :one
-SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at FROM contributor_profiles WHERE id = $1 FOR UPDATE
+SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at, national_id_fp_v FROM contributor_profiles WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (ContributorProfile, error) {
@@ -937,6 +958,7 @@ func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (Con
 		&i.ScreeningNote,
 		&i.ScreeningDecidedBy,
 		&i.ScreeningDecidedAt,
+		&i.NationalIDFpV,
 	)
 	return i, err
 }
@@ -986,18 +1008,25 @@ func (q *Queries) SetContributorCV(ctx context.Context, arg SetContributorCVPara
 
 const setContributorNationalID = `-- name: SetContributorNationalID :exec
 
-UPDATE contributor_profiles SET national_id_fp = $1, national_id_last3 = $2 WHERE id = $3
+UPDATE contributor_profiles SET national_id_fp = $1, national_id_fp_v = $2,
+  national_id_last3 = $3 WHERE id = $4
 `
 
 type SetContributorNationalIDParams struct {
 	NationalIDFp    []byte
+	NationalIDFpV   *int16
 	NationalIDLast3 *string
 	ID              uuid.UUID
 }
 
 // One person, one account (Stage 7c, D-078).
 func (q *Queries) SetContributorNationalID(ctx context.Context, arg SetContributorNationalIDParams) error {
-	_, err := q.db.Exec(ctx, setContributorNationalID, arg.NationalIDFp, arg.NationalIDLast3, arg.ID)
+	_, err := q.db.Exec(ctx, setContributorNationalID,
+		arg.NationalIDFp,
+		arg.NationalIDFpV,
+		arg.NationalIDLast3,
+		arg.ID,
+	)
 	return err
 }
 
