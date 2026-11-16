@@ -5,6 +5,7 @@ import {
   latestPeriodEnd,
   nairobiToday,
   nextStep,
+  openStatuses,
   normaliseReceipt,
   payoutError,
   resultsText,
@@ -80,4 +81,13 @@ it("explains payout errors", () => {
   expect(payoutError(new ApiError(403, "own_batch"))).toMatch(/another person/);
   expect(payoutError(new ApiError(422, "invalid_input", "receipt", "x"))).toMatch(/8 to 12/);
   expect(payoutError(new ApiError(0, "network"))).toMatch(/reach the server/);
+});
+
+describe("M-Pesa B2C batches (Stage 15)", () => {
+  it("are open, sit at the payment step and need no manual results", () => {
+    expect(openStatuses).toContain("disbursing");
+    expect(steps("disbursing").map((s) => s.state)).toEqual(["done", "done", "done", "current", "todo"]);
+    const who = { userId: "u1", canCreate: true, canApprove: true };
+    expect(nextStep({ status: "disbursing", created_by: "u2" }, who)).toBe("watch");
+  });
 });

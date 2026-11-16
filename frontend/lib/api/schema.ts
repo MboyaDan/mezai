@@ -1357,6 +1357,166 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/payouts/batches/{id}/disburse": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Pay an approved batch through M-Pesa B2C (`payout.create`).
+     * @description Approved to disbursing (instead of export). Each pending line gets one B2C transaction, never a second; its OriginatorConversationID is the idempotency key. Payments go out from the job queue; lines are marked paid or failed by Safaricom's results, and the batch settles when every line has one (D-132). 409 b2c_off while MPESA_ENV is off (DG-02).
+     */
+    post: operations["disbursePayoutBatch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/batches/{id}/transactions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * A batch's M-Pesa B2C transactions (`payout.create` or `payout.approve`).
+     * @description No phone numbers or payee names.
+     */
+    get: operations["listPayoutTransactions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/lines/{id}/stop": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Fail a B2C line M-Pesa never accepted (`payout.create`).
+     * @description Only while its transaction is still queued (never accepted, for example the gateway kept refusing). Nothing was paid; the amount stays owed. The reason is shown to the contributor. 409 once it has been sent.
+     */
+    post: operations["stopUnsentPayout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/payouts/reconciliation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * M-Pesa B2C reconciliation (`payout.create` or `payout.approve`).
+     * @description Per disbursed batch, paid lines, succeeded transactions and payout ledger entries must agree (balanced). Exceptions: transactions waiting too long, payments M-Pesa reported after a line was recorded failed (record an adjustment), and callbacks that did not match or contradicted a result.
+     */
+    get: operations["getPayoutReconciliation"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mpesa/callbacks/{token}/b2c/result": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Safaricom Daraja B2C payment result callback (public, server to server).
+     * @description Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403 otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent. Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+     */
+    post: operations["mpesaCallbackB2cResult"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mpesa/callbacks/{token}/b2c/timeout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Safaricom Daraja B2C queue timeout callback (public, server to server).
+     * @description Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403 otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent. Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+     */
+    post: operations["mpesaCallbackB2cTimeout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mpesa/callbacks/{token}/status/result": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Safaricom Daraja transaction status result callback (public, server to server).
+     * @description Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403 otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent. Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+     */
+    post: operations["mpesaCallbackStatusResult"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/mpesa/callbacks/{token}/status/timeout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Safaricom Daraja transaction status timeout callback (public, server to server).
+     * @description Believed only with the secret path token and, when MPESA_CALLBACK_IPS is set, from a listed address (404 and 403 otherwise, nothing stored). The body is stored with a verdict before it is processed; processing is idempotent. Answers Daraja's acknowledgement; a 500 means not stored, so Safaricom retries.
+     */
+    post: operations["mpesaCallbackStatusTimeout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/payouts/next-date": {
     parameters: {
       query?: never;
@@ -3251,6 +3411,11 @@ export interface components {
       /** Format: date-time */
       recorded_at: string | null;
       recorded_by_name: string | null;
+      /**
+       * @description Typed by Ops
+       * @enum {string}
+       */
+      recorded_via: "manual" | "mpesa_b2c";
     };
     PayoutHeld: {
       /** Format: uuid */
@@ -3283,7 +3448,7 @@ export interface components {
       period_end: string;
       currency: string;
       /** @enum {string} */
-      status: "draft" | "pending_approval" | "approved" | "exported" | "settled" | "cancelled";
+      status: "draft" | "pending_approval" | "approved" | "exported" | "disbursing" | "settled" | "cancelled";
       /** Format: int64 */
       total_cents: number;
       line_count: number;
@@ -3295,6 +3460,87 @@ export interface components {
       created_at: string;
       created_by_name: string;
       approved_by_name: string | null;
+    };
+    B2CStatus: {
+      enabled: boolean;
+      /**
+       * @description Fake and sandbox move no money.
+       * @enum {string}
+       */
+      environment: "off" | "fake" | "sandbox" | "production";
+    };
+    MpesaTransaction: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      line_id: string;
+      public_code: string;
+      /** @enum {string} */
+      status: "queued" | "sending" | "accepted" | "unknown" | "succeeded" | "failed";
+      /** Format: int64 */
+      amount_cents: number;
+      currency: string;
+      /** @enum {string} */
+      environment: "fake" | "sandbox" | "production";
+      originator_conversation_id: string;
+      /** Format: date-time */
+      sent_at: string | null;
+      /** Format: date-time */
+      completed_at: string | null;
+      response_code: string | null;
+      response_description: string | null;
+      result_code: string | null;
+      result_desc: string | null;
+      receipt: string | null;
+      status_queries: number;
+    };
+    PayoutReconciliation: {
+      b2c: components["schemas"]["B2CStatus"];
+      batches: {
+        /** Format: uuid */
+        id: string;
+        /** Format: date */
+        period_start: string;
+        /** Format: date */
+        period_end: string;
+        status: string;
+        /** Format: int64 */
+        total_cents: number;
+        line_count: number;
+        paid_lines: number;
+        failed_lines: number;
+        pending_lines: number;
+        /** Format: int64 */
+        paid_cents: number;
+        /** Format: int64 */
+        succeeded_cents: number;
+        /** Format: int64 */
+        ledger_cents: number;
+        open_transactions: number;
+        /** Format: date-time */
+        disbursed_at: string | null;
+        /** Format: date-time */
+        settled_at: string | null;
+        /** @description Paid lines = succeeded transactions = payout ledger entries. */
+        balanced: boolean;
+      }[];
+      exceptions: {
+        /** @enum {string} */
+        kind: "stuck" | "late_success" | "callback";
+        /** Format: uuid */
+        transaction_id: string | null;
+        /** Format: uuid */
+        callback_id: string | null;
+        /** Format: uuid */
+        batch_id: string | null;
+        public_code: string | null;
+        status: string;
+        /** Format: int64 */
+        amount_cents: number | null;
+        note: string;
+        /** Format: date-time */
+        at: string;
+      }[];
     };
     PayoutBatch: components["schemas"]["PayoutBatchSummary"] & {
       /** Format: uuid */
@@ -3313,6 +3559,11 @@ export interface components {
       /** Format: date-time */
       exported_at: string | null;
       export_file_name: string | null;
+      /**
+       * Format: date-time
+       * @description When the batch was sent through M-Pesa B2C.
+       */
+      disbursed_at: string | null;
       /** @description False until DG-03 confirms the column layout. */
       format_confirmed: boolean | null;
       /** Format: date-time */
@@ -5518,6 +5769,7 @@ export interface operations {
         };
         content: {
           "application/json": {
+            b2c: components["schemas"]["B2CStatus"];
             batches: components["schemas"]["PayoutBatchSummary"][];
             /**
              * Format: date
@@ -5795,6 +6047,232 @@ export interface operations {
       404: components["responses"]["Error"];
       409: components["responses"]["Error"];
       422: components["responses"]["Error"];
+    };
+  };
+  disbursePayoutBatch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+    };
+  };
+  listPayoutTransactions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Transactions by contributor code */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            b2c: components["schemas"]["B2CStatus"];
+            transactions: components["schemas"]["MpesaTransaction"][];
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  stopUnsentPayout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The batch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutBatch"];
+        };
+      };
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["Error"];
+    };
+  };
+  getPayoutReconciliation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The report */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayoutReconciliation"];
+        };
+      };
+    };
+  };
+  mpesaCallbackB2cResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            ResultCode?: number;
+            ResultDesc?: string;
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+    };
+  };
+  mpesaCallbackB2cTimeout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            ResultCode?: number;
+            ResultDesc?: string;
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+    };
+  };
+  mpesaCallbackStatusResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            ResultCode?: number;
+            ResultDesc?: string;
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+    };
+  };
+  mpesaCallbackStatusTimeout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": Record<string, never>;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            ResultCode?: number;
+            ResultDesc?: string;
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
     };
   };
   setNextPayoutDate: {

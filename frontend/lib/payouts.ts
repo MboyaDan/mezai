@@ -19,6 +19,7 @@ export const batchLabel: Record<BatchStatus, string> = {
   pending_approval: "Waiting for approval",
   approved: "Approved",
   exported: "File exported",
+  disbursing: "Paying through M-Pesa",
   settled: "Settled",
   cancelled: "Cancelled",
 };
@@ -28,6 +29,7 @@ export const batchTone: Record<BatchStatus, Tone> = {
   pending_approval: "warning",
   approved: "info",
   exported: "info",
+  disbursing: "info",
   settled: "success",
   cancelled: "neutral",
 };
@@ -53,13 +55,20 @@ export const holdLabel: Record<PayoutHeld["reason"], string> = {
   below_minimum: "Below the minimum payout",
 };
 
-export const openStatuses: BatchStatus[] = ["draft", "pending_approval", "approved", "exported"];
+export const openStatuses: BatchStatus[] = [
+  "draft",
+  "pending_approval",
+  "approved",
+  "exported",
+  "disbursing",
+];
 
 /** The steps a batch goes through, with which are done; a cancelled batch has none. */
 export function steps(status: BatchStatus): Array<{ label: string; state: "done" | "current" | "todo" }> {
   const order: BatchStatus[] = ["draft", "pending_approval", "approved", "exported", "settled"];
   const labels = ["Draft", "Approval", "Approved", "Paid in M-Pesa", "Settled"];
-  const at = order.indexOf(status);
+  // A B2C batch (Stage 15) is at the same step as an exported one.
+  const at = order.indexOf(status === "disbursing" ? "exported" : status);
   if (at < 0) return [];
   return labels.map((label, i) => ({
     label,
@@ -92,6 +101,8 @@ export function nextStep(b: Pick<PayoutBatch, "status" | "created_by">, who: Who
       return who.canCreate ? "export" : "wait_export";
     case "exported":
       return who.canCreate ? "record" : "watch";
+    case "disbursing":
+      return "watch"; // M-Pesa B2C results arrive by themselves (Stage 15)
     default:
       return "done";
   }
