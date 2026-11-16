@@ -44,6 +44,7 @@ func (s *Service) Handlers() map[string]jobs.Handler {
 		return time.ParseInLocation(time.DateOnly, p.Day, jobs.Nairobi)
 	}
 	return map[string]jobs.Handler{
+		JobProjectAvailable: s.projectAvailableHandler,
 		JobAgreementSnapshot: func(ctx context.Context, payload json.RawMessage) error {
 			d, err := day(payload)
 			if err != nil {

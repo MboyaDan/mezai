@@ -620,6 +620,9 @@ func (s *Service) succeed(ctx context.Context, q *store.Queries, t store.LockMpe
 		return err
 	}
 	lineID := t.PayoutLineID
+	if err := notifyPaid(ctx, q, lineID, t.ContributorID, t.AmountCents, t.Currency, receipt); err != nil {
+		return err
+	}
 	if err := auth.Audit(ctx, q, auth.Meta{}, auth.Entry{Action: "payout_line.paid", EntityType: "payout_line", EntityID: &lineID,
 		After: map[string]any{"status": "paid", "amount_cents": t.AmountCents, "receipt": receipt, "via": "mpesa_b2c"}}); err != nil {
 		return err
