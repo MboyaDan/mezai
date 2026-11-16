@@ -113,7 +113,9 @@ export function IdentityPanel({
         <dd>
           {c.mpesa_name_checked_at
             ? `Matches · ${c.mpesa_name_checked_by ?? ""} · ${shortDate(c.mpesa_name_checked_at)}`
-            : "Not checked yet (before the first payout)"}
+            : c.mpesa_name_mismatch_at
+              ? `Did not match on a payment · ${shortDate(c.mpesa_name_mismatch_at)}`
+              : "Not checked yet (before the first payout)"}
         </dd>
         {c.decided_at && (
           <>
@@ -125,6 +127,14 @@ export function IdentityPanel({
         )}
       </dl>
       {c.note && <p className="mt-3 text-sm text-fg-muted">Note: {c.note}</p>}
+      {c.mpesa_name_mismatch_at && (
+        <Alert tone="danger" title="M-Pesa paid a different registered name" className="mt-4">
+          On {shortDate(c.mpesa_name_mismatch_at)} M-Pesa reported that this number is registered to a name
+          that does not match the profile. The payment went through; further payouts are held. Call the
+          number, confirm who holds the line, then record the name check again or reject the identity. We do
+          not store the name M-Pesa showed.
+        </Alert>
+      )}
       {pausedUntil && (
         <Alert tone="warning" title="Number changes are paused on this account" className="mt-4">
           It entered three numbers that belong to other accounts within a day. It cannot change its M-Pesa or
@@ -178,7 +188,7 @@ export function IdentityPanel({
               loading={busy && decision === null}
               onClick={() => post("mpesa-name-check", {}, `${p.public_code}: M-Pesa name check recorded`)}
             >
-              M-Pesa name matches
+              {c.mpesa_name_mismatch_at ? "Name confirmed on a call" : "M-Pesa name matches"}
             </Button>
           )}
         </div>

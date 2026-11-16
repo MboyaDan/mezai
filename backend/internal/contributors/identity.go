@@ -66,15 +66,18 @@ type IdentityFlag struct {
 
 // IdentityChecks is what Ops sees when verifying a contributor.
 type IdentityChecks struct {
-	Status             string           `json:"status"`
-	Note               *string          `json:"note"`
-	DecidedBy          *string          `json:"decided_by"` // display name
-	DecidedAt          *time.Time       `json:"decided_at"`
-	NationalIDLast3    *string          `json:"national_id_last3"`
-	MpesaNameCheckedAt *time.Time       `json:"mpesa_name_checked_at"`
-	MpesaNameCheckedBy *string          `json:"mpesa_name_checked_by"`
-	Flags              []IdentityFlag   `json:"flags"`
-	SameName           []ContributorRef `json:"same_name"` // other accounts with the same name
+	Status             string     `json:"status"`
+	Note               *string    `json:"note"`
+	DecidedBy          *string    `json:"decided_by"` // display name
+	DecidedAt          *time.Time `json:"decided_at"`
+	NationalIDLast3    *string    `json:"national_id_last3"`
+	MpesaNameCheckedAt *time.Time `json:"mpesa_name_checked_at"`
+	MpesaNameCheckedBy *string    `json:"mpesa_name_checked_by"`
+	// MpesaNameMismatchAt: an M-Pesa payment showed a registered name that
+	// is not the profile's (D-139). Cleared when Ops checks the name again.
+	MpesaNameMismatchAt *time.Time       `json:"mpesa_name_mismatch_at"`
+	Flags               []IdentityFlag   `json:"flags"`
+	SameName            []ContributorRef `json:"same_name"` // other accounts with the same name
 }
 
 // loadIdentityChecks reads the Ops identity block for one contributor.
@@ -87,7 +90,7 @@ func loadIdentityChecks(ctx context.Context, q *store.Queries, id uuid.UUID) (Id
 		return IdentityChecks{}, err
 	}
 	out := IdentityChecks{Status: cp.IdentityStatus, Note: cp.IdentityNote, DecidedAt: cp.IdentityDecidedAt,
-		NationalIDLast3: cp.NationalIDLast3, MpesaNameCheckedAt: cp.MpesaNameCheckedAt,
+		NationalIDLast3: cp.NationalIDLast3, MpesaNameCheckedAt: cp.MpesaNameCheckedAt, MpesaNameMismatchAt: cp.MpesaNameMismatchAt,
 		Flags: []IdentityFlag{}, SameName: []ContributorRef{}}
 	name := func(u *uuid.UUID) (*string, error) {
 		if u == nil {

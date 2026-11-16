@@ -12,7 +12,8 @@ Started in Stage 17a (2026-11-16). The full threat review, retention job, data s
 | What if the database leaks? | Fingerprints cannot be tried without `IDENTITY_HMAC_KEY`, which lives only in the environment. |
 | What if the database and the key leak? | Every possible number can be tried: about 32 ms each, over a CPU-month for all of them (scheme 2). The last 3 digits shorten that for one chosen person to about an hour. Keep the key out of backups and logs; this is the residual risk of holding any matchable form of the number. |
 | Can someone find out whether a person is registered? | Only by being signed in, and at most 3 answers a day per account (D-137), each recorded for Ops. |
-| What is not covered? | A person using someone else's ID number and someone else's M-Pesa line. The name check and the interview are the controls; see A-082 for stronger options. |
+| What if the M-Pesa line is registered to someone else? | Every direct M-Pesa payment brings back the registered name; it is compared with the profile name automatically and only the result is kept (D-139). A mismatch holds further payouts until Ops has called and recorded the name check again. The payment already made stands. |
+| What is not covered? | A person using someone else's ID number and someone else's M-Pesa line, registered in the same name as the profile. The interview and the name check are the controls; a check against the national register (A-082, option b) would close it and needs DG-05. |
 
 ## Findings, Stage 17a
 
@@ -25,6 +26,8 @@ Started in Stage 17a (2026-11-16). The full threat review, retention job, data s
 | 5 | Request size limited per handler, not globally | Low | Fixed: 1 MiB cap before every handler; uploads keep their own limits |
 | 6 | Rate limits are held in memory per API instance | Low for one instance | Open: Stage 17/19 (shared store if more than one instance runs) |
 | 7 | Site policy allows inline scripts | Low | Open: A-081 |
+| 9 | Stored M-Pesa callbacks held the payee's registered name and full phone number, and the echo of our callback URL with its secret token | Medium | Fixed (D-139): removed before storing; migration 00024 cleans earlier rows |
+| 10 | Contributor detail page scrolled sideways at 390 px for anyone with qualification attempts | Low (layout) | Fixed: the column's grid track can shrink; the table scrolls in its own frame |
 | 8 | 17 moderate `npm audit` findings in development dependencies (not shipped) | Low | Open: waiting for upstream; production dependencies have 0 |
 
 ## Checked and found sound

@@ -162,7 +162,7 @@ export function ContributorDetail() {
           <IdentityPanel profile={p} checks={identity} onChange={d.reload} />
         </div>
 
-        <div className="grid content-start gap-6 lg:col-span-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6 lg:col-span-2">
           <div className="grid gap-6 xl:grid-cols-2">
             <ApplicationPanel profile={p} application={application} onChange={d.reload} />
             <InterviewPanel

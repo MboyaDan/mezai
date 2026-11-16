@@ -2813,7 +2813,7 @@ components:
     IdentityChecks:
       type: object
       description: What Ops sees when verifying a contributor (D-078). Other accounts are named by code only.
-      required: [status, note, decided_by, decided_at, national_id_last3, mpesa_name_checked_at, mpesa_name_checked_by, flags, same_name]
+      required: [status, note, decided_by, decided_at, national_id_last3, mpesa_name_checked_at, mpesa_name_checked_by, mpesa_name_mismatch_at, flags, same_name]
       properties:
         status: { $ref: "#/components/schemas/IdentityStatus" }
         note: { type: [string, "null"] }
@@ -2822,6 +2822,12 @@ components:
         national_id_last3: { type: [string, "null"] }
         mpesa_name_checked_at: { type: [string, "null"], format: date-time }
         mpesa_name_checked_by: { type: [string, "null"], description: Display name }
+        mpesa_name_mismatch_at:
+          type: [string, "null"]
+          format: date-time
+          description: >-
+            When an M-Pesa B2C payment showed a registered name that is not the profile's (D-139). Payouts are held until
+            Ops records the name check again, which clears it.
         flags:
           type: array
           description: Tries to put a number on a profile while another account held it
@@ -3794,7 +3800,7 @@ components:
         environment: { type: string, enum: ["off", fake, sandbox, production], description: Fake and sandbox move no money. }
     MpesaTransaction:
       type: object
-      required: [id, line_id, public_code, status, amount_cents, currency, environment, originator_conversation_id, sent_at, completed_at, response_code, response_description, result_code, result_desc, receipt, status_queries]
+      required: [id, line_id, public_code, status, amount_cents, currency, environment, originator_conversation_id, sent_at, completed_at, response_code, response_description, result_code, result_desc, receipt, status_queries, name_check]
       properties:
         id: { type: string, format: uuid }
         line_id: { type: string, format: uuid }
@@ -3812,6 +3818,10 @@ components:
         result_desc: { type: [string, "null"] }
         receipt: { type: [string, "null"] }
         status_queries: { type: integer }
+        name_check:
+          type: [string, "null"]
+          enum: [match, mismatch, unavailable, null]
+          description: How M-Pesa's registered name compared with the payee's name. The name itself is not stored.
     PayoutReconciliation:
       type: object
       required: [b2c, batches, exceptions]
@@ -3845,7 +3855,7 @@ components:
             type: object
             required: [kind, transaction_id, callback_id, batch_id, public_code, status, amount_cents, note, at]
             properties:
-              kind: { type: string, enum: [stuck, late_success, callback] }
+              kind: { type: string, enum: [stuck, late_success, name_mismatch, callback] }
               transaction_id: { type: [string, "null"], format: uuid }
               callback_id: { type: [string, "null"], format: uuid }
               batch_id: { type: [string, "null"], format: uuid }

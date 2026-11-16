@@ -145,6 +145,7 @@ type ContributorProfile struct {
 	ScreeningDecidedBy    *uuid.UUID
 	ScreeningDecidedAt    *time.Time
 	NationalIDFpV         *int16
+	MpesaNameMismatchAt   *time.Time
 }
 
 type ContributorStatusHistory struct {
@@ -450,6 +451,7 @@ type MpesaCallback struct {
 	ProcessedAt              *time.Time
 	ProcessError             *string
 	CreatedAt                time.Time
+	NameCheck                *string
 }
 
 type MpesaTransaction struct {
@@ -474,6 +476,7 @@ type MpesaTransaction struct {
 	CreatedBy                uuid.UUID
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
+	NameCheck                *string
 }
 
 type OrgMember struct {

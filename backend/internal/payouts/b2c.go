@@ -32,6 +32,7 @@ import (
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/identity"
 	"github.com/MboyaDan/mezai/backend/internal/jobs"
 	"github.com/MboyaDan/mezai/backend/internal/mpesa"
 	"github.com/MboyaDan/mezai/backend/internal/store"
@@ -395,6 +396,10 @@ func (s *Service) ReceiveCallback(ctx context.Context, kind string, body []byte,
 	var txID *uuid.UUID
 	var cbID uuid.UUID
 	var ocid, conv, code *string
+	// The registered name is compared now and then dropped: the stored body
+	// holds neither the name nor the phone number beside it (D-139).
+	body, registeredName := mpesa.Redact(body)
+	var nameCheck *string
 	r, perr := mpesa.ParseResult(body)
 	if !json.Valid(body) {
 		b, _ := json.Marshal(map[string]string{"unreadable": string(body)})
@@ -424,11 +429,14 @@ func (s *Service) ReceiveCallback(ctx context.Context, kind string, body []byte,
 					r.ConversationID != "" && r.ConversationID != *t.ConversationID {
 					verdict, note = "mismatch", "ConversationID differs from the accepted request"
 				}
+				if verdict == "matched" && r.ResultCode == "0" && (kind == CallbackB2CResult || kind == CallbackStatusResult) {
+					nameCheck = ptr(identity.CompareNames(t.PayeeName, registeredName))
+				}
 			}
 		}
 		var err error
 		cbID, err = q.InsertMpesaCallback(ctx, store.InsertMpesaCallbackParams{Kind: kind, OriginatorConversationID: ocid,
-			ConversationID: conv, TransactionID: txID, ResultCode: code, Body: body, RemoteIp: ip, Verdict: verdict, Note: nilIfEmpty(note)})
+			ConversationID: conv, TransactionID: txID, ResultCode: code, Body: body, RemoteIp: ip, Verdict: verdict, Note: nilIfEmpty(note), NameCheck: nameCheck})
 		if err != nil {
 			return err
 		}
@@ -503,7 +511,7 @@ func (s *Service) ProcessCallback(ctx context.Context, id uuid.UUID) error {
 				if amt, ok := r.Params["TransactionAmount"]; !ok || !amountMatches(amt, t.AmountCents) {
 					return flag("amount differs from the payout line")
 				}
-				return s.succeed(ctx, q, t, id, receipt, r, flag)
+				return s.succeed(ctx, q, t, c, receipt, r, flag)
 			}
 			switch {
 			case t.Status == "succeeded":
@@ -532,7 +540,7 @@ func (s *Service) ProcessCallback(ctx context.Context, id uuid.UUID) error {
 					if amt, ok := r.Params["Amount"]; ok && !amountMatches(amt, t.AmountCents) {
 						return flag("amount differs from the payout line")
 					}
-					return s.succeed(ctx, q, t, id, strings.ToUpper(r.Params["ReceiptNo"]), r, flag)
+					return s.succeed(ctx, q, t, c, strings.ToUpper(r.Params["ReceiptNo"]), r, flag)
 				case "Failed", "Declined", "Cancelled", "Expired":
 					switch {
 					case t.Status == "succeeded":
@@ -578,8 +586,9 @@ func (s *Service) ProcessCallback(ctx context.Context, id uuid.UUID) error {
 }
 
 // succeed records a paid line and its payout ledger entry, once.
-func (s *Service) succeed(ctx context.Context, q *store.Queries, t store.LockMpesaTransactionRow, callbackID uuid.UUID,
+func (s *Service) succeed(ctx context.Context, q *store.Queries, t store.LockMpesaTransactionRow, c store.MpesaCallback,
 	receipt string, r mpesa.Result, flag func(string) error) error {
+	callbackID := c.ID
 	if !receiptRe.MatchString(receipt) {
 		return flag("success without a readable receipt")
 	}
@@ -596,7 +605,7 @@ func (s *Service) succeed(ctx context.Context, q *store.Queries, t store.LockMpe
 	}
 	code := r.ResultCode
 	desc := describe(r.ResultDesc, "")
-	if err := q.MarkMpesaSucceeded(ctx, store.MarkMpesaSucceededParams{ID: t.ID, Receipt: &receipt, ResultCode: &code, ResultDesc: &desc}); err != nil {
+	if err := q.MarkMpesaSucceeded(ctx, store.MarkMpesaSucceededParams{ID: t.ID, Receipt: &receipt, ResultCode: &code, ResultDesc: &desc, NameCheck: c.NameCheck}); err != nil {
 		return mapPg(err)
 	}
 	n, err := q.RecordPayoutLinePaidB2C(ctx, store.RecordPayoutLinePaidB2CParams{ID: t.PayoutLineID, Receipt: &receipt})
@@ -614,6 +623,19 @@ func (s *Service) succeed(ctx context.Context, q *store.Queries, t store.LockMpe
 	if err := auth.Audit(ctx, q, auth.Meta{}, auth.Entry{Action: "payout_line.paid", EntityType: "payout_line", EntityID: &lineID,
 		After: map[string]any{"status": "paid", "amount_cents": t.AmountCents, "receipt": receipt, "via": "mpesa_b2c"}}); err != nil {
 		return err
+	}
+	// The money has gone to that number either way. A different registered
+	// name withdraws the name check, so the next batch holds this
+	// contributor until Ops has looked (D-139).
+	if c.NameCheck != nil && *c.NameCheck == identity.NameMismatch {
+		if err := q.MarkMpesaNameMismatch(ctx, t.ContributorID); err != nil {
+			return err
+		}
+		cid := t.ContributorID
+		if err := auth.Audit(ctx, q, auth.Meta{}, auth.Entry{Action: "contributor.mpesa_name_mismatch", EntityType: "contributor", EntityID: &cid,
+			After: map[string]any{"payout_line_id": lineID, "receipt": receipt}}); err != nil {
+			return err
+		}
 	}
 	if err := s.settle(ctx, q, t.BatchID); err != nil {
 		return err
@@ -708,6 +730,9 @@ type Transaction struct {
 	ResultDesc          *string    `json:"result_desc"`
 	Receipt             *string    `json:"receipt"`
 	StatusQueries       int32      `json:"status_queries"`
+	// NameCheck is how M-Pesa's registered name compared with the payee's
+	// name: match, mismatch, unavailable, or null before a result.
+	NameCheck *string `json:"name_check"`
 }
 
 // Transactions lists a batch's B2C payments.
@@ -728,7 +753,7 @@ func (s *Service) Transactions(ctx context.Context, p *auth.Principal, batchID u
 			out = append(out, Transaction{ID: r.ID, LineID: r.PayoutLineID, PublicCode: r.PublicCode, Status: r.Status,
 				AmountCents: r.AmountCents, Currency: r.Currency, Environment: r.Environment, OriginatorID: r.OriginatorConversationID,
 				SentAt: r.SentAt, CompletedAt: r.CompletedAt, ResponseCode: r.ResponseCode, ResponseDescription: r.ResponseDescription,
-				ResultCode: r.ResultCode, ResultDesc: r.ResultDesc, Receipt: r.Receipt, StatusQueries: r.StatusQueries})
+				ResultCode: r.ResultCode, ResultDesc: r.ResultDesc, Receipt: r.Receipt, StatusQueries: r.StatusQueries, NameCheck: r.NameCheck})
 		}
 		return nil
 	})
@@ -758,7 +783,7 @@ type ReconBatch struct {
 
 // Exception is something Ops must look at.
 type Exception struct {
-	Kind          string     `json:"kind"` // stuck, late_success, callback
+	Kind          string     `json:"kind"` // stuck, late_success, name_mismatch, callback
 	TransactionID *uuid.UUID `json:"transaction_id"`
 	CallbackID    *uuid.UUID `json:"callback_id"`
 	BatchID       *uuid.UUID `json:"batch_id"`
@@ -815,6 +840,19 @@ func (s *Service) Reconcile(ctx context.Context, p *auth.Principal) (Reconciliat
 			out.Exceptions = append(out.Exceptions, Exception{Kind: "late_success", TransactionID: ptr(l.TransactionID),
 				CallbackID: ptr(l.CallbackID), BatchID: ptr(l.BatchID), PublicCode: ptr(l.PublicCode), Status: "succeeded",
 				AmountCents: ptr(l.AmountCents), Note: "M-Pesa paid after the line was recorded failed: record an adjustment", At: l.CreatedAt})
+		}
+		names, err := q.MpesaNameMismatches(ctx)
+		if err != nil {
+			return err
+		}
+		for _, n := range names {
+			at := n.CompletedAt
+			if at == nil {
+				at = ptr(s.now())
+			}
+			out.Exceptions = append(out.Exceptions, Exception{Kind: "name_mismatch", TransactionID: ptr(n.ID), BatchID: ptr(n.BatchID),
+				PublicCode: ptr(n.PublicCode), Status: "succeeded", AmountCents: ptr(n.AmountCents),
+				Note: "M-Pesa's registered name differs from the profile name: check before the next payout", At: *at})
 		}
 		cbs, err := q.MpesaCallbackExceptions(ctx)
 		if err != nil {

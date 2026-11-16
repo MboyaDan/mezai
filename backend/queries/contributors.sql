@@ -145,7 +145,9 @@ UPDATE contributor_profiles SET identity_status = @identity_status, identity_not
 WHERE id = @id;
 
 -- name: RecordMpesaNameCheck :exec
-UPDATE contributor_profiles SET mpesa_name_checked_at = now(), mpesa_name_checked_by = @checked_by WHERE id = @id;
+-- A fresh check by Ops also clears a mismatch reported by a payment.
+UPDATE contributor_profiles SET mpesa_name_checked_at = now(), mpesa_name_checked_by = @checked_by,
+  mpesa_name_mismatch_at = NULL WHERE id = @id;
 
 -- name: GetUserDisplayNameByID :one
 SELECT display_name FROM users WHERE id = $1;
