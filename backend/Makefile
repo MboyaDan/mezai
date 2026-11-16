@@ -5,7 +5,7 @@ export
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.29.0
 SQLC  := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
-.PHONY: help up down logs ps test lint run migrate migrate-status migrate-create seed setup sqlc
+.PHONY: help up down logs ps test lint run migrate migrate-status migrate-create seed setup sqlc vuln
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -50,6 +50,9 @@ seed: ## Load sample data (refuses unless APP_ENV is development or test)
 
 setup: ## Create the first Super Admin from SETUP_ADMIN_* (any environment; no-op once one exists). Backup: make setup ARGS=-additional
 	go run ./cmd/setup $(ARGS)
+
+vuln: ## Scan the Go toolchain and modules for known vulnerabilities that reach our code
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 sqlc: ## Generate Go code from queries/ (config arrives in Stage 3)
 	@if [ -f sqlc.yaml ]; then $(SQLC) generate; else echo "sqlc.yaml not created yet (Stage 3)"; fi

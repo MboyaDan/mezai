@@ -1,0 +1,41 @@
+# Weekly scan for known vulnerabilities in the Go toolchain and modules and
+# in the frontend's production dependencies (Stage 17a). Separate from CI so
+# a newly published advisory shows up here, not as a red check on an
+# unrelated pull request. Run it by hand from the Actions tab at any time.
+name: Vulnerability scan
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 08:00 Nairobi
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go (govulncheck)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: make vuln
+
+  npm:
+    name: Frontend (npm audit, production dependencies)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm audit --omit=dev
