@@ -214,6 +214,8 @@ type EmailOutbox struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	NextAttemptAt time.Time
+	UserID        *uuid.UUID
+	DedupeKey     *string
 }
 
 type EmailVerification struct {
@@ -477,6 +479,15 @@ type MpesaTransaction struct {
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
 	NameCheck                *string
+}
+
+type NotificationPreference struct {
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	ProjectAvailable bool
+	FeedbackReceived bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type OrgMember struct {
