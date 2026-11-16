@@ -72,7 +72,7 @@ FROM payout_batches WHERE id = $1 FOR UPDATE;
 -- With each contributor's balance now, so the approver sees a line that is
 -- no longer covered.
 SELECT l.id, l.contributor_id, l.amount_cents, l.currency, l.mpesa_phone, l.payee_name, l.status,
-  l.mpesa_receipt, l.failure_reason, l.recorded_at, ru.display_name AS recorded_by_name,
+  l.mpesa_receipt, l.failure_reason, l.recorded_at, l.recorded_via, ru.display_name AS recorded_by_name,
   cp.public_code, cp.status AS contributor_status,
   coalesce((SELECT sum(e.amount_cents) FROM earnings_ledger e
             WHERE e.contributor_id = l.contributor_id AND e.currency = l.currency), 0)::bigint AS balance_cents

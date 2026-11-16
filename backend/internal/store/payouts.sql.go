@@ -105,7 +105,7 @@ func (q *Queries) FirstLedgerEntry(ctx context.Context) ([]time.Time, error) {
 }
 
 const getPayoutBatch = `-- name: GetPayoutBatch :one
-SELECT b.id, b.period_start, b.period_end, b.currency, b.status, b.total_cents, b.line_count, b.idempotency_key, b.created_by, b.approved_by, b.approved_at, b.exported_at, b.export_file_key, b.settled_at, b.created_at, b.updated_at, b.cutoff_at, b.submitted_at, b.returned_note, b.cancelled_by, b.cancelled_at, b.cancel_reason, b.export_file_name, b.export_checksum, b.export_format, b.exported_by, cu.display_name AS created_by_name, au.display_name AS approved_by_name,
+SELECT b.id, b.period_start, b.period_end, b.currency, b.status, b.total_cents, b.line_count, b.idempotency_key, b.created_by, b.approved_by, b.approved_at, b.exported_at, b.export_file_key, b.settled_at, b.created_at, b.updated_at, b.cutoff_at, b.submitted_at, b.returned_note, b.cancelled_by, b.cancelled_at, b.cancel_reason, b.export_file_name, b.export_checksum, b.export_format, b.exported_by, b.disbursed_at, b.disbursed_by, cu.display_name AS created_by_name, au.display_name AS approved_by_name,
   xu.display_name AS cancelled_by_name
 FROM payout_batches b
 JOIN users cu ON cu.id = b.created_by
@@ -141,6 +141,8 @@ type GetPayoutBatchRow struct {
 	ExportChecksum  *string
 	ExportFormat    []byte
 	ExportedBy      *uuid.UUID
+	DisbursedAt     *time.Time
+	DisbursedBy     *uuid.UUID
 	CreatedByName   string
 	ApprovedByName  *string
 	CancelledByName *string
@@ -176,6 +178,8 @@ func (q *Queries) GetPayoutBatch(ctx context.Context, id uuid.UUID) (GetPayoutBa
 		&i.ExportChecksum,
 		&i.ExportFormat,
 		&i.ExportedBy,
+		&i.DisbursedAt,
+		&i.DisbursedBy,
 		&i.CreatedByName,
 		&i.ApprovedByName,
 		&i.CancelledByName,
@@ -372,7 +376,7 @@ func (q *Queries) ListPayoutBatches(ctx context.Context) ([]ListPayoutBatchesRow
 
 const listPayoutLines = `-- name: ListPayoutLines :many
 SELECT l.id, l.contributor_id, l.amount_cents, l.currency, l.mpesa_phone, l.payee_name, l.status,
-  l.mpesa_receipt, l.failure_reason, l.recorded_at, ru.display_name AS recorded_by_name,
+  l.mpesa_receipt, l.failure_reason, l.recorded_at, l.recorded_via, ru.display_name AS recorded_by_name,
   cp.public_code, cp.status AS contributor_status,
   coalesce((SELECT sum(e.amount_cents) FROM earnings_ledger e
             WHERE e.contributor_id = l.contributor_id AND e.currency = l.currency), 0)::bigint AS balance_cents
@@ -394,6 +398,7 @@ type ListPayoutLinesRow struct {
 	MpesaReceipt      *string
 	FailureReason     *string
 	RecordedAt        *time.Time
+	RecordedVia       string
 	RecordedByName    *string
 	PublicCode        string
 	ContributorStatus string
@@ -422,6 +427,7 @@ func (q *Queries) ListPayoutLines(ctx context.Context, batchID uuid.UUID) ([]Lis
 			&i.MpesaReceipt,
 			&i.FailureReason,
 			&i.RecordedAt,
+			&i.RecordedVia,
 			&i.RecordedByName,
 			&i.PublicCode,
 			&i.ContributorStatus,
