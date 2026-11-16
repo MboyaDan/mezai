@@ -19,6 +19,7 @@ import (
 //	8  Safaricom's queue times out; a status query then finds it paid
 //	7  the request gets a 500 but was paid; a status query finds it
 //	6  the request is refused synchronously (400 with an error body)
+//	5  paid, but the number is registered in another name
 //	   anything else is paid
 //
 // Its receipts start with "FK" so they can never be mistaken for real ones.
@@ -29,6 +30,9 @@ type Fake struct {
 	Delay time.Duration
 	// Manual keeps callbacks until Flush (tests).
 	Manual bool
+	// NameFor gives the registered name for a phone (2547XXXXXXXX). Nil uses
+	// SampleName.
+	NameFor func(phone string) string
 
 	mu       sync.Mutex
 	n        int
@@ -189,7 +193,7 @@ func (f *Fake) pay(r *http.Request, reply func(int, any)) {
 		result["ResultParameters"] = map[string]any{"ResultParameter": []map[string]any{
 			{"Key": "TransactionAmount", "Value": amount},
 			{"Key": "TransactionReceipt", "Value": p.receipt},
-			{"Key": "ReceiverPartyPublicName", "Value": req.PartyB[:3] + "XXXXXX" + req.PartyB[9:] + " - Sample Payee"},
+			{"Key": "ReceiverPartyPublicName", "Value": req.PartyB + " - " + f.name(req.PartyB)},
 			{"Key": "TransactionCompletedDateTime", "Value": time.Now().Format("02.01.2006 15:04:05")},
 		}}
 		switch last {
@@ -236,6 +240,7 @@ func (f *Fake) query(r *http.Request, reply func(int, any)) {
 		result["ResultDesc"] = "The service request is processed successfully. (Fake Daraja)"
 		result["ResultParameters"] = map[string]any{"ResultParameter": []map[string]any{
 			{"Key": "ReceiptNo", "Value": p.receipt},
+			{"Key": "CreditPartyName", "Value": p.phone + " - " + f.name(p.phone)},
 			{"Key": "TransactionStatus", "Value": "Completed"},
 			{"Key": "Amount", "Value": p.amount},
 		}}
@@ -252,4 +257,25 @@ func (f *Fake) query(r *http.Request, reply func(int, any)) {
 		"ConversationID": conv, "OriginatorConversationID": req.OriginatorConversationID,
 		"ResponseCode": "0", "ResponseDescription": "Accept the service request successfully.",
 	})
+}
+
+func (f *Fake) name(phone string) string {
+	if f.NameFor != nil {
+		return f.NameFor(phone)
+	}
+	return SampleName(phone)
+}
+
+// SampleName is the fake's registered name for a phone. The development
+// seed gives "Sample Contributor 0NN" the number +254 700 000 0NN, so those
+// numbers get that name back and compare as a match; a number ending in 5
+// is registered to somebody else, to show a mismatch.
+func SampleName(phone string) string {
+	if strings.HasSuffix(phone, "5") {
+		return "SAMPLE DIFFERENT PERSON"
+	}
+	if len(phone) == 12 && strings.HasPrefix(phone, "2547000000") {
+		return "SAMPLE CONTRIBUTOR 0" + phone[10:]
+	}
+	return "SAMPLE PAYEE"
 }

@@ -140,7 +140,7 @@ func TestPayoutsB2C(t *testing.T) {
 	// Owed KES 1,000 each, by phone ending: 1 paid, 2 gateway refuses, 3
 	// worker crashed after marking, 6 refused, 7 500 then paid, 8 timeout
 	// then paid, 9 failed.
-	codes := []string{"001", "002", "003", "006", "007", "008", "009"}
+	codes := []string{"001", "002", "003", "005", "006", "007", "008", "009"}
 	ids := map[string]string{}
 	for _, n := range codes {
 		ids[n] = e.contributorID("contributor" + n + "@sample.invalid")
@@ -154,7 +154,7 @@ func TestPayoutsB2C(t *testing.T) {
 		}
 		_, err := tx.Exec(ctx, `UPDATE contributor_profiles SET identity_status = 'verified', identity_decided_by = $2, identity_decided_at = now(),
 			mpesa_name_checked_at = now(), mpesa_name_checked_by = $2 WHERE id = ANY($1::uuid[])`,
-			[]string{ids["001"], ids["002"], ids["003"], ids["006"], ids["007"], ids["008"], ids["009"]}, opsID)
+			[]string{ids["001"], ids["002"], ids["003"], ids["005"], ids["006"], ids["007"], ids["008"], ids["009"]}, opsID)
 		return err
 	})
 
@@ -233,7 +233,7 @@ func TestPayoutsB2C(t *testing.T) {
 		})
 		return s
 	}
-	for n, want := range map[string]string{"001": "accepted", "002": "queued", "003": "unknown", "006": "failed",
+	for n, want := range map[string]string{"001": "accepted", "005": "accepted", "002": "queued", "003": "unknown", "006": "failed",
 		"007": "unknown", "008": "accepted", "009": "accepted"} {
 		if got := txStatus(n); got != want {
 			t.Fatalf("after sending, %s: %s, want %s", n, got, want)
@@ -259,7 +259,7 @@ func TestPayoutsB2C(t *testing.T) {
 		e.runJobs(true)
 		e.fake.Flush()
 	}
-	for n, want := range map[string]string{"001": "succeeded", "002": "queued", "003": "failed", "006": "failed",
+	for n, want := range map[string]string{"001": "succeeded", "005": "succeeded", "002": "queued", "003": "failed", "006": "failed",
 		"007": "succeeded", "008": "succeeded", "009": "failed"} {
 		if got := txStatus(n); got != want {
 			t.Fatalf("after results, %s: %s, want %s", n, got, want)
@@ -276,7 +276,7 @@ func TestPayoutsB2C(t *testing.T) {
 		t.Fatalf("stop: %d %s", w.Code, b.Status)
 	}
 	e.runJobs(false) // 002's retry, if due, must not send now
-	for n, want := range map[string]string{"001": "paid", "002": "failed", "003": "failed", "006": "failed",
+	for n, want := range map[string]string{"001": "paid", "005": "paid", "002": "failed", "003": "failed", "006": "failed",
 		"007": "paid", "008": "paid", "009": "failed"} {
 		if got := line(n).Status; got != want {
 			t.Fatalf("line %s: %s, want %s (%v)", n, got, want, line(n).FailureReason)
@@ -306,7 +306,7 @@ func TestPayoutsB2C(t *testing.T) {
 
 	// Ledger: one payout entry per paid line, none for failed ones.
 	if n := e.count(`SELECT count(*) FROM earnings_ledger e JOIN payout_lines l ON l.id = e.payout_line_id
-		WHERE l.batch_id = $1 AND e.entry_type = 'payout'`, batch); n != 3+len(paidSeedLines(b, codes)) {
+		WHERE l.batch_id = $1 AND e.entry_type = 'payout'`, batch); n != 4+len(paidSeedLines(b, codes)) {
 		t.Fatalf("payout entries: %d", n)
 	}
 	for _, n := range []string{"002", "003", "006", "009"} {
@@ -325,8 +325,54 @@ func TestPayoutsB2C(t *testing.T) {
 	for _, x := range rec.Exceptions {
 		kinds[x.Kind]++
 	}
-	if kinds["late_success"] != 1 || kinds["callback"] != 1 {
+	if kinds["late_success"] != 1 || kinds["callback"] != 1 || kinds["name_mismatch"] != 1 {
 		t.Fatalf("exceptions: %+v", rec.Exceptions)
+	}
+
+	// Registered names (D-139): 005's number is registered to somebody else.
+	// The money went to that number, so the line stays paid, but the name
+	// check is withdrawn and the next batch holds 005. Others matched.
+	nameCheck := func(n string) string {
+		var v *string
+		e.staff(func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT name_check FROM mpesa_transactions WHERE originator_conversation_id = $1`, ocid(n)).Scan(&v)
+		})
+		if v == nil {
+			return ""
+		}
+		return *v
+	}
+	for n, want := range map[string]string{"001": "match", "005": "mismatch", "007": "match", "008": "match", "006": "", "009": ""} {
+		if got := nameCheck(n); got != want {
+			t.Fatalf("name check %s: %q, want %q", n, got, want)
+		}
+	}
+	if n := e.count(`SELECT count(*) FROM contributor_profiles WHERE id = $1 AND mpesa_name_mismatch_at IS NOT NULL AND mpesa_name_checked_at IS NULL`, ids["005"]); n != 1 {
+		t.Fatal("005's name check must be withdrawn")
+	}
+	if n := e.count(`SELECT count(*) FROM contributor_profiles WHERE id = $1 AND mpesa_name_mismatch_at IS NULL AND mpesa_name_checked_at IS NOT NULL`, ids["001"]); n != 1 {
+		t.Fatal("001's name check must stand")
+	}
+	if n := e.count(`SELECT count(*) FROM audit_log WHERE action = 'contributor.mpesa_name_mismatch' AND entity_id = $1`, ids["005"]); n != 1 {
+		t.Fatal("mismatch not audited")
+	}
+	// Neither the registered names nor the phone numbers beside them are stored.
+	if n := e.count(`SELECT count(*) FROM mpesa_callbacks WHERE body::text ~ '(SAMPLE|2547[0-9]{8}|callbacks/)'`); n != 0 {
+		t.Fatalf("%d stored callbacks still hold a name, a phone number or our callback URL", n)
+	}
+	// With the check withdrawn the next batch holds 005 as name_unchecked
+	// (payouts.Decide, TestDecide) until Ops checks the name again.
+	if w := e.do(http.MethodPost, "/v1/contributors/"+ids["005"]+"/mpesa-name-check", nil, ops, nil); w.Code != http.StatusOK {
+		t.Fatalf("Ops checks the name again: %d %s", w.Code, w.Body)
+	}
+	if n := e.count(`SELECT count(*) FROM contributor_profiles WHERE id = $1 AND mpesa_name_mismatch_at IS NULL AND mpesa_name_checked_at IS NOT NULL`, ids["005"]); n != 1 {
+		t.Fatal("a fresh check must clear the mismatch")
+	}
+	e.get(approver, "/v1/payouts/reconciliation", &rec)
+	for _, x := range rec.Exceptions {
+		if x.Kind == "name_mismatch" {
+			t.Fatal("a cleared mismatch is still an exception")
+		}
 	}
 
 	var txs struct {

@@ -147,3 +147,34 @@ func isRejected(err error) bool {
 	var r *RejectedError
 	return errors.As(err, &r)
 }
+
+func TestRedact(t *testing.T) {
+	body := `{"Result":{"ResultType":0,"ResultCode":0,"OriginatorConversationID":"mz-a","ConversationID":"AG_1","TransactionID":"NLJ41HAY6Q",
+	  "ResultParameters":{"ResultParameter":[{"Key":"TransactionAmount","Value":1200},
+	  {"Key":"ReceiverPartyPublicName","Value":"254712345678 - JANE DOE"},{"Key":"B2CUtilityAccountAvailableFunds","Value":10116.00}]},
+	  "ReferenceData":{"ReferenceItem":{"Key":"QueueTimeoutURL","Value":"https://api.example.invalid/v1/mpesa/callbacks/secret-token/b2c/timeout"}}}}`
+	stored, name := Redact([]byte(body))
+	if name != "254712345678 - JANE DOE" {
+		t.Fatalf("name: %q", name)
+	}
+	for _, leaked := range []string{"JANE", "254712345678", "secret-token", "ReferenceData"} {
+		if strings.Contains(string(stored), leaked) {
+			t.Fatalf("%q is still in the stored body: %s", leaked, stored)
+		}
+	}
+	// What processing needs is untouched, numbers included.
+	r, err := ParseResult(stored)
+	if err != nil || r.ResultCode != "0" || r.TransactionID != "NLJ41HAY6Q" || r.Params["TransactionAmount"] != "1200" ||
+		r.Params["B2CUtilityAccountAvailableFunds"] != "10116.00" || r.Params["ReceiverPartyPublicName"] != Removed {
+		t.Fatalf("after redaction: %+v %v", r, err)
+	}
+	// A status result names the payee as the credit party; our own name is removed but not returned.
+	stored, name = Redact([]byte(`{"Result":{"ResultCode":0,"ResultParameters":{"ResultParameter":[
+	  {"Key":"DebitPartyName","Value":"600000 - Sample Org"},{"Key":"CreditPartyName","Value":"254700000001 - JOHN DOE"}]}}}`))
+	if name != "254700000001 - JOHN DOE" || strings.Contains(string(stored), "JOHN") || strings.Contains(string(stored), "Sample Org") {
+		t.Fatalf("status result: %q %s", name, stored)
+	}
+	if stored, name := Redact([]byte(`not json`)); string(stored) != "not json" || name != "" {
+		t.Fatal("an unreadable body must come back unchanged")
+	}
+}

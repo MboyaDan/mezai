@@ -94,9 +94,9 @@ func (q *Queries) FlagMpesaCallback(ctx context.Context, arg FlagMpesaCallbackPa
 
 const insertMpesaCallback = `-- name: InsertMpesaCallback :one
 INSERT INTO mpesa_callbacks (kind, originator_conversation_id, conversation_id, transaction_id, result_code,
-  body, remote_ip, verdict, note)
+  body, remote_ip, verdict, note, name_check)
 VALUES ($1, $2, $3, $4, $5,
-  $6, $7, $8, $9)
+  $6, $7, $8, $9, $10)
 RETURNING id
 `
 
@@ -110,6 +110,7 @@ type InsertMpesaCallbackParams struct {
 	RemoteIp                 *netip.Addr
 	Verdict                  string
 	Note                     *string
+	NameCheck                *string
 }
 
 func (q *Queries) InsertMpesaCallback(ctx context.Context, arg InsertMpesaCallbackParams) (uuid.UUID, error) {
@@ -123,6 +124,7 @@ func (q *Queries) InsertMpesaCallback(ctx context.Context, arg InsertMpesaCallba
 		arg.RemoteIp,
 		arg.Verdict,
 		arg.Note,
+		arg.NameCheck,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -159,7 +161,7 @@ func (q *Queries) InsertMpesaTransaction(ctx context.Context, arg InsertMpesaTra
 }
 
 const listBatchMpesaTransactions = `-- name: ListBatchMpesaTransactions :many
-SELECT t.id, t.payout_line_id, t.status, t.amount_cents, t.currency, t.environment, t.sent_at, t.completed_at,
+SELECT t.id, t.payout_line_id, t.status, t.amount_cents, t.currency, t.environment, t.sent_at, t.completed_at, t.name_check,
   t.response_code, t.response_description, t.result_code, t.result_desc, t.receipt, t.status_queries,
   t.originator_conversation_id, cp.public_code
 FROM mpesa_transactions t
@@ -178,6 +180,7 @@ type ListBatchMpesaTransactionsRow struct {
 	Environment              string
 	SentAt                   *time.Time
 	CompletedAt              *time.Time
+	NameCheck                *string
 	ResponseCode             *string
 	ResponseDescription      *string
 	ResultCode               *string
@@ -206,6 +209,7 @@ func (q *Queries) ListBatchMpesaTransactions(ctx context.Context, batchID uuid.U
 			&i.Environment,
 			&i.SentAt,
 			&i.CompletedAt,
+			&i.NameCheck,
 			&i.ResponseCode,
 			&i.ResponseDescription,
 			&i.ResultCode,
@@ -226,7 +230,7 @@ func (q *Queries) ListBatchMpesaTransactions(ctx context.Context, batchID uuid.U
 }
 
 const lockMpesaCallback = `-- name: LockMpesaCallback :one
-SELECT id, kind, originator_conversation_id, conversation_id, transaction_id, result_code, body, remote_ip, verdict, note, processed_at, process_error, created_at FROM mpesa_callbacks WHERE id = $1 FOR UPDATE
+SELECT id, kind, originator_conversation_id, conversation_id, transaction_id, result_code, body, remote_ip, verdict, note, processed_at, process_error, created_at, name_check FROM mpesa_callbacks WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockMpesaCallback(ctx context.Context, id uuid.UUID) (MpesaCallback, error) {
@@ -246,12 +250,13 @@ func (q *Queries) LockMpesaCallback(ctx context.Context, id uuid.UUID) (MpesaCal
 		&i.ProcessedAt,
 		&i.ProcessError,
 		&i.CreatedAt,
+		&i.NameCheck,
 	)
 	return i, err
 }
 
 const lockMpesaTransaction = `-- name: LockMpesaTransaction :one
-SELECT t.id, t.payout_line_id, t.originator_conversation_id, t.conversation_id, t.environment, t.amount_cents, t.currency, t.status, t.send_attempts, t.sent_at, t.response_code, t.response_description, t.result_code, t.result_desc, t.receipt, t.status_queries, t.not_found_count, t.completed_at, t.created_by, t.created_at, t.updated_at, l.mpesa_phone, l.batch_id, l.contributor_id
+SELECT t.id, t.payout_line_id, t.originator_conversation_id, t.conversation_id, t.environment, t.amount_cents, t.currency, t.status, t.send_attempts, t.sent_at, t.response_code, t.response_description, t.result_code, t.result_desc, t.receipt, t.status_queries, t.not_found_count, t.completed_at, t.created_by, t.created_at, t.updated_at, t.name_check, l.mpesa_phone, l.batch_id, l.contributor_id
 FROM mpesa_transactions t JOIN payout_lines l ON l.id = t.payout_line_id
 WHERE t.id = $1 FOR UPDATE OF t
 `
@@ -278,6 +283,7 @@ type LockMpesaTransactionRow struct {
 	CreatedBy                uuid.UUID
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
+	NameCheck                *string
 	MpesaPhone               string
 	BatchID                  uuid.UUID
 	ContributorID            uuid.UUID
@@ -308,6 +314,7 @@ func (q *Queries) LockMpesaTransaction(ctx context.Context, id uuid.UUID) (LockM
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NameCheck,
 		&i.MpesaPhone,
 		&i.BatchID,
 		&i.ContributorID,
@@ -354,6 +361,18 @@ func (q *Queries) MarkMpesaFailed(ctx context.Context, arg MarkMpesaFailedParams
 	return err
 }
 
+const markMpesaNameMismatch = `-- name: MarkMpesaNameMismatch :exec
+UPDATE contributor_profiles SET mpesa_name_mismatch_at = now(), mpesa_name_checked_at = NULL, mpesa_name_checked_by = NULL
+WHERE id = $1
+`
+
+// M-Pesa paid a name that is not the profile's: the registered-name check
+// no longer stands, so the next batch holds this contributor (D-139).
+func (q *Queries) MarkMpesaNameMismatch(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markMpesaNameMismatch, id)
+	return err
+}
+
 const markMpesaRequeued = `-- name: MarkMpesaRequeued :exec
 UPDATE mpesa_transactions SET status = 'queued', response_code = $1, response_description = $2
 WHERE id = $3 AND status = 'sending'
@@ -383,14 +402,15 @@ func (q *Queries) MarkMpesaSending(ctx context.Context, id uuid.UUID) error {
 
 const markMpesaSucceeded = `-- name: MarkMpesaSucceeded :exec
 UPDATE mpesa_transactions SET status = 'succeeded', receipt = $1, result_code = $2,
-  result_desc = $3, completed_at = now()
-WHERE id = $4 AND status NOT IN ('succeeded', 'failed')
+  result_desc = $3, name_check = $4, completed_at = now()
+WHERE id = $5 AND status NOT IN ('succeeded', 'failed')
 `
 
 type MarkMpesaSucceededParams struct {
 	Receipt    *string
 	ResultCode *string
 	ResultDesc *string
+	NameCheck  *string
 	ID         uuid.UUID
 }
 
@@ -399,6 +419,7 @@ func (q *Queries) MarkMpesaSucceeded(ctx context.Context, arg MarkMpesaSucceeded
 		arg.Receipt,
 		arg.ResultCode,
 		arg.ResultDesc,
+		arg.NameCheck,
 		arg.ID,
 	)
 	return err
@@ -587,6 +608,50 @@ func (q *Queries) MpesaLateResults(ctx context.Context) ([]MpesaLateResultsRow, 
 	return items, nil
 }
 
+const mpesaNameMismatches = `-- name: MpesaNameMismatches :many
+SELECT t.id, t.amount_cents, t.completed_at, l.batch_id, cp.public_code
+FROM mpesa_transactions t
+JOIN payout_lines l ON l.id = t.payout_line_id
+JOIN contributor_profiles cp ON cp.id = l.contributor_id
+WHERE t.name_check = 'mismatch' AND cp.mpesa_name_mismatch_at IS NOT NULL AND t.completed_at >= cp.mpesa_name_mismatch_at - interval '1 minute'
+ORDER BY t.completed_at DESC LIMIT 100
+`
+
+type MpesaNameMismatchesRow struct {
+	ID          uuid.UUID
+	AmountCents int64
+	CompletedAt *time.Time
+	BatchID     uuid.UUID
+	PublicCode  string
+}
+
+// Paid transactions whose registered name differed, not yet cleared by Ops.
+func (q *Queries) MpesaNameMismatches(ctx context.Context) ([]MpesaNameMismatchesRow, error) {
+	rows, err := q.db.Query(ctx, mpesaNameMismatches)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MpesaNameMismatchesRow{}
+	for rows.Next() {
+		var i MpesaNameMismatchesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AmountCents,
+			&i.CompletedAt,
+			&i.BatchID,
+			&i.PublicCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mpesaStuckTransactions = `-- name: MpesaStuckTransactions :many
 SELECT t.id, t.status, t.amount_cents, t.sent_at, t.updated_at, t.status_queries, l.batch_id, cp.public_code
 FROM mpesa_transactions t
@@ -640,7 +705,9 @@ func (q *Queries) MpesaStuckTransactions(ctx context.Context) ([]MpesaStuckTrans
 }
 
 const mpesaTransactionByOriginator = `-- name: MpesaTransactionByOriginator :one
-SELECT id, conversation_id, amount_cents, status FROM mpesa_transactions WHERE originator_conversation_id = $1
+SELECT t.id, t.conversation_id, t.amount_cents, t.status, l.payee_name
+FROM mpesa_transactions t JOIN payout_lines l ON l.id = t.payout_line_id
+WHERE t.originator_conversation_id = $1
 `
 
 type MpesaTransactionByOriginatorRow struct {
@@ -648,6 +715,7 @@ type MpesaTransactionByOriginatorRow struct {
 	ConversationID *string
 	AmountCents    int64
 	Status         string
+	PayeeName      string
 }
 
 func (q *Queries) MpesaTransactionByOriginator(ctx context.Context, originatorConversationID string) (MpesaTransactionByOriginatorRow, error) {
@@ -658,6 +726,7 @@ func (q *Queries) MpesaTransactionByOriginator(ctx context.Context, originatorCo
 		&i.ConversationID,
 		&i.AmountCents,
 		&i.Status,
+		&i.PayeeName,
 	)
 	return i, err
 }

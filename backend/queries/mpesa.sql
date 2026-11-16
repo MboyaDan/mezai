@@ -19,7 +19,9 @@ FROM mpesa_transactions t JOIN payout_lines l ON l.id = t.payout_line_id
 WHERE t.id = $1 FOR UPDATE OF t;
 
 -- name: MpesaTransactionByOriginator :one
-SELECT id, conversation_id, amount_cents, status FROM mpesa_transactions WHERE originator_conversation_id = $1;
+SELECT t.id, t.conversation_id, t.amount_cents, t.status, l.payee_name
+FROM mpesa_transactions t JOIN payout_lines l ON l.id = t.payout_line_id
+WHERE t.originator_conversation_id = $1;
 
 -- name: MarkMpesaSending :exec
 UPDATE mpesa_transactions SET status = 'sending', sent_at = now(), send_attempts = send_attempts + 1
@@ -43,7 +45,7 @@ WHERE id = @id AND status IN ('sending', 'accepted');
 
 -- name: MarkMpesaSucceeded :exec
 UPDATE mpesa_transactions SET status = 'succeeded', receipt = @receipt, result_code = @result_code,
-  result_desc = @result_desc, completed_at = now()
+  result_desc = @result_desc, name_check = @name_check, completed_at = now()
 WHERE id = @id AND status NOT IN ('succeeded', 'failed');
 
 -- name: MarkMpesaFailed :exec
@@ -71,9 +73,9 @@ WHERE b.id = @id AND b.status = 'disbursing'
 
 -- name: InsertMpesaCallback :one
 INSERT INTO mpesa_callbacks (kind, originator_conversation_id, conversation_id, transaction_id, result_code,
-  body, remote_ip, verdict, note)
+  body, remote_ip, verdict, note, name_check)
 VALUES (@kind, @originator_conversation_id, @conversation_id, @transaction_id, @result_code,
-  @body, @remote_ip, @verdict, @note)
+  @body, @remote_ip, @verdict, @note, @name_check)
 RETURNING id;
 
 -- name: LockMpesaCallback :one
@@ -96,7 +98,7 @@ WHERE processed_at IS NULL AND verdict = 'matched' AND created_at < now() - inte
 ORDER BY created_at LIMIT 100;
 
 -- name: ListBatchMpesaTransactions :many
-SELECT t.id, t.payout_line_id, t.status, t.amount_cents, t.currency, t.environment, t.sent_at, t.completed_at,
+SELECT t.id, t.payout_line_id, t.status, t.amount_cents, t.currency, t.environment, t.sent_at, t.completed_at, t.name_check,
   t.response_code, t.response_description, t.result_code, t.result_desc, t.receipt, t.status_queries,
   t.originator_conversation_id, cp.public_code
 FROM mpesa_transactions t
@@ -152,3 +154,18 @@ ORDER BY created_at DESC LIMIT 100;
 
 -- name: MpesaTransactionIDByLine :one
 SELECT id FROM mpesa_transactions WHERE payout_line_id = $1;
+
+-- name: MarkMpesaNameMismatch :exec
+-- M-Pesa paid a name that is not the profile's: the registered-name check
+-- no longer stands, so the next batch holds this contributor (D-139).
+UPDATE contributor_profiles SET mpesa_name_mismatch_at = now(), mpesa_name_checked_at = NULL, mpesa_name_checked_by = NULL
+WHERE id = @id;
+
+-- name: MpesaNameMismatches :many
+-- Paid transactions whose registered name differed, not yet cleared by Ops.
+SELECT t.id, t.amount_cents, t.completed_at, l.batch_id, cp.public_code
+FROM mpesa_transactions t
+JOIN payout_lines l ON l.id = t.payout_line_id
+JOIN contributor_profiles cp ON cp.id = l.contributor_id
+WHERE t.name_check = 'mismatch' AND cp.mpesa_name_mismatch_at IS NOT NULL AND t.completed_at >= cp.mpesa_name_mismatch_at - interval '1 minute'
+ORDER BY t.completed_at DESC LIMIT 100;
