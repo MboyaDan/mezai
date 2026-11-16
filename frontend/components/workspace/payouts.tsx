@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { api, ApiError } from "@/lib/api/client";
 import { formatDay } from "@/lib/earnings";
 import {
+  b2cMode,
   batchKey,
   batchLabel,
   batchTone,
@@ -19,6 +20,12 @@ import {
   latestPeriodEnd,
   lineLabel,
   lineTone,
+  nameCheckLabel,
+  txLabel,
+  txNote,
+  txTone,
+  type B2CStatus,
+  type MpesaTransaction,
   nairobiToday,
   openStatuses,
   payoutError,
@@ -36,7 +43,7 @@ import { PageTitle, useCan } from "./workspace";
 
 const asError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, "network"));
 
-type BatchList = { batches: PayoutBatchSummary[]; next_date: string | null };
+type BatchList = { batches: PayoutBatchSummary[]; next_date: string | null; b2c: B2CStatus };
 
 /** /w/payouts: Ops prepare batches and set the next payout date; approvers find what waits for them. */
 export function PayoutsPage() {
@@ -46,16 +53,32 @@ export function PayoutsPage() {
 
   if (list.status === "loading") return <Skeleton className="h-80 w-full" />;
   if (list.status === "error") return <Alert tone="danger" title={payoutError(list.error)} />;
-  const { batches, next_date } = list.data;
+  const { batches, next_date, b2c } = list.data;
+  const mode = b2cMode(b2c);
+  const anyB2C = b2c.enabled || batches.some((b) => b.status === "disbursing");
   const open = batches.find((b) => openStatuses.includes(b.status));
 
   return (
     <div className="grid gap-10">
       <PageTitle title="Payouts">
         Contributors are paid by M-Pesa in batches. One person prepares a batch, a second person approves it,
-        then the team pays it in the M-Pesa business portal and records each result here. Money leaves a
-        contributor&apos;s balance only when their line is recorded paid.
+        then the team pays it{" "}
+        {b2c.enabled
+          ? "straight from MezAI through M-Pesa, or with the bulk payment file"
+          : "in the M-Pesa business portal and records each result here"}
+        . Money leaves a contributor&apos;s balance only when their line is recorded paid.
       </PageTitle>
+      {anyB2C && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border p-4">
+          <p className="text-sm">
+            <span className="font-semibold">Automatic M-Pesa payments: {mode.label}.</span>{" "}
+            <span className="text-fg-muted">{mode.note}</span>
+          </p>
+          <Link href="/w/payouts/reconciliation" className="text-sm font-medium underline underline-offset-4">
+            M-Pesa reconciliation
+          </Link>
+        </div>
+      )}
       {open ? (
         <OpenBatch batch={open} />
       ) : create ? (
@@ -77,7 +100,7 @@ export function PayoutsPage() {
           <BatchTable batches={batches} />
         )}
       </section>
-      {create && <NextDate initial={next_date} onSaved={(d) => list.set({ batches, next_date: d })} />}
+      {create && <NextDate initial={next_date} onSaved={(d) => list.set({ batches, next_date: d, b2c })} />}
     </div>
   );
 }
@@ -94,7 +117,7 @@ function OpenBatch({ batch: b }: { batch: PayoutBatchSummary }) {
           <p className="text-sm text-fg-muted">
             <span className="font-mono tabular">{formatKes(b.total_cents, b.currency)}</span> to{" "}
             {b.line_count} {b.line_count === 1 ? "contributor" : "contributors"}
-            {b.status === "exported" && <> · {resultsText(b)}</>}
+            {(b.status === "exported" || b.status === "disbursing") && <> · {resultsText(b)}</>}
           </p>
           <p className="text-sm text-fg-muted">
             Only one batch is open at a time, so nobody is paid twice for the same earnings.
@@ -321,12 +344,15 @@ export function LinesTable({
   lines,
   showBalance,
   showResult,
+  payments,
   action,
 }: {
   caption: string;
   lines: PayoutLine[];
   showBalance: boolean;
   showResult?: boolean;
+  /** M-Pesa B2C payments by line id (Stage 15b), shown in the result column. */
+  payments?: Map<string, MpesaTransaction>;
   action?: (l: PayoutLine) => React.ReactNode;
 }) {
   const columns: Column<PayoutLine>[] = [
@@ -334,12 +360,22 @@ export function LinesTable({
       key: "who",
       header: "Contributor",
       sortValue: (l) => l.public_code,
-      cell: (l) => <Who code={l.public_code} name={l.name} id={l.contributor_id} phone={l.phone_masked} />,
+      cell: (l) => (
+        <Who code={l.public_code} name={l.name} id={l.contributor_id} phone={l.phone_masked}>
+          {/* With a result column, phones show the amount here instead of in its own column. */}
+          {showResult && (
+            <span className="font-mono text-xs whitespace-nowrap tabular sm:hidden">
+              {formatKes(l.amount_cents, l.currency)}
+            </span>
+          )}
+        </Who>
+      ),
     },
     {
       key: "amount",
       header: "Amount",
       numeric: true,
+      className: showResult ? "hidden sm:table-cell" : undefined,
       sortValue: (l) => l.amount_cents,
       cell: (l) => (
         <span className="font-mono whitespace-nowrap tabular">{formatKes(l.amount_cents, l.currency)}</span>
@@ -369,7 +405,7 @@ export function LinesTable({
       key: "result",
       header: "Result",
       sortValue: (l) => l.status,
-      cell: (l) => <LineResult l={l} />,
+      cell: (l) => <LineResult l={l} tx={payments?.get(l.id)} />,
     });
   }
   if (action) columns.push({ key: "action", header: <span className="sr-only">Action</span>, cell: action });
@@ -385,19 +421,40 @@ export function LinesTable({
   );
 }
 
-function LineResult({ l }: { l: PayoutLine }) {
+function LineResult({ l, tx }: { l: PayoutLine; tx?: MpesaTransaction }) {
+  // While the line has no result, the payment's own state says what is happening.
+  const pending = l.status === "pending" && tx;
+  const note = pending ? txNote(tx) : null;
   return (
     <span className="grid justify-items-start gap-0.5">
-      <StatusPill status={lineTone[l.status]}>{lineLabel[l.status]}</StatusPill>
+      {pending ? (
+        <StatusPill status={txTone[tx.status]}>{txLabel[tx.status]}</StatusPill>
+      ) : (
+        <StatusPill status={lineTone[l.status]}>{lineLabel[l.status]}</StatusPill>
+      )}
+      {note && <span className="max-w-56 text-xs text-fg-muted">{note}</span>}
       {l.mpesa_receipt && <span className="font-mono text-xs">{l.mpesa_receipt}</span>}
       {l.failure_reason && <span className="max-w-56 text-xs text-fg-muted">{l.failure_reason}</span>}
-      {l.recorded_by_name && <span className="text-xs text-fg-muted">by {l.recorded_by_name}</span>}
+      {l.recorded_via === "mpesa_b2c" ? (
+        <span className="text-xs text-fg-muted">by M-Pesa B2C</span>
+      ) : (
+        l.recorded_by_name && <span className="text-xs text-fg-muted">by {l.recorded_by_name}</span>
+      )}
+      {tx?.name_check && (
+        <span
+          className={
+            tx.name_check === "mismatch" ? "text-xs font-semibold text-danger-fg" : "text-xs text-fg-muted"
+          }
+        >
+          {nameCheckLabel[tx.name_check]}
+        </span>
+      )}
     </span>
   );
 }
 
 const linesText = (b: PayoutBatchSummary) =>
-  b.status === "exported" || b.status === "settled"
+  b.status === "exported" || b.status === "disbursing" || b.status === "settled"
     ? resultsText(b)
     : `${b.line_count} ${b.line_count === 1 ? "line" : "lines"}`;
 

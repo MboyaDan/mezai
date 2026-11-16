@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import {
+  b2cMode,
   batchKey,
+  stillPaying,
+  txNote,
+  type MpesaTransaction,
   latestPeriodEnd,
   nairobiToday,
   nextStep,
@@ -88,6 +92,33 @@ describe("M-Pesa B2C batches (Stage 15)", () => {
     expect(openStatuses).toContain("disbursing");
     expect(steps("disbursing").map((s) => s.state)).toEqual(["done", "done", "done", "current", "todo"]);
     const who = { userId: "u1", canCreate: true, canApprove: true };
-    expect(nextStep({ status: "disbursing", created_by: "u2" }, who)).toBe("watch");
+    expect(nextStep({ status: "disbursing", created_by: "u2" }, who)).toBe("b2c");
+    expect(nextStep({ status: "disbursing", created_by: "u2" }, { ...who, canCreate: false })).toBe("watch");
+  });
+
+  it("never calls a test mode real money", () => {
+    expect(b2cMode({ enabled: true, environment: "production" }).real).toBe(true);
+    for (const environment of ["fake", "sandbox", "off"] as const) {
+      const m = b2cMode({ enabled: environment !== "off", environment });
+      expect(m.real).toBe(false);
+      expect(m.note).toMatch(/No money moves|switched off/);
+    }
+  });
+
+  it("keeps refreshing until every payment has a final result", () => {
+    const t = (status: MpesaTransaction["status"]) => ({ status }) as MpesaTransaction;
+    expect(stillPaying([t("succeeded"), t("failed")])).toBe(false);
+    expect(stillPaying([t("succeeded"), t("unknown")])).toBe(true);
+    expect(stillPaying([])).toBe(false);
+  });
+
+  it("says an unclear payment is never resent", () => {
+    expect(txNote({ status: "unknown", status_queries: 2 })).toMatch(/Never sent again.*2 status checks/);
+    expect(txNote({ status: "queued", status_queries: 0 })).toMatch(/stopped/);
+    expect(txNote({ status: "succeeded", status_queries: 0 })).toBeNull();
+  });
+
+  it("explains that B2C is off", () => {
+    expect(payoutError(new ApiError(409, "b2c_off"))).toMatch(/Export the payment file/);
   });
 });

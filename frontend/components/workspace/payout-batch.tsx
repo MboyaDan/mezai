@@ -2,7 +2,8 @@
 
 import { Check, Download } from "lucide-react";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Alert, Breadcrumb, Card, Skeleton, StatusPill } from "@/components/ui/display";
@@ -12,7 +13,11 @@ import { Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { api, ApiError } from "@/lib/api/client";
 import {
+  b2cMode,
   batchLabel,
+  stillPaying,
+  type B2CStatus,
+  type BatchTransactions,
   batchTone,
   nextStep,
   normaliseReceipt,
@@ -34,21 +39,65 @@ import { useCan } from "./workspace";
 
 const asError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, "network"));
 
+/** Seconds between refreshes while M-Pesa results are still arriving. */
+const REFRESH_S = 10;
+
+type Loaded = { batch: PayoutBatch; pay: BatchTransactions };
+
 /** /w/payouts/[id]: one batch, the next step for the person looking, and its lines. */
 export function PayoutBatchPage() {
   const { id } = useParams<{ id: string }>();
-  const b = useLoad(() => api<PayoutBatch>("GET", `/v1/payouts/batches/${id}`), id);
-  if (b.status === "loading") return <Skeleton className="h-80 w-full" />;
-  if (b.status === "error") return <Alert tone="danger" title={payoutError(b.error)} />;
-  return <BatchView batch={b.data} onChange={b.set} />;
+  const d = useLoad(async (): Promise<Loaded> => {
+    const [batch, pay] = await Promise.all([
+      api<PayoutBatch>("GET", `/v1/payouts/batches/${id}`),
+      api<BatchTransactions>("GET", `/v1/payouts/batches/${id}/transactions`),
+    ]);
+    return { batch, pay };
+  }, id);
+  const paying =
+    d.status === "ready" && (d.data.batch.status === "disbursing" || stillPaying(d.data.pay.transactions));
+  const reload = d.reload;
+  // M-Pesa results arrive by themselves: refresh while the tab is visible.
+  useEffect(() => {
+    if (!paying) return;
+    const t = window.setInterval(() => {
+      if (document.visibilityState === "visible") reload();
+    }, REFRESH_S * 1000);
+    return () => window.clearInterval(t);
+  }, [paying, reload]);
+
+  if (d.status === "loading") return <Skeleton className="h-80 w-full" />;
+  if (d.status === "error") return <Alert tone="danger" title={payoutError(d.error)} />;
+  const { batch, pay } = d.data;
+  return (
+    <BatchView
+      batch={batch}
+      pay={pay}
+      onChange={(nb) => {
+        d.set({ batch: nb, pay });
+        reload(); // a disburse or stop changes the payments too
+      }}
+    />
+  );
 }
 
-function BatchView({ batch: b, onChange }: { batch: PayoutBatch; onChange: (b: PayoutBatch) => void }) {
+function BatchView({
+  batch: b,
+  pay,
+  onChange,
+}: {
+  batch: PayoutBatch;
+  pay: BatchTransactions;
+  onChange: (b: PayoutBatch) => void;
+}) {
   const user = useUser();
   const can = useCan();
   const who = { userId: user.id, canCreate: can("payout.create"), canApprove: can("payout.approve") };
   const step = nextStep(b, who);
   const [recording, setRecording] = useState<PayoutLine | null>(null);
+  const [stopping, setStopping] = useState<PayoutLine | null>(null);
+  const payments = new Map(pay.transactions.map((t) => [t.line_id, t]));
+  const b2cBatch = b.disbursed_at !== null || pay.transactions.length > 0;
   const short = uncovered(b.lines);
   const title = periodText(b.period_start, b.period_end);
 
@@ -83,27 +132,30 @@ function BatchView({ batch: b, onChange }: { batch: PayoutBatch; onChange: (b: P
         </dl>
       </Card>
 
-      {short.length > 0 && b.status !== "exported" && (
+      {short.length > 0 && b.status !== "exported" && b.status !== "disbursing" && (
         <Alert tone="danger" title="A balance is now less than its line">
           {short.length === 1 ? "One contributor's" : `${short.length} contributors'`} balance dropped after a
           correction, so this batch cannot be approved or exported. Cancel it and create a new one.
         </Alert>
       )}
 
-      <NextAction batch={b} step={step} onChange={onChange} />
+      <NextAction batch={b} b2c={pay.b2c} step={step} onChange={onChange} />
 
       <section aria-labelledby="lines-h" className="grid gap-3">
         <h2 id="lines-h" className="font-display text-lg font-semibold">
           Lines
         </h2>
         <p className="text-sm text-fg-muted">
-          M-Pesa numbers are masked here. The full numbers are only in the exported file.
+          {b2cBatch
+            ? "M-Pesa numbers are masked here. M-Pesa's registered names are compared with the profile name and never stored."
+            : "M-Pesa numbers are masked here. The full numbers are only in the exported file."}
         </p>
         <LinesTable
           caption="Lines in this batch"
           lines={b.lines}
           showBalance={b.status !== "settled" && b.status !== "cancelled"}
-          showResult={b.status === "exported" || b.status === "settled"}
+          showResult={b.status === "exported" || b.status === "disbursing" || b.status === "settled"}
+          payments={payments}
           action={
             step === "record"
               ? (l) =>
@@ -112,11 +164,29 @@ function BatchView({ batch: b, onChange }: { batch: PayoutBatch; onChange: (b: P
                       Record result<span className="sr-only"> for {l.public_code}</span>
                     </Button>
                   )
-              : undefined
+              : step === "b2c"
+                ? (l) =>
+                    l.status === "pending" &&
+                    payments.get(l.id)?.status === "queued" && (
+                      <Button size="sm" variant="ghost" onClick={() => setStopping(l)}>
+                        Stop<span className="sr-only"> payment to {l.public_code}</span>
+                      </Button>
+                    )
+                : undefined
           }
         />
       </section>
 
+      {stopping && (
+        <StopDialog
+          line={stopping}
+          onClose={() => setStopping(null)}
+          onDone={(nb) => {
+            setStopping(null);
+            onChange(nb);
+          }}
+        />
+      )}
       {recording && (
         <ResultDialog
           line={recording}
@@ -169,14 +239,16 @@ function Steps({ batch: b }: { batch: PayoutBatch }) {
   );
 }
 
-type Act = "submit" | "approve" | "return" | "cancel" | "export";
+type Act = "submit" | "approve" | "return" | "cancel" | "export" | "disburse";
 
 function NextAction({
   batch: b,
+  b2c,
   step,
   onChange,
 }: {
   batch: PayoutBatch;
+  b2c: B2CStatus;
   step: ReturnType<typeof nextStep>;
   onChange: (b: PayoutBatch) => void;
 }) {
@@ -185,6 +257,8 @@ function NextAction({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState<"return" | "cancel" | null>(null);
+  const [confirmPay, setConfirmPay] = useState(false);
+  const mode = b2cMode(b2c);
 
   const run = async (act: Act, reason?: string) => {
     setBusy(true);
@@ -201,9 +275,11 @@ function NextAction({
         return: "Sent back to the preparer",
         cancel: "Batch cancelled",
         export: "Payment file ready",
+        disburse: "Payments are going out through M-Pesa",
       };
       toast({ tone: "success", title: done[act] });
       setAsking(null);
+      setConfirmPay(false);
       onChange(nb);
     } catch (err) {
       setError(payoutError(asError(err)));
@@ -273,7 +349,43 @@ function NextAction({
       );
       break;
     case "export":
-      body = (
+      body = b2c.enabled ? (
+        <Panel title="Pay the batch">
+          <ModeNote b2c={b2c} />
+          <p className="text-sm text-fg-muted">
+            Pay every line straight from MezAI through M-Pesa, or export the bulk payment file and pay it in
+            the business portal. A batch is paid one way only.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid content-start gap-2 rounded-card border border-border p-4">
+              <h3 className="font-semibold">Pay through M-Pesa</h3>
+              <p className="text-sm text-fg-muted">
+                One payment per line, sent once and never twice. Results come back by themselves and each line
+                is marked paid or failed.
+              </p>
+              <div>
+                <Button disabled={busy} onClick={() => setConfirmPay(true)}>
+                  Pay through M-Pesa
+                </Button>
+              </div>
+            </div>
+            <div className="grid content-start gap-2 rounded-card border border-border p-4">
+              <h3 className="font-semibold">Use the payment file</h3>
+              <p className="text-sm text-fg-muted">
+                The file holds the full phone numbers. You record each line&apos;s result here afterwards.
+              </p>
+              {b.format_confirmed === false && (
+                <p className="text-sm font-semibold text-warning">File columns not yet confirmed (DG-03).</p>
+              )}
+              <div>
+                <Button variant="secondary" disabled={busy} onClick={() => void run("export")}>
+                  Export payment file
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Panel>
+      ) : (
         <Panel title="Export the payment file">
           {b.format_confirmed === false && <FormatWarning />}
           <p className="text-sm text-fg-muted">
@@ -297,8 +409,36 @@ function NextAction({
         </Panel>
       );
       break;
-    case "record":
+    case "b2c":
     case "watch":
+      if (b.status === "disbursing") {
+        body = (
+          <Panel title="Paying through M-Pesa">
+            <ModeNote b2c={b2c} />
+            <p className="text-sm text-fg-muted" aria-live="polite">
+              {resultsText(b)}. Results arrive by themselves and this page refreshes every {REFRESH_S}{" "}
+              seconds. A payment M-Pesa did not answer clearly is never sent again: it is checked until M-Pesa
+              says whether it was paid. A failed line&apos;s money stays owed and joins the next batch.
+            </p>
+            {step === "b2c" && (
+              <p className="text-sm text-fg-muted">
+                A payment M-Pesa has not accepted yet can be stopped from its line.
+              </p>
+            )}
+            <div>
+              <Link
+                href="/w/payouts/reconciliation"
+                className="text-sm font-medium underline underline-offset-4"
+              >
+                M-Pesa reconciliation
+              </Link>
+            </div>
+          </Panel>
+        );
+        break;
+      }
+    // falls through: an exported batch this person can only watch
+    case "record":
       body = (
         <Panel title={step === "record" ? "Pay in M-Pesa, then record each result" : "Being paid"}>
           {b.format_confirmed === false && <FormatWarning />}
@@ -341,6 +481,31 @@ function NextAction({
     <>
       {body}
       {error && <Alert tone="danger" title={error} />}
+      {confirmPay && (
+        <Dialog
+          open
+          onClose={() => setConfirmPay(false)}
+          title="Pay this batch through M-Pesa?"
+          description={`${b.line_count} ${b.line_count === 1 ? "payment" : "payments"} totalling ${formatKes(b.total_cents, b.currency)} will be sent. Once sent, a payment cannot be called back.`}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmPay(false)}>
+                Not now
+              </Button>
+              <Button disabled={busy} onClick={() => void run("disburse")}>
+                {busy ? "Starting…" : mode.real ? "Send real payments" : "Send test payments"}
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-4">
+            <Alert tone={mode.real ? "warning" : "info"} title={mode.label}>
+              {mode.note}
+            </Alert>
+            {error && <Alert tone="danger" title={error} />}
+          </div>
+        </Dialog>
+      )}
       {asking && (
         <ReasonDialog
           kind={asking}
@@ -368,6 +533,77 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       </h2>
       {children}
     </section>
+  );
+}
+
+function ModeNote({ b2c }: { b2c: B2CStatus }) {
+  const mode = b2cMode(b2c);
+  if (mode.real) return null;
+  return (
+    <Alert tone="info" title={`${mode.label}: no money moves`}>
+      {mode.note}
+    </Alert>
+  );
+}
+
+function StopDialog({
+  line,
+  onClose,
+  onDone,
+}: {
+  line: PayoutLine;
+  onClose: () => void;
+  onDone: (b: PayoutBatch) => void;
+}) {
+  const toast = useToast();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const stop = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const nb = await api<PayoutBatch>("POST", `/v1/payouts/lines/${line.id}/stop`, {
+        reason: reason.trim(),
+      });
+      toast({ tone: "success", title: `Payment to ${line.public_code} stopped` });
+      onDone(nb);
+    } catch (err) {
+      const e = asError(err);
+      setError(
+        e.code === "wrong_state"
+          ? "M-Pesa has already taken this payment, so it cannot be stopped. Wait for its result."
+          : payoutError(e),
+      );
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Stop the payment to ${line.public_code}`}
+      description={`${formatKes(line.amount_cents, line.currency)} has not been accepted by M-Pesa yet. Stopping it marks the line failed; nothing is paid and the money stays owed for the next batch.`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Keep trying
+          </Button>
+          <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void stop()}>
+            {busy ? "Stopping…" : "Stop payment"}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <Field label="Reason" hint="The contributor sees this." required>
+          <Textarea rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
+        {error && <Alert tone="danger" title={error} />}
+      </div>
+    </Dialog>
   );
 }
 

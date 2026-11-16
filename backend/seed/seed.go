@@ -289,11 +289,14 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 	return nil
 }
 
-// sampleBalances are made-up amounts owed to three contributors no test
+// sampleBalances are made-up amounts owed to contributors no browser test
 // signs in as, dated five days back, so the payout screens have a batch to
 // preview in development (Stage 14b). 011 is paused and its M-Pesa name is
-// not checked, so the preview holds it.
-var sampleBalances = map[int]int64{6: 125000, 8: 83050, 11: 64000}
+// not checked, so the preview holds it. With MPESA_ENV=fake, 005's number
+// returns another registered name (D-139): the Stage 15b browser test pays
+// it after the 14b test records it failed. 001 to 004 stay without sample
+// balances because TestPayoutsManualPath checks their ledgers exactly.
+var sampleBalances = map[int]int64{5: 61000, 6: 125000, 8: 83050, 11: 64000}
 
 const sampleHeldContributor = 11
 
