@@ -61,12 +61,21 @@ async function verificationLink(to: string): Promise<string> {
   throw new Error(`no verification email for ${to}`);
 }
 
+// Every sign-in in CI comes from one address and the API allows 20 a minute:
+// a refused one waits for the window and tries once more (as in auth.ts).
 async function signIn(page: Page, who: string, pw: string) {
-  await page.goto("/login");
-  // During a transition the old and new pages can both be in the DOM.
-  await page.getByLabel("Email").filter({ visible: true }).fill(who);
-  await page.getByLabel("Password").filter({ visible: true }).fill(pw);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  for (let attempt = 0; ; attempt++) {
+    await page.goto("/login");
+    // During a transition the old and new pages can both be in the DOM.
+    await page.getByLabel("Email").filter({ visible: true }).fill(who);
+    await page.getByLabel("Password").filter({ visible: true }).fill(pw);
+    const answer = page.waitForResponse((r) => r.url().endsWith("/api/v1/auth/login"));
+    await page.getByRole("button", { name: "Sign in" }).click();
+    const res = await answer;
+    if (res.status() !== 429 || attempt > 0) return;
+    const wait = Number(res.headers()["retry-after"]);
+    await page.waitForTimeout((Number.isFinite(wait) && wait > 0 ? Math.min(wait, 65) : 61) * 1000);
+  }
 }
 
 async function signOut(page: Page) {

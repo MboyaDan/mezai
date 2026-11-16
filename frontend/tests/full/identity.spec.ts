@@ -14,6 +14,16 @@ const applicant = "contributor010@sample.invalid";
 const base = `http://localhost:${Number(process.env.PORT ?? 3000)}`;
 
 async function axe(page: Page, label: string) {
+  // A toast or panel still fading in reads as low contrast: let entrance
+  // animations finish first.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const r = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
@@ -85,6 +95,8 @@ test("number tries are capped, Ops sees the pause, and the pages respect the pol
     for (const box of await page.getByRole("checkbox", { name: /I have read and accept/ }).all())
       await box.check();
     await consent.click();
+    // Wait for the acceptance to be saved before moving on.
+    await expect(consent).toHaveCount(0);
     await page.goto("/c/profile");
   }
   await expect(page.getByText("What we keep", { exact: true })).toBeVisible();
