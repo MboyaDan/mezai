@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 type fakeCheck struct{ err error }
@@ -100,5 +102,67 @@ func TestUnknownRouteAndMethod(t *testing.T) {
 	}
 	if w := do(t, Deps{}, http.MethodPost, "/healthz", nil); w.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("got %d", w.Code)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	for _, path := range []string{"/healthz", "/no-such-route"} {
+		w := do(t, Deps{}, http.MethodGet, path, nil)
+		h := w.Header()
+		for k, want := range map[string]string{
+			"X-Content-Type-Options":       "nosniff",
+			"X-Frame-Options":              "DENY",
+			"Referrer-Policy":              "no-referrer",
+			"Cache-Control":                "no-store",
+			"Cross-Origin-Resource-Policy": "same-origin",
+		} {
+			if h.Get(k) != want {
+				t.Errorf("%s %s: %q, want %q", path, k, h.Get(k), want)
+			}
+		}
+		if csp := h.Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'none'") || !strings.Contains(csp, "frame-ancestors 'none'") {
+			t.Errorf("%s CSP: %q", path, csp)
+		}
+		if h.Get("Strict-Transport-Security") != "" {
+			t.Errorf("%s: HSTS sent although off", path)
+		}
+	}
+	if w := do(t, Deps{HSTS: true}, http.MethodGet, "/healthz", nil); !strings.HasPrefix(w.Header().Get("Strict-Transport-Security"), "max-age=31536000") {
+		t.Fatalf("HSTS: %q", w.Header().Get("Strict-Transport-Security"))
+	}
+}
+
+func TestBodyLimit(t *testing.T) {
+	r := gin.New()
+	r.Use(BodyLimit())
+	r.POST("/echo", func(c *gin.Context) {
+		b, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.Status(http.StatusRequestEntityTooLarge)
+			return
+		}
+		c.String(http.StatusOK, "%d", len(b))
+	})
+	post := func(n int, contentType string, declare bool) int {
+		req := httptest.NewRequest(http.MethodPost, "/echo", bytes.NewReader(bytes.Repeat([]byte("a"), n)))
+		req.Header.Set("Content-Type", contentType)
+		if !declare {
+			req.ContentLength = -1 // chunked: the reader must stop it
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	if code := post(MaxJSONBody, "application/json", true); code != http.StatusOK {
+		t.Fatalf("at the limit: %d", code)
+	}
+	if code := post(MaxJSONBody+1, "application/json", true); code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("declared over the limit: %d", code)
+	}
+	if code := post(MaxJSONBody+1, "application/json", false); code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("undeclared over the limit: %d", code)
+	}
+	if code := post(MaxJSONBody+1, "multipart/form-data; boundary=x", true); code != http.StatusOK {
+		t.Fatalf("uploads keep their own limits: %d", code)
 	}
 }

@@ -105,6 +105,7 @@ func run() error {
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Log:    log,
+			HSTS:   !cfg.IsDevLike(),
 			Checks: map[string]httpapi.Checker{"database": pool, "storage": store},
 			Auth: &httpapi.AuthDeps{
 				Service: authSvc, Pool: pool, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,

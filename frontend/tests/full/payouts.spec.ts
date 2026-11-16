@@ -16,6 +16,16 @@ const port = Number(process.env.PORT ?? 3000);
 const base = `http://localhost:${port}`;
 
 async function axe(page: Page, label: string) {
+  // A toast or panel still fading in reads as low contrast: let entrance
+  // animations finish first.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const r = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

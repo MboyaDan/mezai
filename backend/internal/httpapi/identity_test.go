@@ -1,10 +1,15 @@
 package httpapi_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/MboyaDan/mezai/backend/internal/identity"
 )
 
 type detailResp struct {
@@ -191,5 +196,101 @@ func TestOneAccountPerPerson(t *testing.T) {
 	w = e.do(http.MethodPut, "/v1/me/contributor/profile", profileWith(map[string]any{"national_id": "87654321"}), b, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("B uses the number A gave up: %d %s", w.Code, w.Body)
+	}
+}
+
+// TestIdentityHardening covers Stage 17a (D-136, D-137): the fingerprint is
+// stored under the current scheme; a number saved under the old scheme still
+// blocks a second account and is upgraded when its owner saves again without
+// losing verification; two people who share the last three digits are two
+// people; and an account that keeps entering other people's numbers stops
+// getting answers.
+func TestIdentityHardening(t *testing.T) {
+	e := newEnv(t)
+	a := e.signUpAndSignIn("first.applicant@sample.invalid")
+	b := e.signUpAndSignIn("second.applicant@sample.invalid")
+	ctx := context.Background()
+
+	var p profileResp
+	decode(t, e.do(http.MethodPut, "/v1/me/contributor/profile", completeProfile, a, nil), &p)
+	aID := p.ID
+	if n := e.count(`SELECT count(*) FROM contributor_profiles WHERE id = $1 AND national_id_fp_v = 2`, aID); n != 1 {
+		t.Fatal("new numbers must be stored under scheme 2")
+	}
+
+	// Put A's row back to the Stage 7c scheme (HMAC only), as verified.
+	old := identity.Fingerprints(identity.DevKey, "24681357").All[1]
+	e.staff(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE contributor_profiles SET national_id_fp = $2, national_id_fp_v = 1 WHERE id = $1`, aID, old)
+		return err
+	})
+	other := map[string]any{"mpesa_phone": "0712 345 679", "mpesa_phone_confirm": "0712345679"}
+	with := func(id string) map[string]any {
+		m := profileWith(other)
+		m["national_id"] = id
+		return m
+	}
+	// B types A's number: still refused although A's fingerprint is old.
+	if w := e.do(http.MethodPut, "/v1/me/contributor/profile", with("24681357"), b, nil); w.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(w.Body.String(), "another MezAI account") {
+		t.Fatalf("old-scheme number reused: %d %s", w.Code, w.Body)
+	}
+	// A saves again: same number, upgraded in place, nothing reset, no try counted.
+	var before, after string
+	e.staff(func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT identity_status FROM contributor_profiles WHERE id = $1`, aID).Scan(&before)
+	})
+	if w := e.do(http.MethodPut, "/v1/me/contributor/profile", completeProfile, a, nil); w.Code != http.StatusOK {
+		t.Fatalf("A saves again: %d %s", w.Code, w.Body)
+	}
+	e.staff(func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT identity_status FROM contributor_profiles WHERE id = $1 AND national_id_fp_v = 2 AND national_id_fp <> $2`, aID, old).Scan(&after)
+	})
+	if after != before {
+		t.Fatalf("upgrade changed identity status: %q to %q", before, after)
+	}
+	if n := e.count(`SELECT count(*) FROM identity_flags WHERE contributor_id = $1`, aID); n != 0 {
+		t.Fatal("saving your own number counted as a try")
+	}
+
+	// B's own number shares A's last three digits (…357): a different person.
+	w := e.do(http.MethodPut, "/v1/me/contributor/profile", with("11111357"), b, nil)
+	decode(t, w, &p)
+	if w.Code != http.StatusOK || p.NationalIDLast3 == nil || *p.NationalIDLast3 != "357" {
+		t.Fatalf("same last three digits, different number: %d %s", w.Code, w.Body)
+	}
+	bID := p.ID
+
+	// B keeps trying A's numbers: two more refusals (three in all), then no
+	// more answers, even for a number nobody holds, and nothing is saved.
+	for i := 0; i < 2; i++ {
+		if w := e.do(http.MethodPut, "/v1/me/contributor/profile", with("24681357"), b, nil); !strings.Contains(w.Body.String(), "another MezAI account") {
+			t.Fatalf("try %d: %d %s", i+2, w.Code, w.Body)
+		}
+	}
+	for _, id := range []string{"24681357", "99999999"} {
+		w := e.do(http.MethodPut, "/v1/me/contributor/profile", with(id), b, nil)
+		if w.Code != http.StatusUnprocessableEntity || strings.Contains(w.Body.String(), "another MezAI account") ||
+			!strings.Contains(w.Body.String(), "cannot be changed for now") {
+			t.Fatalf("after the cap, %s: %d %s", id, w.Code, w.Body)
+		}
+	}
+	if n := e.count(`SELECT count(*) FROM identity_flags WHERE contributor_id = $1`, bID); n != 3 {
+		t.Fatalf("flags: %d, want 3 (none after the cap)", n)
+	}
+	if n := e.count(`SELECT count(*) FROM audit_log WHERE action = 'contributor.identity_tries_exceeded' AND entity_id = $1`, bID); n != 2 {
+		t.Fatalf("exceeded tries audited: %d", n)
+	}
+	// B can still save the profile with the numbers already on it.
+	if w := e.do(http.MethodPut, "/v1/me/contributor/profile", with("11111357"), b, nil); w.Code != http.StatusOK {
+		t.Fatalf("B saves own numbers while capped: %d %s", w.Code, w.Body)
+	}
+	// A day later the tries are forgotten.
+	// (as the table owner: the app role may only add flags)
+	if _, err := e.pool.Exec(ctx, `UPDATE identity_flags SET created_at = created_at - interval '25 hours' WHERE contributor_id = $1`, bID); err != nil {
+		t.Fatal(err)
+	}
+	if w := e.do(http.MethodPut, "/v1/me/contributor/profile", with("99999999"), b, nil); w.Code != http.StatusOK {
+		t.Fatalf("B changes number after the window: %d %s", w.Code, w.Body)
 	}
 }

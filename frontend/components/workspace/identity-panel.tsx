@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { ApiError, api, type ContributorProfile, type Schemas } from "@/lib/api/client";
+import { numberChangesPausedUntil } from "@/lib/identity";
 import { errorMessage } from "@/lib/onboarding";
 import { shortDate } from "./contributors";
 import { useCan } from "./workspace";
@@ -53,6 +54,7 @@ export function IdentityPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const complete = Boolean(p.national_id_last3 && p.mpesa_phone_confirmed);
+  const pausedUntil = numberChangesPausedUntil(c.flags);
   const needsNote = decision === "reject" || (decision === "verify" && hasPossibleDuplicates(c));
 
   async function post(path: string, body: unknown, done: string) {
@@ -98,7 +100,15 @@ export function IdentityPanel({
       </div>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-fg-muted">National ID</dt>
-        <dd className="font-mono">{c.national_id_last3 ? `••••• ${c.national_id_last3}` : "–"}</dd>
+        <dd>
+          <span className="font-mono">{c.national_id_last3 ? `••••• ${c.national_id_last3}` : "–"}</span>
+          {c.national_id_last3 && (
+            <span className="mt-0.5 block text-xs text-fg-muted">
+              Last 3 digits, to confirm on the call. Other people share them: duplicates are found from the
+              whole number, below.
+            </span>
+          )}
+        </dd>
         <dt className="text-fg-muted">M-Pesa name</dt>
         <dd>
           {c.mpesa_name_checked_at
@@ -115,6 +125,14 @@ export function IdentityPanel({
         )}
       </dl>
       {c.note && <p className="mt-3 text-sm text-fg-muted">Note: {c.note}</p>}
+      {pausedUntil && (
+        <Alert tone="warning" title="Number changes are paused on this account" className="mt-4">
+          It entered three numbers that belong to other accounts within a day. It cannot change its M-Pesa or
+          ID number until {shortDate(pausedUntil.toISOString())},{" "}
+          {pausedUntil.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}. Look at the
+          accounts below before verifying.
+        </Alert>
+      )}
 
       <div className="mt-4 grid gap-2 text-sm">
         <p className="font-medium">Possible duplicates</p>

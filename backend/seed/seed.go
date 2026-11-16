@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -223,8 +224,9 @@ func (s *seeder) contributors(admin uuid.UUID) error {
 		// past qualifying is verified; the qualifying one waits for Ops.
 		if status != "applied" {
 			last3 := fmt.Sprintf("%03d", n)
+			v := int16(identity.Version)
 			if err := s.q.SetContributorNationalID(s.ctx, store.SetContributorNationalIDParams{
-				ID: cp.ID, NationalIDFp: identity.Fingerprint(identity.DevKey, "sample-"+last3), NationalIDLast3: &last3,
+				ID: cp.ID, NationalIDFp: sampleFingerprint(last3), NationalIDFpV: &v, NationalIDLast3: &last3,
 			}); err != nil {
 				return err
 			}
@@ -458,3 +460,17 @@ func mustJSON(v any) []byte {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// sampleFingerprint is the fingerprint of the made-up value "sample-NNN".
+// Fingerprints are slow on purpose (D-136) and tests seed many databases, so
+// the twelve sample values are computed once per process.
+var sampleFingerprints sync.Map
+
+func sampleFingerprint(last3 string) []byte {
+	if v, ok := sampleFingerprints.Load(last3); ok {
+		return v.([]byte)
+	}
+	fp := identity.Fingerprints(identity.DevKey, "sample-"+last3).Current
+	sampleFingerprints.Store(last3, fp)
+	return fp
+}

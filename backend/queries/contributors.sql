@@ -96,7 +96,8 @@ ORDER BY document, accepted_at DESC, id DESC;
 -- One person, one account (Stage 7c, D-078).
 
 -- name: SetContributorNationalID :exec
-UPDATE contributor_profiles SET national_id_fp = @national_id_fp, national_id_last3 = @national_id_last3 WHERE id = @id;
+UPDATE contributor_profiles SET national_id_fp = @national_id_fp, national_id_fp_v = @national_id_fp_v,
+  national_id_last3 = @national_id_last3 WHERE id = @id;
 
 -- name: ResetContributorIdentity :exec
 -- A changed number needs checking again.
@@ -111,7 +112,12 @@ UPDATE contributor_profiles SET mpesa_name_checked_at = NULL, mpesa_name_checked
 SELECT id FROM contributor_profiles WHERE mpesa_phone = @mpesa_phone AND id <> @id;
 
 -- name: ContributorHoldingNationalID :one
-SELECT id FROM contributor_profiles WHERE national_id_fp = @national_id_fp AND id <> @id;
+-- fps holds the number's fingerprint under every scheme (identity.Prints.All).
+SELECT id FROM contributor_profiles WHERE national_id_fp = ANY(@fps::bytea[]) AND id <> @id LIMIT 1;
+
+-- name: CountRecentIdentityFlags :one
+-- Numbers this contributor tried that another account holds, since a time.
+SELECT count(*)::int FROM identity_flags WHERE contributor_id = @contributor_id AND created_at > @since;
 
 -- name: AddIdentityFlag :exec
 INSERT INTO identity_flags (contributor_id, other_contributor_id, kind) VALUES (@contributor_id, @other_contributor_id, @kind);

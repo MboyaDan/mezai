@@ -31,6 +31,9 @@ type Deps struct {
 	Checks map[string]Checker
 	// Auth enables the /v1 API. Nil serves only the health endpoints (unit tests).
 	Auth *AuthDeps
+	// HSTS sends Strict-Transport-Security (every environment served over
+	// HTTPS: all but development and test).
+	HSTS bool
 }
 
 // AuthDeps configures sign-in and the /v1 API.
@@ -82,7 +85,7 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 	}
 	r := gin.New()
 	r.HandleMethodNotAllowed = true
-	r.Use(RequestID(), AccessLog(d.Log), Recover(d.Log))
+	r.Use(RequestID(), AccessLog(d.Log), Recover(d.Log), SecurityHeaders(d.HSTS), BodyLimit())
 
 	r.GET("/healthz", healthz)
 	r.GET("/readyz", readyz(d.Log, d.Checks))

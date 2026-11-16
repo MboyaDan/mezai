@@ -29,26 +29,52 @@ func TestNormaliseNationalID(t *testing.T) {
 	}
 }
 
-func TestFingerprint(t *testing.T) {
+func TestFingerprints(t *testing.T) {
 	key := bytes.Repeat([]byte{7}, 32)
-	a := Fingerprint(key, "12345678")
-	if len(a) != 32 {
-		t.Fatalf("length %d", len(a))
+	p := Fingerprints(key, "12345678")
+	if len(p.Current) != 32 || len(p.All) != 2 || !bytes.Equal(p.All[0], p.Current) {
+		t.Fatalf("prints: %d bytes, %d schemes", len(p.Current), len(p.All))
 	}
-	// Known value: HMAC-SHA256 computed independently of Fingerprint.
+	// Version 1 is kept for numbers saved before version 2: HMAC-SHA256
+	// computed here independently.
 	m := hmac.New(sha256.New, key)
 	m.Write([]byte("national_id:12345678"))
-	if hex.EncodeToString(a) != hex.EncodeToString(m.Sum(nil)) {
-		t.Fatal("fingerprint is not HMAC-SHA256 of the prefixed number")
+	v1 := m.Sum(nil)
+	if hex.EncodeToString(p.All[1]) != hex.EncodeToString(v1) {
+		t.Fatal("version 1 is not HMAC-SHA256 of the prefixed number")
 	}
-	if bytes.Equal(a, Fingerprint(key, "12345679")) {
-		t.Fatal("different numbers, same fingerprint")
+	if bytes.Equal(p.Current, v1) {
+		t.Fatal("version 2 must not be the plain HMAC")
 	}
-	if bytes.Equal(a, Fingerprint(bytes.Repeat([]byte{8}, 32), "12345678")) {
-		t.Fatal("different keys, same fingerprint")
+	if !p.Matches(v1) || !p.Matches(p.Current) {
+		t.Fatal("a number must match its fingerprint under either scheme")
+	}
+	// Deterministic, and different for another number or another key.
+	if !bytes.Equal(p.Current, Fingerprints(key, "12345678").Current) {
+		t.Fatal("not deterministic")
+	}
+	other := Fingerprints(key, "12345679")
+	if bytes.Equal(p.Current, other.Current) || other.Matches(p.Current) || other.Matches(v1) {
+		t.Fatal("different numbers match")
+	}
+	if Fingerprints(bytes.Repeat([]byte{8}, 32), "12345678").Matches(p.Current) {
+		t.Fatal("different keys match")
 	}
 	if Last3("12345678") != "678" {
 		t.Fatal("last3")
+	}
+}
+
+// The last three digits are for display only: two different numbers that
+// share them are different people to the platform.
+func TestLast3NeverIdentifies(t *testing.T) {
+	key := bytes.Repeat([]byte{7}, 32)
+	a, b := "12345678", "87654678"
+	if Last3(a) != Last3(b) {
+		t.Fatal("test numbers must share their last three digits")
+	}
+	if Fingerprints(key, a).Matches(Fingerprints(key, b).Current) {
+		t.Fatal("numbers sharing the last three digits must not match")
 	}
 }
 

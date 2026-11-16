@@ -431,12 +431,25 @@ export function ProfileForm() {
 
         <Section
           title="National ID number"
-          hint="So each person has one account. We do not keep the number: we store a one-way code made from it and its last 3 digits."
+          hint="So each person has one account, and pay reaches the right person."
         >
+          <dl className="grid gap-x-6 gap-y-3 rounded-md border border-border bg-surface p-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="font-medium">What we keep</dt>
+              <dd className="mt-1 text-fg-muted">
+                A one-way code made from the whole number, used only to notice a second account, and the last
+                3 digits, so you and our interviewer can confirm which number is on file.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">What we never keep</dt>
+              <dd className="mt-1 text-fg-muted">The number itself, or any photo or copy of your ID.</dd>
+            </div>
+          </dl>
           {profile.national_id_last3 && (
             <p className="text-sm">
               On file: ID ending <span className="font-mono">{profile.national_id_last3}</span>. Leave the box
-              empty to keep it.
+              empty to keep it. If you change it, we check your details again.
             </p>
           )}
           <Field

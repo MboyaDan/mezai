@@ -1,7 +1,6 @@
 package contributors
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -343,7 +342,7 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		}
 		phone = &a
 	}
-	var fp []byte
+	var prints *identity.Prints
 	var last3 string
 	if strings.TrimSpace(in.NationalID) != "" {
 		n, err := identity.NormaliseNationalID(in.NationalID)
@@ -353,7 +352,9 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		if len(s.idKey) < identity.MinKeyBytes {
 			return Profile{}, ErrNoIdentityKey
 		}
-		fp, last3 = identity.Fingerprint(s.idKey, n), identity.Last3(n)
+		// The whole number is fingerprinted; the last 3 digits are only shown.
+		fps := identity.Fingerprints(s.idKey, n)
+		prints, last3 = &fps, identity.Last3(n)
 	}
 	var out Profile
 	var clash error
@@ -366,11 +367,23 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 		if cp.Status == StatusRemoved {
 			return ErrNotEligible
 		}
+		// Only a number that is new to this account is looked up, so saving
+		// the profile again never counts as a try.
+		idSame := prints != nil && cp.NationalIDFp != nil && prints.Matches(cp.NationalIDFp)
+		idChanged := prints != nil && !idSame
+		idUpgrade := idSame && (cp.NationalIDFpV == nil || *cp.NationalIDFpV != identity.Version)
+		var tryPhone *string
+		if phone != nil && (cp.MpesaPhone == nil || *cp.MpesaPhone != *phone) {
+			tryPhone = phone
+		}
+		var tryID [][]byte
+		if idChanged {
+			tryID = prints.All
+		}
 		// Numbers another account holds: record the try, save nothing else.
-		if clash, err = numberClash(ctx, q, m, p.UserID, id, phone, fp); err != nil || clash != nil {
+		if clash, err = numberClash(ctx, q, m, p.UserID, id, tryPhone, tryID, s.now()); err != nil || clash != nil {
 			return err
 		}
-		idChanged := fp != nil && !bytes.Equal(fp, cp.NationalIDFp)
 		phoneChanged := false
 		confirmedAt := cp.MpesaPhoneConfirmedAt
 		if phone != nil {
@@ -394,8 +407,10 @@ func (s *Service) UpdateMyProfile(ctx context.Context, p *auth.Principal, in Pro
 				return err
 			}
 		}
-		if idChanged {
-			if err := q.SetContributorNationalID(ctx, store.SetContributorNationalIDParams{ID: id, NationalIDFp: fp, NationalIDLast3: &last3}); err != nil {
+		if idChanged || idUpgrade { // an upgrade stores the same number under the current scheme
+			v := int16(identity.Version)
+			if err := q.SetContributorNationalID(ctx, store.SetContributorNationalIDParams{ID: id, NationalIDFp: prints.Current,
+				NationalIDFpV: &v, NationalIDLast3: &last3}); err != nil {
 				return err
 			}
 		}

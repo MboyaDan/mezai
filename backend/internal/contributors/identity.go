@@ -34,9 +34,18 @@ const (
 )
 
 // The answer to a number already on another account. It confirms the number
-// is registered (unavoidable with a uniqueness rule) but names nobody; every
-// try is recorded for Ops, and profile saves are rate limited.
+// is registered (unavoidable with a uniqueness rule) but names nobody, and
+// every try is recorded for Ops. So that an account cannot be used to test
+// whether other people's numbers are registered, it gets MaxNumberTries such
+// answers in NumberTryWindow; after that no new number is looked up at all
+// (D-137).
 const inUseMessage = "this number is already on another MezAI account. If it is yours, contact us through the contact form"
+
+const (
+	MaxNumberTries  = 3
+	NumberTryWindow = 24 * time.Hour
+	lockedMessage   = "several numbers you entered belong to other accounts, so numbers on this profile cannot be changed for now. Contact us through the contact form"
+)
 
 // ContributorRef names another contributor by code only.
 type ContributorRef struct {
@@ -114,7 +123,28 @@ func loadIdentityChecks(ctx context.Context, q *store.Queries, id uuid.UUID) (Id
 // numberClash records and reports a number another account holds. It runs
 // before any write in the profile transaction, so committing it stores only
 // the flags.
-func numberClash(ctx context.Context, q *store.Queries, m auth.Meta, by uuid.UUID, id uuid.UUID, phone *string, fp []byte) (error, error) {
+//
+// phone and fps are only the numbers new to this account (nil when
+// unchanged); fps is the ID's fingerprint under every scheme.
+func numberClash(ctx context.Context, q *store.Queries, m auth.Meta, by uuid.UUID, id uuid.UUID, phone *string, fps [][]byte, now time.Time) (error, error) {
+	if phone == nil && fps == nil {
+		return nil, nil
+	}
+	tries, err := q.CountRecentIdentityFlags(ctx, store.CountRecentIdentityFlagsParams{ContributorID: id, Since: now.Add(-NumberTryWindow)})
+	if err != nil {
+		return nil, err
+	}
+	if tries >= MaxNumberTries {
+		field := "national_id"
+		if fps == nil {
+			field = "mpesa_phone"
+		}
+		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &by, Action: "contributor.identity_tries_exceeded", EntityType: "contributor", EntityID: &id,
+			After: map[string]any{"tries": tries}}); err != nil {
+			return nil, err
+		}
+		return fieldErr(field, lockedMessage), nil
+	}
 	type hit struct {
 		other       uuid.UUID
 		kind, field string
@@ -128,8 +158,8 @@ func numberClash(ctx context.Context, q *store.Queries, m auth.Meta, by uuid.UUI
 			return nil, err
 		}
 	}
-	if fp != nil {
-		other, err := q.ContributorHoldingNationalID(ctx, store.ContributorHoldingNationalIDParams{NationalIDFp: fp, ID: id})
+	if fps != nil {
+		other, err := q.ContributorHoldingNationalID(ctx, store.ContributorHoldingNationalIDParams{Fps: fps, ID: id})
 		if err == nil {
 			hits = append(hits, hit{other, FlagNationalIDInUse, "national_id"})
 		} else if !errors.Is(err, pgx.ErrNoRows) {
