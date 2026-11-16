@@ -561,6 +561,37 @@ paths:
         "200": { description: Updated profile, content: { application/json: { schema: { $ref: "#/components/schemas/ContributorProfile" } } } }
         "409": { description: "`consent_required`: a version is not current (reload the document)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/notifications:
+    get:
+      operationId: getMyNotifications
+      summary: The caller's email choices (`profile.manage`, Stage 16).
+      description: >-
+        Only optional emails can be switched off: new projects open to you and
+        feedback received (at most one a day). `always` lists the kinds that
+        are always sent (D-141).
+      tags: [contributors]
+      responses:
+        "200": { description: Choices, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setMyNotifications
+      summary: Change the caller's email choices (audited).
+      tags: [contributors]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_available, feedback_received]
+              properties:
+                project_available: { type: boolean }
+                feedback_received: { type: boolean }
+      responses:
+        "200": { description: Choices, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/me/qualification/tests:
     get:
       operationId: listMyQualificationTests
@@ -2553,6 +2584,17 @@ components:
       schema:
         type: string
   schemas:
+    NotificationPreferences:
+      type: object
+      required: [project_available, feedback_received, updated_at, always]
+      properties:
+        project_available: { type: boolean, description: Email when a new project you qualify for opens. }
+        feedback_received: { type: boolean, description: Email when a reviewer leaves feedback (at most one a day). }
+        updated_at: { type: [string, "null"], format: date-time, description: Null until the person first changes a choice. }
+        always:
+          type: array
+          description: Emails that cannot be switched off.
+          items: { type: string, enum: [account, qualification_result, payout_sent] }
     Health:
       type: object
       required: [status]

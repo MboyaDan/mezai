@@ -50,6 +50,8 @@ var expectedAccess = map[string]string{
 
 	"POST /v1/contributors/signup":                        "public",
 	"GET /v1/me/contributor":                              "profile.manage",
+	"GET /v1/me/notifications":                            "profile.manage",
+	"PUT /v1/me/notifications":                            "profile.manage",
 	"PUT /v1/me/contributor/profile":                      "profile.manage",
 	"POST /v1/me/contributor/consents":                    "profile.manage",
 	"GET /v1/me/qualification/tests":                      "qualification.take",

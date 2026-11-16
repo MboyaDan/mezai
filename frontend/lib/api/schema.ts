@@ -478,6 +478,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/notifications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The caller's email choices (`profile.manage`, Stage 16).
+     * @description Only optional emails can be switched off: new projects open to you and feedback received (at most one a day). `always` lists the kinds that are always sent (D-141).
+     */
+    get: operations["getMyNotifications"];
+    /** Change the caller's email choices (audited). */
+    put: operations["setMyNotifications"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/me/qualification/tests": {
     parameters: {
       query?: never;
@@ -2156,6 +2177,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    NotificationPreferences: {
+      /** @description Email when a new project you qualify for opens. */
+      project_available: boolean;
+      /** @description Email when a reviewer leaves feedback (at most one a day). */
+      feedback_received: boolean;
+      /**
+       * Format: date-time
+       * @description Null until the person first changes a choice.
+       */
+      updated_at: string | null;
+      /** @description Emails that cannot be switched off. */
+      always: ("account" | "qualification_result" | "payout_sent")[];
+    };
     Health: {
       /** @enum {string} */
       status: "ok";
@@ -4557,6 +4591,59 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  getMyNotifications: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Choices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationPreferences"];
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  setMyNotifications: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          project_available: boolean;
+          feedback_received: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Choices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationPreferences"];
+        };
+      };
+      403: components["responses"]["Error"];
       422: components["responses"]["InvalidField"];
     };
   };

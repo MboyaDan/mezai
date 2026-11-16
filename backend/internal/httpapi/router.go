@@ -138,6 +138,9 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		ch := &contributorHandlers{auth: d.Auth.Service, svc: contributors.NewService(d.Auth.Pool, d.Auth.IdentityKey, d.Auth.Files), log: d.Log, perEmail: newLimiter(5, time.Hour)}
 		a.handle(http.MethodPost, "/contributors/signup", Public(), rateLimit(newLimiter(10, time.Hour)), ch.signUp)
 		a.handle(http.MethodGet, "/me/contributor", Perm("profile.manage"), ch.myProfile)
+		nh := &notificationHandlers{pool: d.Auth.Pool, log: d.Log}
+		a.handle(http.MethodGet, "/me/notifications", Perm("profile.manage"), nh.get)
+		a.handle(http.MethodPut, "/me/notifications", Perm("profile.manage"), rateLimitUser(newLimiter(30, time.Minute)), nh.put)
 		// Rate limited: a number already on another account is refused, so
 		// saves must not become a way to test many numbers (D-078).
 		a.handle(http.MethodPut, "/me/contributor/profile", Perm("profile.manage"), rateLimitUser(newLimiter(30, time.Hour)), ch.updateMyProfile)

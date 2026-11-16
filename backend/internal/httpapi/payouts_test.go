@@ -273,6 +273,17 @@ func TestPayoutsManualPath(t *testing.T) {
 	if n := e.count(`SELECT count(*) FROM earnings_ledger WHERE payout_line_id = $1`, l2.ID); n != 0 {
 		t.Fatalf("ledger entries for the failed line: %d", n)
 	}
+	// Stage 16: "payout sent" once for the paid line (recorded twice), with
+	// the receipt and only the last three digits of the number; none for
+	// the failed line.
+	if n := e.count(`SELECT count(*) FROM email_outbox WHERE template = 'payout_sent' AND dedupe_key = $1
+		AND data->>'Receipt' = 'SAMPLE0A01' AND data->>'PhoneEnd' = '001' AND data->>'Amount' = 'KES 1,200.00'
+		AND data::text NOT LIKE '%700000001%'`, "payout_sent:"+l1.ID); n != 1 {
+		t.Fatalf("payout email for the paid line: %d", n)
+	}
+	if n := e.count(`SELECT count(*) FROM email_outbox WHERE template = 'payout_sent' AND dedupe_key = $1`, "payout_sent:"+l2.ID); n != 0 {
+		t.Fatalf("payout email for the failed line: %d", n)
+	}
 	want := map[string]int64{"001": 150050 - 120000, "002": 80000, "003": 70000, "004": 20000}
 	for n, cents := range want {
 		if got := e.count(`SELECT coalesce(sum(amount_cents), 0)::int FROM earnings_ledger WHERE contributor_id = $1`, c[n]); int64(got) != cents {
