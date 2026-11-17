@@ -291,9 +291,19 @@
   display: inline-block;
   animation: line-rise 700ms var(--ease-out) 260ms both;
 }
+/* The subline is the page's largest text, so it is visible from the first
+   paint (Stage 18a, D-149): it settles from 60% opacity and a short rise
+   instead of fading from 0, which held LCP back until the first frame of the
+   fade on a slow phone. */
 .hero-after {
-  animation: layer-rise var(--dur-slow) var(--ease-out) both;
+  animation: layer-settle var(--dur-slow) var(--ease-out) both;
   animation-delay: var(--delay, 450ms);
+}
+@keyframes layer-settle {
+  from {
+    opacity: 0.6;
+    transform: translateY(12px);
+  }
 }
 @keyframes line-rise {
   from {

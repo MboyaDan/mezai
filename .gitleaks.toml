@@ -8,4 +8,6 @@ description = "Test fixtures that are not secrets"
 regexes = [
   # config_test.go: an IDENTITY_HMAC_KEY made of the bytes 0 to 31.
   '''AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=''',
+  # totp_test.go: the RFC 6238 test key "12345678901234567890" in base32.
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
 ]

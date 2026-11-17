@@ -1,7 +1,7 @@
 // Pure helpers for sign-in, sign-up, profile and qualification screens.
 // The API validates everything again; these give early, friendly feedback.
 
-import { legalDocs } from "@/content/legal";
+import { legalIndex as legalDocs } from "@/content/legal-index";
 import type { ApiError, ContributorProfile, MyTest, TaskConfig } from "@/lib/api/client";
 
 type Kind = "staff" | "client" | "contributor";

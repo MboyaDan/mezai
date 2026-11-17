@@ -13,6 +13,12 @@ import { brand } from "@/lib/brand";
 export function AuthFrame({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-bg lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <a
+        href="#main"
+        className="sr-only z-50 bg-lime px-4 py-2 font-medium text-charcoal-950 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      >
+        Skip to content
+      </a>
       <aside data-theme="dark" className="relative overflow-hidden bg-bg text-fg">
         <div className="flex h-14 items-center px-4 sm:px-8 lg:h-auto lg:px-12 lg:pt-10">
           <Link href="/" aria-label={`${brand.name} home`}>
@@ -31,7 +37,11 @@ export function AuthFrame({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <main id="main" className="flex justify-center px-4 py-10 sm:px-8 lg:items-center lg:py-16">
+      <main
+        id="main"
+        tabIndex={-1}
+        className="outline-none flex justify-center px-4 py-10 sm:px-8 lg:items-center lg:py-16"
+      >
         <div className="w-full max-w-md">{children}</div>
       </main>
     </div>

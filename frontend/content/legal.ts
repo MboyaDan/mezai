@@ -4,20 +4,12 @@
 // version a contributor accepted. Raise the version whenever the text changes.
 
 import { brand } from "@/lib/brand";
+import { legalMeta, type LegalMeta } from "./legal-index";
 
 export type LegalBlock = string | { list: string[] };
 export type LegalSection = { heading: string; body: LegalBlock[] };
 
-export type LegalDoc = {
-  slug: string;
-  title: string;
-  /** Shown in the footer and page title. */
-  short: string;
-  version: string;
-  /** ISO date of the last change. */
-  updated: string;
-  /** False until the advocate review in DG-05 approves this version. */
-  approved: boolean;
+export type LegalDoc = LegalMeta & {
   summary: string;
   sections: LegalSection[];
   /** Points the advocate must settle; shown on the page while it is a draft. */
@@ -31,12 +23,7 @@ const contactLine =
 
 export const legalDocs: LegalDoc[] = [
   {
-    slug: "privacy",
-    title: "Privacy notice",
-    short: "Privacy notice",
-    version: "0.4",
-    updated: "2026-11-16",
-    approved: false,
+    ...legalMeta("privacy"),
     summary: `How ${entity} collects, uses and protects personal data on ${brand.name}, under Kenya's Data Protection Act, 2019.`,
     sections: [
       {
@@ -148,12 +135,7 @@ export const legalDocs: LegalDoc[] = [
     ],
   },
   {
-    slug: "terms",
-    title: "Terms of use",
-    short: "Terms of use",
-    version: "0.1",
-    updated: "2026-11-06",
-    approved: false,
+    ...legalMeta("terms"),
     summary: `The terms for using the ${brand.name} website. Contributors also agree to the contributor terms; clients sign a separate agreement.`,
     sections: [
       {
@@ -201,12 +183,7 @@ export const legalDocs: LegalDoc[] = [
     ],
   },
   {
-    slug: "contributor-terms",
-    title: "Contributor terms",
-    short: "Contributor terms",
-    version: "0.4",
-    updated: "2026-11-16",
-    approved: false,
+    ...legalMeta("contributor-terms"),
     summary: `The agreement between ${entity} and each person who does paid task work on ${brand.name}.`,
     sections: [
       {
@@ -277,12 +254,7 @@ export const legalDocs: LegalDoc[] = [
     ],
   },
   {
-    slug: "acceptable-use",
-    title: "Acceptable use policy for contributors",
-    short: "Acceptable use",
-    version: "0.1",
-    updated: "2026-11-06",
-    approved: false,
+    ...legalMeta("acceptable-use"),
     summary: "What contributors must and must not do on the platform. It is part of the contributor terms.",
     sections: [
       {
@@ -325,12 +297,7 @@ export const legalDocs: LegalDoc[] = [
     ],
   },
   {
-    slug: "cookies",
-    title: "Cookie notice",
-    short: "Cookies",
-    version: "0.1",
-    updated: "2026-11-06",
-    approved: false,
+    ...legalMeta("cookies"),
     summary: `${brand.name} uses one cookie, only when you sign in. There are no analytics or advertising cookies.`,
     sections: [
       {

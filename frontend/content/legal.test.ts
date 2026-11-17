@@ -24,3 +24,22 @@ describe("legal versions", () => {
     }
   });
 });
+
+describe("legal index (Stage 18a)", () => {
+  it("lists every document once, with the same metadata as the full text", async () => {
+    const { legalIndex } = await import("./legal-index");
+    const { legalDocs } = await import("./legal");
+    expect(legalIndex.map((m) => m.slug)).toEqual(legalDocs.map((d) => d.slug));
+    for (const d of legalDocs) {
+      const m = legalIndex.find((x) => x.slug === d.slug)!;
+      expect({ ...m }).toEqual({
+        slug: d.slug,
+        title: d.title,
+        short: d.short,
+        version: d.version,
+        updated: d.updated,
+        approved: d.approved,
+      });
+    }
+  });
+});

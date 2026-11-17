@@ -1,4 +1,4 @@
-import { legalDocs } from "@/content/legal";
+import { legalIndex as legalDocs } from "@/content/legal-index";
 
 // Where the site lives and whether search engines may index it. The domain
 // waits on DG-01, so it comes from the environment.

@@ -9,7 +9,7 @@ import { Drawer } from "@/components/ui/dialog";
 import { brand } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { NavLink } from "./nav-link";
-import { legalDocs } from "@/content/legal";
+import { legalIndex as legalDocs } from "@/content/legal-index";
 
 // Header navigation from docs/design/sitemap.md. Case studies stay hidden until one is published.
 const nav = [
@@ -102,7 +102,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
         </ButtonLink>
       </Drawer>
 
-      <main id="main" className="flex-1">
+      <main id="main" tabIndex={-1} className="outline-none flex-1">
         {children}
       </main>
 
