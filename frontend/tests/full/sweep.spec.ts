@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { legalIndex } from "../../content/legal-index";
 import { seedPassword } from "./auth";
 
 // Stage 18a: every page, for every kind of user, at 1440 and 390 in light
@@ -136,10 +137,37 @@ async function signedInPage(browser: Browser, email?: string) {
         continue;
       }
       expect(res.ok(), await res.text()).toBeTruthy();
+      await acceptCurrentDocuments(context.request, (await res.json()).csrf_token);
       break;
     }
   }
   return { context, page };
+}
+
+/**
+ * Seed contributors accepted older legal documents, so the portal first asks
+ * for consent and every page would only show that prompt (as the 18a run
+ * did). Accept the current versions, as the prompt itself does.
+ */
+async function acceptCurrentDocuments(request: APIRequestContext, csrf: string) {
+  const res = await request.get(`${origin}/api/v1/me/contributor`);
+  if (!res.ok()) return; // not a contributor
+  const keys: string[] = (await res.json()).consent_required ?? [];
+  if (keys.length === 0) return;
+  const slug: Record<string, string> = {
+    privacy_notice: "privacy",
+    terms_of_use: "terms",
+    contributor_terms: "contributor-terms",
+    acceptable_use: "acceptable-use",
+  };
+  const consents = Object.fromEntries(
+    keys.map((k) => [k, legalIndex.find((d) => d.slug === slug[k])!.version]),
+  );
+  const ok = await request.post(`${origin}/api/v1/me/contributor/consents`, {
+    headers: { Origin: origin, "X-CSRF-Token": csrf },
+    data: { consents },
+  });
+  expect(ok.ok(), await ok.text()).toBeTruthy();
 }
 
 async function settle(page: Page) {
@@ -167,6 +195,7 @@ for (const role of roles) {
     if (role.email) await page.goto("/");
     const routes = role.routes(await idsFor(page, role.name));
     const problems: string[] = [];
+    const imagesByPage = new Map<string, string[]>();
     for (const route of routes) {
       for (const v of variants) {
         await page.setViewportSize({ width: v.width, height: v.height });
@@ -176,6 +205,9 @@ for (const role of roles) {
           .first()
           .waitFor({ timeout: 15_000 })
           .catch(() => problems.push(`${route}: no h1`));
+        // The consent prompt would hide the page under test.
+        if (await page.getByRole("button", { name: "Accept and continue" }).isVisible())
+          problems.push(`${route}: shows the consent prompt instead of the page`);
         if (v.dark) await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
         await settle(page);
         const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -192,9 +224,22 @@ for (const role of roles) {
               .slice(0, 3)
               .join(", ")}`,
           );
+        if (!v.dark) {
+          const d = await designCheck(page);
+          problems.push(...d.problems.map((x) => `${route} (${v.label}): ${x}`));
+          if (v.label === "1440 light") imagesByPage.set(route, d.images);
+        }
         if (v.label === "1440 light") problems.push(...(await focusCheck(page, route)));
       }
     }
+    // DESIGN.md section 8: no image used twice across the site.
+    const firstSeen = new Map<string, string>();
+    for (const [route, images] of imagesByPage)
+      for (const img of new Set(images)) {
+        const other = firstSeen.get(img);
+        if (other && other !== route) problems.push(`${route}: image ${img} is also used on ${other}`);
+        else firstSeen.set(img, route);
+      }
     await context.close();
     console.log(`${role.name}: ${routes.length} pages × ${variants.length} views checked`);
     expect(problems, problems.join("\n")).toEqual([]);
@@ -208,10 +253,18 @@ for (const role of roles) {
  */
 async function focusCheck(page: Page, route: string): Promise<string[]> {
   const out: string[] = [];
-  // The first stop is "Skip to content", and it moves focus to <main>.
-  await page.keyboard.press("Tab");
+  // The first stop is "Skip to content", and it moves focus to <main>. A page
+  // that already puts focus inside <main> on load (the task workspace focuses
+  // each new task's heading) needs no skip.
+  const startsInMain = await page.evaluate(() => {
+    const a = document.activeElement;
+    return !!a && a !== document.body && !!a.closest("main");
+  });
+  if (!startsInMain) await page.keyboard.press("Tab");
   const first = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
-  if (first !== "Skip to content")
+  if (startsInMain) {
+    // fine: focus is already in the content
+  } else if (first !== "Skip to content")
     out.push(`${route}: first Tab stop is "${first.slice(0, 30)}", not the skip link`);
   else {
     await page.keyboard.press("Enter");
@@ -242,4 +295,89 @@ async function focusCheck(page: Page, route: string): Promise<string[]> {
     if (!r.ok) out.push(`${route}: no visible focus on ${r.label}`);
   }
   return out;
+}
+
+/**
+ * Design quality gate, rendered (Stage 18b, DESIGN.md section 8): lime never
+ * as text or thin line on a light background; the serif accent only inside
+ * headings; lime fills at most about 5% of any screen; the images shown.
+ */
+async function designCheck(page: Page): Promise<{ problems: string[]; images: string[] }> {
+  return page.evaluate(() => {
+    const problems: string[] = [];
+    const isLime = (c: string) => {
+      const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+      if (!m) return false;
+      const [r, g, b] = [+m[1], +m[2], +m[3]];
+      const a = m[4] === undefined ? 1 : +m[4];
+      return a > 0.5 && Math.abs(r - 200) < 12 && Math.abs(g - 240) < 12 && Math.abs(b - 49) < 12;
+    };
+    const bgOf = (el: Element | null): [number, number, number] => {
+      for (let e = el; e; e = e.parentElement) {
+        const m = getComputedStyle(e).backgroundColor.match(
+          /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/,
+        );
+        if (m && (m[4] === undefined || +m[4] > 0.5)) return [+m[1], +m[2], +m[3]];
+      }
+      return [255, 255, 255];
+    };
+    const light = ([r, g, b]: [number, number, number]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5;
+    const visible = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return (
+        r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0
+      );
+    };
+    const describe = (el: Element) =>
+      `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? "." + el.className.split(" ").slice(0, 2).join(".") : ""} "${(el.textContent ?? "").trim().slice(0, 30)}"`;
+
+    for (const el of document.querySelectorAll("body *")) {
+      if (!visible(el)) continue;
+      const s = getComputedStyle(el);
+      const ownText = [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? "").trim());
+      if (ownText && isLime(s.color) && light(bgOf(el)))
+        problems.push(`lime text on a light background: ${describe(el)}`);
+      if (el instanceof SVGElement && isLime(s.stroke) && parseFloat(s.strokeWidth) <= 2 && light(bgOf(el)))
+        problems.push(`thin lime line on a light background: ${describe(el)}`);
+      if (
+        ownText &&
+        /Instrument Serif/.test(s.fontFamily) &&
+        // headline type: a heading, or display-face text such as a slogan in a <p>
+        !el.closest("h1, h2, h3, h4, h5, h6, [role=heading], .font-display")
+      )
+        problems.push(`serif accent outside a heading: ${describe(el)}`);
+    }
+
+    // Lime fill, per screen-height slice of the page.
+    const vw = innerWidth,
+      vh = innerHeight,
+      height = document.documentElement.scrollHeight;
+    const slices = new Array(Math.ceil(height / vh)).fill(0);
+    for (const el of document.querySelectorAll("body *")) {
+      if (!visible(el) || !isLime(getComputedStyle(el).backgroundColor)) continue;
+      // The home page's closing band is lime by design (DESIGN.md section 10, frame 8).
+      if (el.closest("[data-lime-band]")) continue;
+      const r = el.getBoundingClientRect();
+      const top = r.top + scrollY,
+        bottom = r.bottom + scrollY;
+      const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      slices.forEach((_, i) => {
+        const h = Math.max(0, Math.min(bottom, (i + 1) * vh) - Math.max(top, i * vh));
+        slices[i] += w * h;
+      });
+    }
+    slices.forEach((area, i) => {
+      const share = area / (vw * vh);
+      if (share > 0.06) problems.push(`lime covers ${Math.round(share * 100)}% of screen ${i + 1}`);
+    });
+
+    const images = [...document.querySelectorAll("img")]
+      .filter((i) => !i.src.startsWith("data:"))
+      .map((i) => {
+        const u = new URL(i.currentSrc || i.src);
+        return u.searchParams.get("url") ?? u.pathname;
+      });
+    return { problems, images };
+  });
 }
