@@ -58,7 +58,7 @@ Tried and dropped: inlining CSS (`experimental.inlineCss`) gave no measurable ga
 - no sideways page scroll;
 - at 1440 light, the keyboard: the first Tab stop is "Skip to content" and Enter moves focus to `<main>`; then the first 15 Tab stops each show a visible focus indicator (outline or ring).
 
-Result: see the PR for the run. Pages the fresh data could not reach (a project request, a review item, a payout batch) are covered by their own specs.
+Result (2026-11-17, fresh seed, production build): **all four passed in 14.3 minutes**: 57 pages × 3 views, no serious or critical axe issue, no sideways scroll, the skip link first on every page and moving focus to `<main>`, and a visible focus indicator on every checked Tab stop. Before the skip-link fix the same check found `<main>` could not take focus (fixed in this stage). Pages the fresh data could not reach (a project request, a review item, a payout batch) are covered by their own specs.
 
 ### Manual checklist
 
