@@ -38,7 +38,7 @@ func (q *Queries) AddUserRole(ctx context.Context, arg AddUserRoleParams) error 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, display_name, password_hash, email_verified_at)
 VALUES (lower($1), $2, $3, $4)
-RETURNING id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until, last_login_at, created_at, updated_at
+RETURNING id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until, last_login_at, created_at, updated_at, totp_secret_enc, totp_enabled_at, totp_last_step, totp_pending_enc, totp_pending_at
 `
 
 type CreateUserParams struct {
@@ -68,6 +68,11 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotpSecretEnc,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.TotpPendingEnc,
+		&i.TotpPendingAt,
 	)
 	return i, err
 }
@@ -93,7 +98,7 @@ func (q *Queries) GetRoleByKey(ctx context.Context, key string) (Role, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until, last_login_at, created_at, updated_at FROM users WHERE email = lower($1)
+SELECT id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until, last_login_at, created_at, updated_at, totp_secret_enc, totp_enabled_at, totp_last_step, totp_pending_enc, totp_pending_at FROM users WHERE email = lower($1)
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -111,6 +116,11 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotpSecretEnc,
+		&i.TotpEnabledAt,
+		&i.TotpLastStep,
+		&i.TotpPendingEnc,
+		&i.TotpPendingAt,
 	)
 	return i, err
 }

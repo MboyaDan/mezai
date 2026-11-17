@@ -82,6 +82,11 @@ func (h *authHandlers) login(c *gin.Context) {
 	case errors.Is(err, auth.ErrAccountSetup):
 		abort(c, http.StatusForbidden, "account_not_ready")
 		return
+	case errors.Is(err, auth.ErrSecondFactor):
+		// Right password, two-step on: no session yet (Stage 17d).
+		h.setChallenge(c, sess.Challenge, time.Until(sess.ExpiresAt))
+		c.JSON(http.StatusAccepted, gin.H{"second_factor": "totp", "expires_at": sess.ExpiresAt})
+		return
 	case err != nil:
 		h.log.Error("login failed", slog.String("request_id", RequestIDFrom(c)), slog.Any("error", err))
 		abort(c, http.StatusInternalServerError, "internal_error")
