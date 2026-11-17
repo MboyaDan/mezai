@@ -1,11 +1,11 @@
 package contributors
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MboyaDan/mezai/backend/internal/filecheck"
 	"log/slog"
 	"path"
 	"regexp"
@@ -159,7 +159,13 @@ func (s *Service) UploadCV(ctx context.Context, p *auth.Principal, name string, 
 	if len(data) == 0 || len(data) > MaxCVBytes {
 		return Profile{}, fieldErr("cv", "upload a PDF of up to 2 MB")
 	}
-	if !bytes.HasPrefix(data, []byte("%PDF-")) || !strings.EqualFold(path.Ext(name), ".pdf") {
+	if !strings.EqualFold(path.Ext(name), ".pdf") {
+		return Profile{}, fieldErr("cv", "upload your CV as a PDF")
+	}
+	switch err := filecheck.PDF(data); {
+	case errors.Is(err, filecheck.ErrActivePDF):
+		return Profile{}, fieldErr("cv", "this PDF contains scripts or attached files: save it again as a plain PDF")
+	case err != nil:
 		return Profile{}, fieldErr("cv", "upload your CV as a PDF")
 	}
 	name = strings.TrimSpace(path.Base(name))
