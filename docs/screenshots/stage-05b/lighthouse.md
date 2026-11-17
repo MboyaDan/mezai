@@ -17,3 +17,4 @@ Lighthouse 13.5.0, mobile preset (Moto G Power emulation, 4x CPU slowdown, slow 
 
 Same setup, three runs: 93/100/96/69 (LCP 2.78 s, TBT 101 ms), 89/100/96/69 (3.39 s, 105 ms), 93/100/96/69 (2.78 s, 94 ms). Median: performance 93, LCP 2.78 s, TBT 101 ms, CLS 0.000, 457 KB total transfer. The LCP element is still the hero subline; the photos load lazily below the fold, served as AVIF (the 1920 px main photo is 86 KB). SEO fails only `is-crawlable`, the deliberate noindex.
 
+Later measurements: `docs/screenshots/stage-18a/performance.md` (Stage 18a, devtools and simulated throttling, four pages).
