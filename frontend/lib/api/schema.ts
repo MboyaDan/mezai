@@ -499,6 +499,141 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/me/data-export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download everything held about the caller as one JSON file (`profile.manage`, Stage 17b).
+     * @description Right of access under the Kenya Data Protection Act 2019. Task content, other people's answers and qualification answers are left out and `not_included` says why. Audited; 5 an hour per account.
+     */
+    get: operations["exportMyData"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/erasure": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The caller's erasure request and what must be settled first (`profile.manage`). */
+    get: operations["getMyErasure"];
+    put?: never;
+    /** Ask for the caller's account and personal data to be deleted (audited; asking again returns the open request). */
+    post: operations["requestMyErasure"];
+    /** Withdraw the caller's open erasure request. */
+    delete: operations["withdrawMyErasure"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/erasure-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Open erasure requests, oldest first (`privacy.manage`). */
+    get: operations["listErasureRequests"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/data-export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download a contributor's data for a request made outside the app (`privacy.manage`, audited). */
+    get: operations["exportContributorData"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/contributors/{id}/erasure": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** A contributor's erasure state (`privacy.manage`). */
+    get: operations["getContributorErasure"];
+    put?: never;
+    /**
+     * Erase a contributor's personal data and close the account (`privacy.manage`).
+     * @description Refused while money is owed either way, a payout line is pending or answers await a decision (A-088). Ledger, payout and audit rows stay, pointing at the public code only; the payee on payout lines becomes `erased`. `confirm` must be the public code. Cannot be undone.
+     */
+    post: operations["eraseContributor"];
+    /** Close a contributor's open erasure request without erasing (`privacy.manage`). */
+    delete: operations["withdrawContributorErasure"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/retention": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * When the project's task content is deleted (`project.manage` or `org.project.read`).
+     * @description Content goes `retention_days` after the project closes (brief 12); `due_at` is null until it closes or once it is gone.
+     */
+    get: operations["getProjectRetention"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{id}/purge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete a closed project's task content now, for example on the client's request (`privacy.manage`).
+     * @description Blanks item content, every answer, gold answers, review notes and feedback text, retires qualification tests made from the project's gold and deletes its stored files (deliverables, imports, the request sample). Counts, quality figures, earnings and the audit trail stay. `confirm` must be the project's name. Cannot be undone.
+     */
+    post: operations["purgeProjectContent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/me/qualification/tests": {
     parameters: {
       query?: never;
@@ -2177,6 +2312,50 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    Retention: {
+      retention_days: number;
+      /** Format: date-time */
+      closed_at: string | null;
+      /** Format: date-time */
+      due_at: string | null;
+      /** Format: date-time */
+      purged_at: string | null;
+    };
+    ErasureBlockers: {
+      /**
+       * Format: int64
+       * @description Approved earnings not yet paid
+       */
+      balance_cents: number;
+      pending_payout_lines: number;
+      /** @description Submitted answers that may still earn */
+      undecided_answers: number;
+    };
+    Erasure: {
+      public_code: string;
+      /** Format: date-time */
+      erased_at: string | null;
+      request: null | {
+        /** Format: uuid */
+        id: string;
+        by_contributor: boolean;
+        note?: string;
+        /** Format: date-time */
+        created_at: string;
+      };
+      blockers: components["schemas"]["ErasureBlockers"];
+      can_erase: boolean;
+    };
+    DataExport: {
+      about: string;
+      /** Format: date-time */
+      generated_at: string;
+      not_included: string[];
+      /** @description account, profile, languages, domains, consents, status_history, qualification_attempts, interviews, answers (metadata only), skips, content_reports, feedback, trust_scores, earnings, payouts, email_choices, sessions, erasure_requests. */
+      data: {
+        [key: string]: unknown;
+      };
+    };
     NotificationPreferences: {
       /** @description Email when a new project you qualify for opens. */
       project_available: boolean;
@@ -2879,6 +3058,11 @@ export interface components {
       created_at: string;
       /** Format: date-time */
       published_at: string | null;
+      /**
+       * Format: date-time
+       * @description Files deleted under the retention rule (Stage 17b); links answer 410
+       */
+      purged_at: string | null;
       manifest: components["schemas"]["DeliverableManifest"];
       files: components["schemas"]["DeliverableFile"][];
     };
@@ -4647,6 +4831,372 @@ export interface operations {
       422: components["responses"]["InvalidField"];
     };
   };
+  exportMyData: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description JSON file (`Content-Disposition: attachment`) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DataExport"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      429: components["responses"]["Error"];
+    };
+  };
+  getMyErasure: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Erasure"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+    };
+  };
+  requestMyErasure: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          note?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Erasure"];
+        };
+      };
+      403: components["responses"]["Error"];
+      /** @description `erased` */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  withdrawMyErasure: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Erasure"];
+        };
+      };
+      /** @description `no_open_request` */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  listErasureRequests: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Requests */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            requests: {
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              contributor_id: string;
+              public_code: string;
+              /** @description false when Ops recorded a request made by email or phone */
+              by_contributor: boolean;
+              /** Format: date-time */
+              created_at: string;
+            }[];
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+    };
+  };
+  exportContributorData: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description JSON file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DataExport"];
+        };
+      };
+      404: components["responses"]["Error"];
+      /** @description `erased` */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  getContributorErasure: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Erasure"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  eraseContributor: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @description The contributor's public code */
+          confirm: string;
+          /** @description How the request reached us */
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Erased */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Erasure"];
+        };
+      };
+      404: components["responses"]["Error"];
+      /** @description `erasure_blocked` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            blockers: components["schemas"]["ErasureBlockers"];
+          };
+        };
+      };
+      /** @description `erased` */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  withdrawContributorErasure: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Erasure"];
+        };
+      };
+      /** @description `no_open_request` */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  getProjectRetention: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Retention */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Retention"];
+        };
+      };
+      404: components["responses"]["Error"];
+    };
+  };
+  purgeProjectContent: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          confirm: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Deleted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            retention: components["schemas"]["Retention"];
+            counts: {
+              [key: string]: number;
+            };
+          };
+        };
+      };
+      404: components["responses"]["Error"];
+      /** @description `project_not_closed` or `already_deleted` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      422: components["responses"]["InvalidField"];
+    };
+  };
   listMyQualificationTests: {
     parameters: {
       query?: never;
@@ -5510,6 +6060,15 @@ export interface operations {
         };
       };
       404: components["responses"]["Error"];
+      /** @description `content_deleted`: files deleted under the retention rule */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       422: components["responses"]["Error"];
     };
   };

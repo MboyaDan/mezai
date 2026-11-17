@@ -25,6 +25,7 @@ import { errorMessage } from "@/lib/onboarding";
 import { useLoad } from "@/lib/use-load";
 import { pct, shortDate } from "./contributors";
 import { IdentityPanel, type IdentityChecks } from "./identity-panel";
+import { PersonalDataPanel } from "./personal-data-panel";
 import { ApplicationPanel, InterviewPanel } from "./screening-panels";
 import { PageTitle, useCan } from "./workspace";
 
@@ -160,6 +161,7 @@ export function ContributorDetail() {
             </div>
           </Card>
           <IdentityPanel profile={p} checks={identity} onChange={d.reload} />
+          {can("privacy.manage") && <PersonalDataPanel contributorId={p.id} onErased={d.reload} />}
         </div>
 
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6 lg:col-span-2">
