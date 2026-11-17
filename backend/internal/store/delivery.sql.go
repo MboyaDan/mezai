@@ -34,7 +34,7 @@ INSERT INTO deliverables (
   org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256,
   schema_version, item_count, published_at, published_by, version, byte_size, created_by
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at, version, byte_size, created_by
+RETURNING id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at, version, byte_size, created_by, purged_at
 `
 
 type CreateDeliverableParams struct {
@@ -90,6 +90,7 @@ func (q *Queries) CreateDeliverable(ctx context.Context, arg CreateDeliverablePa
 		&i.Version,
 		&i.ByteSize,
 		&i.CreatedBy,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -306,7 +307,7 @@ func (q *Queries) ExportRouteReasons(ctx context.Context, projectID uuid.UUID) (
 
 const getDeliverable = `-- name: GetDeliverable :one
 SELECT d.id, d.org_id, d.project_id, d.version, d.format, d.file_key, d.manifest_key, d.byte_size,
-  d.checksum_sha256, d.published_at, p.name AS project_name
+  d.checksum_sha256, d.published_at, d.purged_at, p.name AS project_name
 FROM deliverables d JOIN projects p ON p.id = d.project_id
 WHERE d.id = $1
 `
@@ -322,6 +323,7 @@ type GetDeliverableRow struct {
 	ByteSize       int64
 	ChecksumSha256 string
 	PublishedAt    *time.Time
+	PurgedAt       *time.Time
 	ProjectName    string
 }
 
@@ -339,13 +341,14 @@ func (q *Queries) GetDeliverable(ctx context.Context, id uuid.UUID) (GetDelivera
 		&i.ByteSize,
 		&i.ChecksumSha256,
 		&i.PublishedAt,
+		&i.PurgedAt,
 		&i.ProjectName,
 	)
 	return i, err
 }
 
 const listDeliverables = `-- name: ListDeliverables :many
-SELECT id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at, version, byte_size, created_by FROM deliverables ORDER BY created_at
+SELECT id, org_id, project_id, format, file_key, manifest_key, manifest, checksum_sha256, schema_version, item_count, published_at, published_by, created_at, updated_at, version, byte_size, created_by, purged_at FROM deliverables ORDER BY created_at
 `
 
 func (q *Queries) ListDeliverables(ctx context.Context) ([]Deliverable, error) {
@@ -375,6 +378,7 @@ func (q *Queries) ListDeliverables(ctx context.Context) ([]Deliverable, error) {
 			&i.Version,
 			&i.ByteSize,
 			&i.CreatedBy,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -388,7 +392,7 @@ func (q *Queries) ListDeliverables(ctx context.Context) ([]Deliverable, error) {
 
 const listProjectDeliverables = `-- name: ListProjectDeliverables :many
 SELECT d.id, d.version, d.format, d.byte_size, d.checksum_sha256, d.item_count, d.schema_version,
-  d.manifest, d.published_at, d.created_at,
+  d.manifest, d.published_at, d.purged_at, d.created_at,
   (SELECT count(*) FROM deliverable_downloads dd WHERE dd.deliverable_id = d.id)::int AS downloads
 FROM deliverables d
 WHERE d.project_id = $1
@@ -405,6 +409,7 @@ type ListProjectDeliverablesRow struct {
 	SchemaVersion  int32
 	Manifest       []byte
 	PublishedAt    *time.Time
+	PurgedAt       *time.Time
 	CreatedAt      time.Time
 	Downloads      int32
 }
@@ -429,6 +434,7 @@ func (q *Queries) ListProjectDeliverables(ctx context.Context, projectID uuid.UU
 			&i.SchemaVersion,
 			&i.Manifest,
 			&i.PublishedAt,
+			&i.PurgedAt,
 			&i.CreatedAt,
 			&i.Downloads,
 		); err != nil {
@@ -444,19 +450,20 @@ func (q *Queries) ListProjectDeliverables(ctx context.Context, projectID uuid.UU
 
 const lockProjectForExport = `-- name: LockProjectForExport :one
 
-SELECT p.id, p.org_id, p.name, p.task_type, p.config, p.overlap_k, o.name AS org_name
+SELECT p.id, p.org_id, p.name, p.task_type, p.config, p.overlap_k, p.content_purged_at, o.name AS org_name
 FROM projects p JOIN organisations o ON o.id = p.org_id
 WHERE p.id = $1 FOR UPDATE OF p
 `
 
 type LockProjectForExportRow struct {
-	ID       uuid.UUID
-	OrgID    uuid.UUID
-	Name     string
-	TaskType string
-	Config   []byte
-	OverlapK int16
-	OrgName  string
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	Name            string
+	TaskType        string
+	Config          []byte
+	OverlapK        int16
+	ContentPurgedAt *time.Time
+	OrgName         string
 }
 
 // Deliverable exports (Stage 11b, brief 8.5). Exports read in system scope
@@ -472,6 +479,7 @@ func (q *Queries) LockProjectForExport(ctx context.Context, id uuid.UUID) (LockP
 		&i.TaskType,
 		&i.Config,
 		&i.OverlapK,
+		&i.ContentPurgedAt,
 		&i.OrgName,
 	)
 	return i, err

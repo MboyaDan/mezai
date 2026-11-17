@@ -585,7 +585,8 @@ func (q *Queries) ProjectQualitySummary(ctx context.Context, projectID uuid.UUID
 
 const projectsWithConsensusIn = `-- name: ProjectsWithConsensusIn :many
 
-SELECT DISTINCT project_id FROM consensus_results WHERE created_at >= $1 AND created_at < $2
+SELECT DISTINCT c.project_id FROM consensus_results c JOIN projects p ON p.id = c.project_id
+WHERE c.created_at >= $1 AND c.created_at < $2 AND p.content_purged_at IS NULL
 `
 
 type ProjectsWithConsensusInParams struct {

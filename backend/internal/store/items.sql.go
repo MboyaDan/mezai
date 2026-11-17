@@ -105,7 +105,7 @@ INSERT INTO import_jobs (id, org_id, project_id, kind, format, file_key, file_na
   status, total_rows, valid_rows, error_rows, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
   $10, $11, $12, $13, $14)
-RETURNING id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at
+RETURNING id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at, purged_at
 `
 
 type CreateImportJobParams struct {
@@ -162,6 +162,7 @@ func (q *Queries) CreateImportJob(ctx context.Context, arg CreateImportJobParams
 		&i.SizeBytes,
 		&i.Sha256,
 		&i.CommittedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -280,7 +281,7 @@ func (q *Queries) GetGoldItem(ctx context.Context, id uuid.UUID) (GoldItem, erro
 }
 
 const getImportJob = `-- name: GetImportJob :one
-SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at FROM import_jobs WHERE id = $1
+SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at, purged_at FROM import_jobs WHERE id = $1
 `
 
 func (q *Queries) GetImportJob(ctx context.Context, id uuid.UUID) (ImportJob, error) {
@@ -305,6 +306,7 @@ func (q *Queries) GetImportJob(ctx context.Context, id uuid.UUID) (ImportJob, er
 		&i.SizeBytes,
 		&i.Sha256,
 		&i.CommittedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -395,7 +397,7 @@ func (q *Queries) ListImportErrors(ctx context.Context, importJobID uuid.UUID) (
 }
 
 const listImportJobs = `-- name: ListImportJobs :many
-SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at FROM import_jobs WHERE project_id = $1 ORDER BY created_at DESC LIMIT 200
+SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at, purged_at FROM import_jobs WHERE project_id = $1 ORDER BY created_at DESC LIMIT 200
 `
 
 func (q *Queries) ListImportJobs(ctx context.Context, projectID uuid.UUID) ([]ImportJob, error) {
@@ -426,6 +428,7 @@ func (q *Queries) ListImportJobs(ctx context.Context, projectID uuid.UUID) ([]Im
 			&i.SizeBytes,
 			&i.Sha256,
 			&i.CommittedAt,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -475,7 +478,7 @@ func (q *Queries) ListItemsByProject(ctx context.Context, projectID uuid.UUID) (
 }
 
 const lockImportJob = `-- name: LockImportJob :one
-SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at FROM import_jobs WHERE id = $1 FOR UPDATE
+SELECT id, org_id, project_id, kind, format, file_key, file_name, dry_run, status, total_rows, valid_rows, error_rows, created_by, created_at, updated_at, size_bytes, sha256, committed_at, purged_at FROM import_jobs WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockImportJob(ctx context.Context, id uuid.UUID) (ImportJob, error) {
@@ -500,6 +503,7 @@ func (q *Queries) LockImportJob(ctx context.Context, id uuid.UUID) (ImportJob, e
 		&i.SizeBytes,
 		&i.Sha256,
 		&i.CommittedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }

@@ -400,7 +400,7 @@ func (q *Queries) GetMyAssignment(ctx context.Context, id uuid.UUID) (Assignment
 const getProjectForWork = `-- name: GetProjectForWork :one
 SELECT p.id, p.org_id, p.name, p.status, p.task_type, p.instructions_md, p.config, p.overlap_k, p.gold_rate,
   p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars,
-  p.review_spread_threshold, p.audit_sample_rate
+  p.review_spread_threshold, p.audit_sample_rate, p.content_purged_at
 FROM projects p WHERE p.id = $1
 `
 
@@ -422,6 +422,7 @@ type GetProjectForWorkRow struct {
 	MinRationaleChars     int32
 	ReviewSpreadThreshold float64
 	AuditSampleRate       float64
+	ContentPurgedAt       *time.Time
 }
 
 func (q *Queries) GetProjectForWork(ctx context.Context, id uuid.UUID) (GetProjectForWorkRow, error) {
@@ -445,6 +446,7 @@ func (q *Queries) GetProjectForWork(ctx context.Context, id uuid.UUID) (GetProje
 		&i.MinRationaleChars,
 		&i.ReviewSpreadThreshold,
 		&i.AuditSampleRate,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }

@@ -68,7 +68,7 @@ INSERT INTO projects (
   $1, $2, $3, $4, $5, $6, $7,
   $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at
 `
 
 type CreateProjectParams struct {
@@ -136,6 +136,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaChecks,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }
@@ -171,7 +172,7 @@ func (q *Queries) GetLatestTaskTemplate(ctx context.Context, taskType string) (T
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks FROM projects WHERE id = $1
+SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id uuid.UUID) (Project, error) {
@@ -205,12 +206,13 @@ func (q *Queries) GetProject(ctx context.Context, id uuid.UUID) (Project, error)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaChecks,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }
 
 const getProjectSummary = `-- name: GetProjectSummary :one
-SELECT p.id, p.org_id, p.template_id, p.task_type, p.name, p.status, p.instructions_md, p.config, p.overlap_k, p.gold_rate, p.pay_per_task_cents, p.currency, p.target_count, p.deadline, p.reservation_minutes, p.review_spread_threshold, p.audit_sample_rate, p.agreement_threshold, p.min_rationale_chars, p.retention_days, p.client_visibility, p.published_at, p.closed_at, p.created_by, p.created_at, p.updated_at, p.qa_checks, o.name AS org_name,
+SELECT p.id, p.org_id, p.template_id, p.task_type, p.name, p.status, p.instructions_md, p.config, p.overlap_k, p.gold_rate, p.pay_per_task_cents, p.currency, p.target_count, p.deadline, p.reservation_minutes, p.review_spread_threshold, p.audit_sample_rate, p.agreement_threshold, p.min_rationale_chars, p.retention_days, p.client_visibility, p.published_at, p.closed_at, p.created_by, p.created_at, p.updated_at, p.qa_checks, p.content_purged_at, o.name AS org_name,
   (SELECT count(*) FROM items i WHERE i.project_id = p.id
      AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id))::int AS item_count,
   (SELECT count(*) FROM gold_items g WHERE g.project_id = p.id AND g.status = 'active')::int AS gold_count
@@ -257,6 +259,7 @@ func (q *Queries) GetProjectSummary(ctx context.Context, id uuid.UUID) (GetProje
 		&i.Project.CreatedAt,
 		&i.Project.UpdatedAt,
 		&i.Project.QaChecks,
+		&i.Project.ContentPurgedAt,
 		&i.OrgName,
 		&i.ItemCount,
 		&i.GoldCount,
@@ -274,7 +277,7 @@ INSERT INTO projects (
   $8, $9, $10, $11, $12, $13,
   $14, $15
 )
-RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at
 `
 
 type InsertProjectParams struct {
@@ -343,6 +346,7 @@ func (q *Queries) InsertProject(ctx context.Context, arg InsertProjectParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaChecks,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }
@@ -381,7 +385,7 @@ func (q *Queries) ListProjectSkills(ctx context.Context, projectID uuid.UUID) ([
 }
 
 const listProjectSummaries = `-- name: ListProjectSummaries :many
-SELECT p.id, p.org_id, p.template_id, p.task_type, p.name, p.status, p.instructions_md, p.config, p.overlap_k, p.gold_rate, p.pay_per_task_cents, p.currency, p.target_count, p.deadline, p.reservation_minutes, p.review_spread_threshold, p.audit_sample_rate, p.agreement_threshold, p.min_rationale_chars, p.retention_days, p.client_visibility, p.published_at, p.closed_at, p.created_by, p.created_at, p.updated_at, p.qa_checks, o.name AS org_name,
+SELECT p.id, p.org_id, p.template_id, p.task_type, p.name, p.status, p.instructions_md, p.config, p.overlap_k, p.gold_rate, p.pay_per_task_cents, p.currency, p.target_count, p.deadline, p.reservation_minutes, p.review_spread_threshold, p.audit_sample_rate, p.agreement_threshold, p.min_rationale_chars, p.retention_days, p.client_visibility, p.published_at, p.closed_at, p.created_by, p.created_at, p.updated_at, p.qa_checks, p.content_purged_at, o.name AS org_name,
   (SELECT count(*) FROM items i WHERE i.project_id = p.id
      AND NOT EXISTS (SELECT 1 FROM gold_items g WHERE g.item_id = i.id))::int AS item_count,
   (SELECT count(*) FROM gold_items g WHERE g.project_id = p.id AND g.status = 'active')::int AS gold_count
@@ -444,6 +448,7 @@ func (q *Queries) ListProjectSummaries(ctx context.Context, arg ListProjectSumma
 			&i.Project.CreatedAt,
 			&i.Project.UpdatedAt,
 			&i.Project.QaChecks,
+			&i.Project.ContentPurgedAt,
 			&i.OrgName,
 			&i.ItemCount,
 			&i.GoldCount,
@@ -459,7 +464,7 @@ func (q *Queries) ListProjectSummaries(ctx context.Context, arg ListProjectSumma
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks FROM projects ORDER BY created_at
+SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at FROM projects ORDER BY created_at
 `
 
 // Row-level security decides which rows the caller's scope can see.
@@ -500,6 +505,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.QaChecks,
+			&i.ContentPurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -546,7 +552,7 @@ func (q *Queries) ListTaskTemplates(ctx context.Context) ([]TaskTemplate, error)
 }
 
 const lockProject = `-- name: LockProject :one
-SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks FROM projects WHERE id = $1 FOR UPDATE
+SELECT id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at FROM projects WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockProject(ctx context.Context, id uuid.UUID) (Project, error) {
@@ -580,6 +586,7 @@ func (q *Queries) LockProject(ctx context.Context, id uuid.UUID) (Project, error
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaChecks,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }
@@ -589,7 +596,7 @@ UPDATE projects SET status = $1,
   published_at = coalesce(published_at, $2::timestamptz),
   closed_at = $3::timestamptz
 WHERE id = $4
-RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at
 `
 
 type SetProjectStatusParams struct {
@@ -635,6 +642,7 @@ func (q *Queries) SetProjectStatus(ctx context.Context, arg SetProjectStatusPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaChecks,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }
@@ -645,7 +653,7 @@ UPDATE projects SET
   overlap_k = $5, gold_rate = $6, pay_per_task_cents = $7,
   target_count = $8, deadline = $9, min_rationale_chars = $10
 WHERE id = $11
-RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at
 `
 
 type UpdateProjectSettingsParams struct {
@@ -705,6 +713,7 @@ func (q *Queries) UpdateProjectSettings(ctx context.Context, arg UpdateProjectSe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.QaChecks,
+		&i.ContentPurgedAt,
 	)
 	return i, err
 }

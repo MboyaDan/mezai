@@ -60,7 +60,8 @@ SELECT * FROM trust_scores WHERE contributor_id = $1 ORDER BY created_at DESC, i
 -- Reporting (Stage 10b).
 
 -- name: ProjectsWithConsensusIn :many
-SELECT DISTINCT project_id FROM consensus_results WHERE created_at >= @from_at AND created_at < @to_at;
+SELECT DISTINCT c.project_id FROM consensus_results c JOIN projects p ON p.id = c.project_id
+WHERE c.created_at >= @from_at AND c.created_at < @to_at AND p.content_purged_at IS NULL;
 
 -- name: CompletedItemAnswers :many
 -- Answers on regular items whose consensus was reached in the window: each

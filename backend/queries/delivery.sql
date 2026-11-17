@@ -13,7 +13,7 @@ SELECT * FROM deliverables ORDER BY created_at;
 
 -- name: LockProjectForExport :one
 -- Serialises exports of one project so two clicks cannot take one version.
-SELECT p.id, p.org_id, p.name, p.task_type, p.config, p.overlap_k, o.name AS org_name
+SELECT p.id, p.org_id, p.name, p.task_type, p.config, p.overlap_k, p.content_purged_at, o.name AS org_name
 FROM projects p JOIN organisations o ON o.id = p.org_id
 WHERE p.id = $1 FOR UPDATE OF p;
 
@@ -78,7 +78,7 @@ GROUP BY c.public_code ORDER BY c.public_code;
 -- name: ListProjectDeliverables :many
 -- Visible rows only: a client sees published versions (RLS).
 SELECT d.id, d.version, d.format, d.byte_size, d.checksum_sha256, d.item_count, d.schema_version,
-  d.manifest, d.published_at, d.created_at,
+  d.manifest, d.published_at, d.purged_at, d.created_at,
   (SELECT count(*) FROM deliverable_downloads dd WHERE dd.deliverable_id = d.id)::int AS downloads
 FROM deliverables d
 WHERE d.project_id = $1
@@ -94,7 +94,7 @@ SELECT count(*)::int FROM deliverables WHERE project_id = @project_id AND versio
 
 -- name: GetDeliverable :one
 SELECT d.id, d.org_id, d.project_id, d.version, d.format, d.file_key, d.manifest_key, d.byte_size,
-  d.checksum_sha256, d.published_at, p.name AS project_name
+  d.checksum_sha256, d.published_at, d.purged_at, p.name AS project_name
 FROM deliverables d JOIN projects p ON p.id = d.project_id
 WHERE d.id = $1;
 
