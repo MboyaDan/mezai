@@ -1,6 +1,6 @@
 # Security review
 
-Started in Stage 17a (2026-11-16); retention and data subject tooling added in 17b, the tenancy review, upload checks, log review, secrets scan and threat model in 17c (2026-11-17). Optional TOTP is Stage 17d. This file records what was checked, what was found and what was done. "Checked" means read in code or run; nothing here is a certification.
+Started in Stage 17a (2026-11-16); retention and data subject tooling added in 17b, the tenancy review, upload checks, log review, secrets scan and threat model in 17c (2026-11-17). Optional two-step sign-in (TOTP) added in 17d. This file records what was checked, what was found and what was done. "Checked" means read in code or run; nothing here is a certification.
 
 ## One person, one account
 
@@ -82,7 +82,7 @@ Read every log call. Request lines carry the route template, method, status, dur
 
 | Threat | Controls in place | Residual risk and next step |
 |---|---|---|
-| Account takeover by password guessing or stuffing | Argon2id, 12-character minimum, per-IP and per-email limits, lockout, audited sign-ins | No second factor for staff and payout roles until Stage 17d. Rate limits are in memory per instance (finding 6). |
+| Account takeover by password guessing or stuffing | Argon2id, 12-character minimum, per-IP and per-email limits, lockout, audited sign-ins; optional two-step sign-in for staff (D-148) with encrypted secrets, one-time codes and recovery codes, wrong codes counting towards lockout | Two-step is optional (A-091): recommend making it required for Super Admins and Payout Approvers before production. Rate limits are in memory per instance (finding 6). |
 | Session theft or cross-site requests | HttpOnly, Secure, SameSite=Lax cookie; hashed tokens; idle and absolute expiry; CSRF token and origin check; strict headers and content policy | Inline scripts allowed on the site (A-081). |
 | A client reads another client's data | Org scope in every query, RLS on client tables, the two cross-tenant tests | A new client-owned table must get a policy: `TestEveryOrgTableHasRLS` fails for any table with `org_id` and no row-level security unless it is a named exception (audit log, enquiries, invitations, user roles, each with its reason). |
 | A contributor reads content beyond their assigned item, or the gold answers | Item-by-item serving, contributor scope, gold indistinguishable, delayed batched gold feedback, export excludes qualification answers | A contributor can copy what they are shown; contributor terms carry confidentiality (brief 12). |
@@ -91,10 +91,21 @@ Read every log call. Request lines carry the route template, method, status, dur
 | Forged M-Pesa callbacks | Secret token in the callback URL, optional source address list, match on conversation IDs and amount, stored with a verdict | The token is in the URL, so it appears in Daraja's configuration; rotate it if exposed. |
 | Malicious uploads | Size caps, type checks inside the file (D-145), stored outside the web root, served only as attachments with `nosniff` and a deny-all policy | No malware scanning; Ops should open CVs and invoices in a browser's PDF viewer rather than a desktop reader. |
 | Data exposure from a dump, backup or log | ID numbers never stored (keyed fingerprint), phone numbers masked in lists and logs, log redaction, retention and erasure (17b), secrets out of git (scan) | Backups keep erased and purged data until they expire: set and state the backup period in Stage 19. A dump plus `IDENTITY_HMAC_KEY` allows matching ID numbers. |
-| A compromised or careless staff account | Permission keys per action, Super Admin protections, audit log on every write, two-person payouts, purge and erasure need typed confirmation and a reason | Ops Managers can read all contributor data by design; TOTP in 17d; no alerting on unusual staff activity yet. |
+| A compromised or careless staff account | Permission keys per action, Super Admin protections, audit log on every write, two-person payouts, purge and erasure need typed confirmation and a reason | Ops Managers can read all contributor data by design; two-step sign-in is optional (A-091); no alerting on unusual staff activity yet. |
 | Vulnerable dependencies | Dependabot, weekly govulncheck, `npm audit` (0 production findings) | Development-only npm advisories (finding 8). |
 | Denial of service | Request size cap, per-route limits, statement and lock timeouts | No edge protection until Cloudflare is in front (Stage 19). |
 
+## Two-step sign-in (Stage 17d)
+
+| Question | Answer |
+|---|---|
+| Who can use it? | Staff accounts (Super Admin, Ops Manager, Payout Approver, Reviewer). Optional (A-091). |
+| What if the database leaks? | Secrets are encrypted with a key derived from `IDENTITY_HMAC_KEY`, kept only in the environment; recovery codes are hashes. |
+| Can a code be replayed? | No: the last used time step is stored and the user row is locked while a code is checked; recovery codes are marked used in the same transaction. |
+| Can codes be guessed? | Five wrong codes close the sign-in step, each counts towards the 5-failure lockout, and the step shares the per-IP sign-in limit. |
+| Lost phone? | A recovery code, or a reset by a `user.manage` holder with a reason in the audit log (a Super Admin's only by a Super Admin). |
+| Tested | `TestTOTPRFCVectors` (RFC 6238 appendix B), `TestVerifyTOTP`, `TestSealer`, `TestRecoveryCodes`, `TestTwoStepSignIn`, `TestTwoStepLimitsAndReset`, `tests/full/two-step.spec.ts`. |
+
 ## Still to do
 
-Stage 17d: optional TOTP for Ops and payout roles. Stage 19: shared rate-limit store if more than one API instance runs, backup period, edge protection.
+Stage 19: shared rate-limit store if more than one API instance runs, backup period, edge protection.

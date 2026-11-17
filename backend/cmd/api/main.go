@@ -69,6 +69,7 @@ func run() error {
 
 	opts := auth.DefaultOptions(cfg.SessionTTL, cfg.SessionIdle)
 	opts.AppOrigin = cfg.AppOrigin
+	opts.TOTPKey = cfg.IdentityKey // encrypts two-step secrets (Stage 17d)
 	authSvc, err := auth.NewService(pool, opts)
 	if err != nil {
 		return err

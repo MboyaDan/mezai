@@ -104,6 +104,14 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodPost, "/auth/login", Public(), perIP, h.login)
 		a.handle(http.MethodPost, "/auth/logout", SignedIn(), h.logout)
 		a.handle(http.MethodGet, "/auth/me", SignedIn(), h.me)
+		// Two-step sign-in (Stage 17d): the code step shares the sign-in limit.
+		a.handle(http.MethodPost, "/auth/login/code", Public(), perIP, h.loginCode)
+		perUser15 := rateLimitUser(newLimiter(10, 15*time.Minute))
+		a.handle(http.MethodGet, "/me/two-step", SignedIn(), h.totpStatus)
+		a.handle(http.MethodPost, "/me/two-step/setup", SignedIn(), perUser15, h.totpSetup)
+		a.handle(http.MethodPost, "/me/two-step/confirm", SignedIn(), perUser15, h.totpConfirm)
+		a.handle(http.MethodPost, "/me/two-step/disable", SignedIn(), perUser15, h.totpDisable)
+		a.handle(http.MethodPost, "/users/:id/two-step/reset", Perm("user.manage"), h.totpReset)
 
 		// Public account links share one per-IP limit; email-keyed ones add a per-address limit.
 		ah := &accountHandlers{svc: d.Auth.Service, log: d.Log, perEmail: newLimiter(5, time.Hour)}

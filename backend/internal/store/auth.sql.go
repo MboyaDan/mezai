@@ -110,7 +110,7 @@ func (q *Queries) GetContributorIDByUser(ctx context.Context, userID uuid.UUID) 
 }
 
 const getUserForLogin = `-- name: GetUserForLogin :one
-SELECT id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until
+SELECT id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until, totp_enabled_at
 FROM users WHERE email = lower($1)
 `
 
@@ -123,6 +123,7 @@ type GetUserForLoginRow struct {
 	Status           string
 	FailedLoginCount int32
 	LockedUntil      *time.Time
+	TotpEnabledAt    *time.Time
 }
 
 func (q *Queries) GetUserForLogin(ctx context.Context, email string) (GetUserForLoginRow, error) {
@@ -137,6 +138,7 @@ func (q *Queries) GetUserForLogin(ctx context.Context, email string) (GetUserFor
 		&i.Status,
 		&i.FailedLoginCount,
 		&i.LockedUntil,
+		&i.TotpEnabledAt,
 	)
 	return i, err
 }

@@ -78,6 +78,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
+        "202":
+          description: >-
+            Password right, two-step sign-in on (Stage 17d): no session yet. Sets the
+            `mezai_signin_step` cookie (HttpOnly, SameSite=Strict, 5 minutes); finish with
+            `POST /v1/auth/login/code`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [second_factor, expires_at]
+                properties:
+                  second_factor: { type: string, enum: [totp] }
+                  expires_at: { type: string, format: date-time }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
         "403":
@@ -97,6 +110,97 @@ paths:
         "204": { description: Signed out }
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+  /v1/auth/login/code:
+    post:
+      operationId: loginCode
+      summary: Finish a sign-in with a two-step code or a recovery code (Stage 17d).
+      description: >-
+        After `POST /v1/auth/login` answers 202 `second_factor`, send the 6-digit code from the
+        authenticator app, or an unused recovery code (`xxxx-xxxx`). Needs the `mezai_signin_step`
+        cookie set by the password step (5 minutes, 5 codes). Wrong codes count towards the account
+        lockout. Shares the per-IP sign-in limit.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string } } }
+      responses:
+        "200": { description: Signed in; sets the session cookie, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
+        "401": { description: "`invalid_code` or `challenge_expired` (start again with the password)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/Error" }
+  /v1/me/two-step:
+    get:
+      operationId: getTwoStep
+      summary: The caller's two-step sign-in state (signed in).
+      description: "`available` is true for staff accounts on a server with a key; contributors and client users cannot switch it on."
+      tags: [auth]
+      responses:
+        "200":
+          description: State
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available, enabled, enabled_at, recovery_codes_left]
+                properties:
+                  available: { type: boolean }
+                  enabled: { type: boolean }
+                  enabled_at: { type: [string, "null"], format: date-time }
+                  recovery_codes_left: { type: integer }
+  /v1/me/two-step/setup:
+    post:
+      operationId: startTwoStep
+      summary: Start switching two-step on; returns a new secret (staff only).
+      tags: [auth]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200":
+          description: Secret to add to an authenticator app (shown as a QR code). Starting again replaces it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, uri]
+                properties:
+                  secret: { type: string, description: Base32, for typing in by hand }
+                  uri: { type: string, description: "otpauth://totp/... link" }
+        "403": { description: "`two_step_unavailable`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`two_step_on`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/two-step/confirm:
+    post:
+      operationId: confirmTwoStep
+      summary: Switch two-step on with a code from the app; returns ten recovery codes, shown once.
+      tags: [auth]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string } } }
+      responses:
+        "200":
+          description: On
+          content:
+            application/json:
+              schema: { type: object, required: [recovery_codes], properties: { recovery_codes: { type: array, items: { type: string } } } }
+        "401": { description: "`invalid_code`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`two_step_on` or `two_step_not_started` (set-up older than an hour)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/me/two-step/disable:
+    post:
+      operationId: disableTwoStep
+      summary: Switch two-step off with the password and a current or recovery code (audited).
+      tags: [auth]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [password, code], properties: { password: { type: string }, code: { type: string } } }
+      responses:
+        "204": { description: Off; recovery codes deleted }
+        "401": { description: "`invalid_credentials` or `invalid_code`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`two_step_off`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/auth/me:
     get:
       operationId: getMe
@@ -299,6 +403,26 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /v1/users/{id}/two-step/reset:
+    post:
+      operationId: resetTwoStep
+      summary: Switch off another user's two-step sign-in, for a lost phone (`user.manage`, audited with the reason).
+      description: Only a Super Admin can reset a Super Admin's. Your own is switched off from your account page.
+      tags: [users]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string, maxLength: 500 } } }
+      responses:
+        "204": { description: Off }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "`two_step_off` or `self`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/users/{id}/status:
     post:
       operationId: setUserStatus
@@ -2894,7 +3018,7 @@ components:
         created_at: { type: string, format: date-time }
     UserSummary:
       type: object
-      required: [id, email, display_name, status, email_verified, roles]
+      required: [id, email, display_name, status, email_verified, roles, two_step]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -2902,6 +3026,7 @@ components:
         status: { type: string, enum: [active, disabled] }
         email_verified: { type: boolean }
         last_login_at: { type: [string, "null"], format: date-time }
+        two_step: { type: boolean, description: Two-step sign-in is on (Stage 17d) }
         roles:
           type: array
           items: { type: string }

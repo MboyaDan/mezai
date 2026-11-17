@@ -358,7 +358,8 @@ type UserSummary struct {
 	Status        string     `json:"status"`
 	EmailVerified bool       `json:"email_verified"`
 	LastLoginAt   *time.Time `json:"last_login_at"`
-	Roles         []string   `json:"roles"` // "role_key" or "role_key:org_id"
+	Roles         []string   `json:"roles"`    // "role_key" or "role_key:org_id"
+	TwoStep       bool       `json:"two_step"` // two-step sign-in on (Stage 17d)
 }
 
 func (s *Service) ListUsers(ctx context.Context, p *Principal) ([]UserSummary, error) {
@@ -367,7 +368,7 @@ func (s *Service) ListUsers(ctx context.Context, p *Principal) ([]UserSummary, e
 		rows, err := store.New(tx).ListUsersWithRoles(ctx)
 		for _, r := range rows {
 			out = append(out, UserSummary{ID: r.ID, Email: r.Email, DisplayName: r.DisplayName, Status: r.Status,
-				EmailVerified: r.EmailVerifiedAt != nil, LastLoginAt: r.LastLoginAt, Roles: r.Roles})
+				EmailVerified: r.EmailVerifiedAt != nil, LastLoginAt: r.LastLoginAt, Roles: r.Roles, TwoStep: r.TwoStep})
 		}
 		return err
 	})

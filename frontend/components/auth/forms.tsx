@@ -44,8 +44,12 @@ export function LoginForm() {
   const { state, signedIn } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { busy, error, run } = useSubmit();
+  const { busy, error, setError, run } = useSubmit();
   const [resent, setResent] = useState(false);
+  // Two-step sign-in (Stage 17d): after a right password, ask for the code.
+  const [step, setStep] = useState<"password" | "code">("password");
+  const [code, setCode] = useState("");
+  const [recovery, setRecovery] = useState(false);
 
   // Someone already signed in goes straight on.
   useEffect(() => {
@@ -55,10 +59,86 @@ export function LoginForm() {
   function submit(e: FormEvent) {
     e.preventDefault();
     void run(async () => {
-      const me = await api<Me>("POST", "/v1/auth/login", { email, password });
-      signedIn(me);
-      router.replace(safeNext(params.get("next"), me.user.kind));
+      const res = await api<Me | { second_factor: "totp" }>("POST", "/v1/auth/login", { email, password });
+      if ("second_factor" in res) {
+        setStep("code");
+        setCode("");
+        return;
+      }
+      signedIn(res);
+      router.replace(safeNext(params.get("next"), res.user.kind));
     });
+  }
+
+  function submitCode(e: FormEvent) {
+    e.preventDefault();
+    void run(async () => {
+      try {
+        const me = await api<Me>("POST", "/v1/auth/login/code", { code });
+        signedIn(me);
+        router.replace(safeNext(params.get("next"), me.user.kind));
+      } catch (err) {
+        // The step lasts five minutes and five codes: then start again.
+        if (err instanceof ApiError && err.code === "challenge_expired") {
+          setStep("password");
+          setPassword("");
+        }
+        throw err;
+      }
+    });
+  }
+
+  if (step === "code") {
+    return (
+      <>
+        <AuthHeading title="Enter your code">
+          {recovery
+            ? "Type one of the recovery codes you saved when you turned on two-step sign-in. Each works once."
+            : "Open your authenticator app and type the 6-digit code it shows for MezAI."}
+        </AuthHeading>
+        <form onSubmit={submitCode} noValidate className="grid gap-5">
+          <FormError error={error} />
+          <Field label={recovery ? "Recovery code" : "Code"} required>
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="one-time-code"
+              inputMode={recovery ? "text" : "numeric"}
+              maxLength={recovery ? 12 : 7}
+              autoFocus
+              required
+            />
+          </Field>
+          <Button type="submit" loading={busy} fullWidth arrow>
+            Sign in
+          </Button>
+          <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            <button
+              type="button"
+              className="font-medium underline underline-offset-[0.3em]"
+              onClick={() => {
+                setRecovery((r) => !r);
+                setCode("");
+                setError(null);
+              }}
+            >
+              {recovery ? "Use the app instead" : "Use a recovery code"}
+            </button>
+            <button
+              type="button"
+              className="font-medium underline underline-offset-[0.3em]"
+              onClick={() => {
+                setStep("password");
+                setPassword("");
+                setError(null);
+              }}
+            >
+              Start again
+            </button>
+          </p>
+        </form>
+      </>
+    );
   }
 
   function resend() {

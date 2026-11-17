@@ -8,8 +8,10 @@ import {
   FolderKanban,
   History,
   Inbox,
+  KeyRound,
   LayoutGrid,
   Receipt,
+  ShieldCheck,
   UserPlus,
   Users,
   Wallet,
@@ -27,7 +29,7 @@ export function useCan() {
 }
 
 // Pages that exist so far; the rest of the sitemap joins in later stages.
-const items: Array<WorkspaceNavItem & { perms?: string[] }> = [
+const items: Array<WorkspaceNavItem & { perms?: string[]; staffOnly?: boolean }> = [
   { href: "/w", label: "Overview", icon: LayoutGrid, exact: true },
   {
     href: "/w/projects",
@@ -54,12 +56,17 @@ const items: Array<WorkspaceNavItem & { perms?: string[] }> = [
   { href: "/w/invoices", label: "Invoices", icon: Receipt, perms: ["invoice.manage", "org.invoice.read"] },
   { href: "/w/team", label: "Team", icon: UserPlus, perms: ["org.user.invite"] },
   { href: "/w/activity", label: "Activity", icon: History, perms: ["org.project.read", "audit.read"] },
+  { href: "/w/staff", label: "Staff", icon: ShieldCheck, perms: ["user.manage"], staffOnly: true },
+  { href: "/w/account", label: "Account", icon: KeyRound, staffOnly: true },
 ];
 
 function Shell({ children }: { children: ReactNode }) {
   const user = useUser();
   const can = useCan();
-  const nav = items.filter((i) => !i.perms || can(...i.perms));
+  const nav = items
+    .filter((i) => !i.staffOnly || user.kind === "staff")
+    .filter((i) => !i.perms || can(...i.perms))
+    .map(({ href, label, icon, exact }) => ({ href, label, icon, exact }));
   return (
     <WorkspaceShell
       nav={nav}

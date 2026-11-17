@@ -449,6 +449,7 @@ func (q *Queries) ListRolesWithPermissions(ctx context.Context) ([]ListRolesWith
 
 const listUsersWithRoles = `-- name: ListUsersWithRoles :many
 SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at, u.last_login_at,
+       (u.totp_enabled_at IS NOT NULL)::boolean AS two_step,
        coalesce(array_agg(r.key || coalesce(':' || ur.org_id::text, '') ORDER BY r.key)
                 FILTER (WHERE r.key IS NOT NULL), '{}')::text[] AS roles
 FROM users u
@@ -466,6 +467,7 @@ type ListUsersWithRolesRow struct {
 	Status          string
 	EmailVerifiedAt *time.Time
 	LastLoginAt     *time.Time
+	TwoStep         bool
 	Roles           []string
 }
 
@@ -486,6 +488,7 @@ func (q *Queries) ListUsersWithRoles(ctx context.Context) ([]ListUsersWithRolesR
 			&i.Status,
 			&i.EmailVerifiedAt,
 			&i.LastLoginAt,
+			&i.TwoStep,
 			&i.Roles,
 		); err != nil {
 			return nil, err

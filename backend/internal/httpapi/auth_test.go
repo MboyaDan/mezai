@@ -44,6 +44,7 @@ func newEnv(t *testing.T) *env {
 	files := storage.NewMemory()
 	opts := auth.DefaultOptions(time.Hour, 30*time.Minute)
 	opts.AppOrigin = origin
+	opts.TOTPKey = identity.DevKey
 	svc, err := auth.NewService(pool, opts)
 	if err != nil {
 		t.Fatal(err)

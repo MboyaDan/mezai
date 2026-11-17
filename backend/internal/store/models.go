@@ -454,6 +454,15 @@ type Job struct {
 	UpdatedAt   time.Time
 }
 
+type LoginChallenge struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TokenHash []byte
+	Attempts  int32
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
 type MpesaCallback struct {
 	ID                       uuid.UUID
 	Kind                     string
@@ -725,6 +734,14 @@ type QualificationTest struct {
 	CreatedBy       *uuid.UUID
 }
 
+type RecoveryCode struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	CodeHash  []byte
+	UsedAt    *time.Time
+	CreatedAt time.Time
+}
+
 type Review struct {
 	ID                 uuid.UUID
 	OrgID              uuid.UUID
@@ -881,6 +898,11 @@ type User struct {
 	LastLoginAt      *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	TotpSecretEnc    []byte
+	TotpEnabledAt    *time.Time
+	TotpLastStep     *int64
+	TotpPendingEnc   []byte
+	TotpPendingAt    *time.Time
 }
 
 type UserRole struct {

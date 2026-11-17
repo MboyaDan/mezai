@@ -207,7 +207,10 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 		if res.Emails, err = q.RedactSentEmails(ctx, int32(emailDays)); err != nil {
 			return err
 		}
-		res.IdemKeys, err = q.DeleteExpiredIdempotencyKeys(ctx)
+		if res.IdemKeys, err = q.DeleteExpiredIdempotencyKeys(ctx); err != nil {
+			return err
+		}
+		_, err = q.DeleteExpiredLoginChallenges(ctx) // unfinished two-step sign-ins (Stage 17d)
 		return err
 	})
 	if err != nil {

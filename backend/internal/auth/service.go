@@ -25,6 +25,9 @@ var (
 	ErrEmailNotVerified   = errors.New("auth: email not verified")
 	ErrNoSession          = errors.New("auth: no valid session")
 	ErrAccountSetup       = errors.New("auth: account has no usable role")
+	// ErrSecondFactor: the password was right and the account has two-step
+	// sign-in on; Session.Challenge holds the token for CompleteLogin.
+	ErrSecondFactor = errors.New("auth: second factor required")
 )
 
 // Options are the lockout and session rules.
@@ -34,6 +37,9 @@ type Options struct {
 	SessionIdle time.Duration
 	MaxFailures int           // failed passwords before lockout
 	LockFor     time.Duration // lockout length
+	// TOTPKey encrypts two-step secrets (config.IdentityKey). Without it
+	// two-step sign-in cannot be switched on.
+	TOTPKey []byte
 }
 
 // DefaultOptions: 5 failures lock the account for 15 minutes (A-018).
@@ -47,6 +53,8 @@ type Service struct {
 	opt  Options
 	// dummyHash is verified against for unknown emails so a miss takes as long as a hit.
 	dummyHash string
+	totp      *sealer // nil when Options.TOTPKey is unset
+	now       func() time.Time
 }
 
 func NewService(pool *db.Pool, opt Options) (*Service, error) {
@@ -54,7 +62,13 @@ func NewService(pool *db.Pool, opt Options) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{pool: pool, opt: opt, dummyHash: h}, nil
+	svc := &Service{pool: pool, opt: opt, dummyHash: h, now: time.Now}
+	if len(opt.TOTPKey) > 0 {
+		if svc.totp, err = newSealer(opt.TOTPKey); err != nil {
+			return nil, err
+		}
+	}
+	return svc, nil
 }
 
 // Session is what a successful login hands back: the cookie value and the
@@ -63,6 +77,8 @@ type Session struct {
 	Token     string
 	CSRFToken string
 	ExpiresAt time.Time
+	// Challenge is set instead of Token when a second factor is needed.
+	Challenge string
 }
 
 // Login checks the password, applies lockout, and creates a session.
@@ -123,29 +139,47 @@ func (s *Service) Login(ctx context.Context, email, plain string, m Meta) (Sessi
 			outErr = err
 			return nil
 		}
-		token, tokenHash := newToken()
-		csrf := make([]byte, 32)
-		_, _ = rand.Read(csrf)
-		expires := time.Now().Add(s.opt.SessionTTL)
-		ua := truncate(m.UserAgent, 300)
-		sid, err := q.CreateSession(ctx, store.CreateSessionParams{
-			UserID: u.ID, TokenHash: tokenHash, CsrfSecret: csrf, Ip: m.IP, UserAgent: &ua, ExpiresAt: expires,
-		})
-		if err != nil {
-			return err
+		if u.TotpEnabledAt != nil {
+			// Right password, two-step on: a challenge, not a session (Stage 17d).
+			token, tokenHash := newToken()
+			expires := s.now().Add(ChallengeTTL)
+			if err := q.CreateLoginChallenge(ctx, store.CreateLoginChallengeParams{UserID: u.ID, TokenHash: tokenHash, ExpiresAt: expires}); err != nil {
+				return err
+			}
+			out, outErr = Session{Challenge: token, ExpiresAt: expires}, ErrSecondFactor
+			return Audit(ctx, q, m, Entry{Actor: &u.ID, Action: "auth.password_ok", EntityType: "user", EntityID: &u.ID,
+				After: map[string]any{"second_factor": "totp"}})
 		}
-		if err := q.RecordSuccessfulLogin(ctx, u.ID); err != nil {
-			return err
-		}
-		p.SessionID, p.CSRFSecret = sid, csrf
-		principal = p
-		out = Session{Token: token, CSRFToken: CSRFToken(csrf), ExpiresAt: expires}
-		return Audit(ctx, q, m, Entry{Actor: &u.ID, Action: "auth.login", EntityType: "session", EntityID: &sid})
+		out, principal, err = s.startSession(ctx, q, p, m, nil)
+		return err
 	})
 	if err != nil {
 		return Session{}, nil, err
 	}
 	return out, principal, outErr
+}
+
+// startSession creates a session for a principal whose sign-in is complete.
+func (s *Service) startSession(ctx context.Context, q *store.Queries, p *Principal, m Meta, after any) (Session, *Principal, error) {
+	token, tokenHash := newToken()
+	csrf := make([]byte, 32)
+	_, _ = rand.Read(csrf)
+	expires := s.now().Add(s.opt.SessionTTL)
+	ua := truncate(m.UserAgent, 300)
+	sid, err := q.CreateSession(ctx, store.CreateSessionParams{
+		UserID: p.UserID, TokenHash: tokenHash, CsrfSecret: csrf, Ip: m.IP, UserAgent: &ua, ExpiresAt: expires,
+	})
+	if err != nil {
+		return Session{}, nil, err
+	}
+	if err := q.RecordSuccessfulLogin(ctx, p.UserID); err != nil {
+		return Session{}, nil, err
+	}
+	p.SessionID, p.CSRFSecret = sid, csrf
+	if err := Audit(ctx, q, m, Entry{Actor: &p.UserID, Action: "auth.login", EntityType: "session", EntityID: &sid, After: after}); err != nil {
+		return Session{}, nil, err
+	}
+	return Session{Token: token, CSRFToken: CSRFToken(csrf), ExpiresAt: expires}, p, nil
 }
 
 // Authenticate resolves a session cookie value to a principal.

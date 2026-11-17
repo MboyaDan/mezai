@@ -1,5 +1,5 @@
 -- name: GetUserForLogin :one
-SELECT id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until
+SELECT id, email, display_name, password_hash, email_verified_at, status, failed_login_count, locked_until, totp_enabled_at
 FROM users WHERE email = lower(@email);
 
 -- name: RecordFailedLogin :one
