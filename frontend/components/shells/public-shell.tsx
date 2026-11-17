@@ -102,7 +102,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
         </ButtonLink>
       </Drawer>
 
-      <main id="main" className="flex-1">
+      <main id="main" tabIndex={-1} className="outline-none flex-1">
         {children}
       </main>
 
