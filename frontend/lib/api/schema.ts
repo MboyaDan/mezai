@@ -78,6 +78,97 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/auth/login/code": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Finish a sign-in with a two-step code or a recovery code (Stage 17d).
+     * @description After `POST /v1/auth/login` answers 202 `second_factor`, send the 6-digit code from the authenticator app, or an unused recovery code (`xxxx-xxxx`). Needs the `mezai_signin_step` cookie set by the password step (5 minutes, 5 codes). Wrong codes count towards the account lockout. Shares the per-IP sign-in limit.
+     */
+    post: operations["loginCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/two-step": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The caller's two-step sign-in state (signed in).
+     * @description `available` is true for staff accounts on a server with a key; contributors and client users cannot switch it on.
+     */
+    get: operations["getTwoStep"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/two-step/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start switching two-step on; returns a new secret (staff only). */
+    post: operations["startTwoStep"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/two-step/confirm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Switch two-step on with a code from the app; returns ten recovery codes, shown once. */
+    post: operations["confirmTwoStep"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/me/two-step/disable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Switch two-step off with the password and a current or recovery code (audited). */
+    post: operations["disableTwoStep"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/auth/me": {
     parameters: {
       query?: never;
@@ -270,6 +361,26 @@ export interface paths {
     post?: never;
     /** Remove a role (`user.manage`). Super Admin changes need `system.admin`; the last Super Admin cannot be demoted (409 `last_super_admin`). */
     delete: operations["removeRole"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/users/{id}/two-step/reset": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Switch off another user's two-step sign-in, for a lost phone (`user.manage`, audited with the reason).
+     * @description Only a Super Admin can reset a Super Admin's. Your own is switched off from your account page.
+     */
+    post: operations["resetTwoStep"];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -2434,6 +2545,8 @@ export interface components {
       email_verified: boolean;
       /** Format: date-time */
       last_login_at?: string | null;
+      /** @description Two-step sign-in is on (Stage 17d) */
+      two_step: boolean;
       /** @description `role_key`, or `role_key:org_id` for client roles */
       roles: string[];
     };
@@ -4073,6 +4186,20 @@ export interface operations {
           "application/json": components["schemas"]["Me"];
         };
       };
+      /** @description Password right, two-step sign-in on (Stage 17d): no session yet. Sets the `mezai_signin_step` cookie (HttpOnly, SameSite=Strict, 5 minutes); finish with `POST /v1/auth/login/code`. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            second_factor: "totp";
+            /** Format: date-time */
+            expires_at: string;
+          };
+        };
+      };
       400: components["responses"]["Error"];
       401: components["responses"]["Error"];
       /** @description `email_not_verified`, `account_not_ready` or `csrf_failed` */
@@ -4108,6 +4235,209 @@ export interface operations {
       };
       401: components["responses"]["Error"];
       403: components["responses"]["Error"];
+    };
+  };
+  loginCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Signed in; sets the session cookie */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Me"];
+        };
+      };
+      /** @description `invalid_code` or `challenge_expired` (start again with the password) */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      429: components["responses"]["Error"];
+    };
+  };
+  getTwoStep: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            available: boolean;
+            enabled: boolean;
+            /** Format: date-time */
+            enabled_at: string | null;
+            recovery_codes_left: number;
+          };
+        };
+      };
+    };
+  };
+  startTwoStep: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Secret to add to an authenticator app (shown as a QR code). Starting again replaces it. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @description Base32 */
+            secret: string;
+            /** @description otpauth://totp/... link */
+            uri: string;
+          };
+        };
+      };
+      /** @description `two_step_unavailable` */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description `two_step_on` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  confirmTwoStep: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description On */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            recovery_codes: string[];
+          };
+        };
+      };
+      /** @description `invalid_code` */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description `two_step_on` or `two_step_not_started` (set-up older than an hour) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  disableTwoStep: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          password: string;
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Off; recovery codes deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description `invalid_credentials` or `invalid_code` */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description `two_step_off` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
     };
   };
   getMe: {
@@ -4405,6 +4735,47 @@ export interface operations {
       403: components["responses"]["Error"];
       404: components["responses"]["Error"];
       409: components["responses"]["Error"];
+    };
+  };
+  resetTwoStep: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Off */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      /** @description `two_step_off` or `self` */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      422: components["responses"]["InvalidField"];
     };
   };
   setUserStatus: {
