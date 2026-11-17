@@ -46,6 +46,18 @@ jobs:
         run: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 diff
       - run: go test -race -count=1 ./...
 
+  secrets:
+    name: Secrets scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the whole history: a secret removed later is still leaked
+      - name: gitleaks (pinned image, default rules plus .gitleaks.toml)
+        run: >-
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4
+          detect --source=/repo --config=/repo/.gitleaks.toml --redact --no-banner --exit-code=1
+
   api-image:
     name: API image builds
     runs-on: ubuntu-latest

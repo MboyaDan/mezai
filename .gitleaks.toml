@@ -1,0 +1,11 @@
+# Secrets scan (Stage 17c): gitleaks' default rules, run over the whole
+# history in CI. Allow only exact, known test values, never whole files.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures that are not secrets"
+regexes = [
+  # config_test.go: an IDENTITY_HMAC_KEY made of the bytes 0 to 31.
+  '''AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=''',
+]
