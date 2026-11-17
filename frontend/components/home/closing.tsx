@@ -38,7 +38,12 @@ export function Practices() {
 /** Frame 8. A calm lime band. */
 export function FinalCta() {
   return (
-    <section data-theme="light" aria-labelledby="cta-title" className="bg-lime text-charcoal-950">
+    <section
+      data-theme="light"
+      data-lime-band
+      aria-labelledby="cta-title"
+      className="bg-lime text-charcoal-950"
+    >
       <Container className="flex flex-col gap-10 py-20 md:flex-row md:items-end md:justify-between md:py-28">
         <div data-reveal>
           <div className="w-20">
