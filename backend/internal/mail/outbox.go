@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"encoding/json"
+	"github.com/MboyaDan/mezai/backend/internal/pii"
 	"log/slog"
 	"time"
 
@@ -86,7 +87,7 @@ func (w *Worker) SendDue(ctx context.Context) (int, error) {
 				// Addresses are personal data: log the row id, not the recipient.
 				w.Log.Warn("email send failed", slog.String("email_id", m.ID.String()), slog.Int("attempt", int(m.Attempts)+1), slog.Any("error", sendErr))
 				return q.MarkEmailFailed(ctx, store.MarkEmailFailedParams{
-					ID: m.ID, LastError: truncate(sendErr.Error(), 500), MaxAttempts: maxAttempts,
+					ID: m.ID, LastError: truncate(pii.Redact(sendErr.Error()), 500), MaxAttempts: maxAttempts,
 					RetrySeconds: int32(30 * (1 << m.Attempts)), // 30 s, 1, 2, 4 min
 				})
 			}
