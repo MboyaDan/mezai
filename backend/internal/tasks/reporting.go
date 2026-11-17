@@ -86,6 +86,9 @@ func (s *Service) SnapshotAgreement(ctx context.Context, from, to time.Time, onl
 			if err != nil {
 				return err
 			}
+			if pr.ContentPurgedAt != nil {
+				continue // answers deleted under the retention rule: keep the last figures
+			}
 			cfg, err := quality.ValidateConfig(pr.TaskType, pr.Config)
 			if err != nil {
 				return err

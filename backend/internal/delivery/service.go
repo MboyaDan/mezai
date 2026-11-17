@@ -32,6 +32,9 @@ var (
 	ErrFileChanged      = errors.New("delivery: stored file does not match its checksum")
 	ErrStorage          = errors.New("delivery: file storage unavailable")
 	ErrInvalidInput     = errors.New("delivery: invalid input")
+	// ErrPurged: the project's content was deleted under its retention rule
+	// (Stage 17b); its files are gone and nothing new can be exported.
+	ErrPurged = errors.New("delivery: content deleted under the retention rule")
 )
 
 // MaxItems caps one export, which is built in memory (A-069).
@@ -76,22 +79,28 @@ type Version struct {
 	Items       int32      `json:"items"`
 	CreatedAt   time.Time  `json:"created_at"`
 	PublishedAt *time.Time `json:"published_at"`
+	PurgedAt    *time.Time `json:"purged_at"`
 	Manifest    Manifest   `json:"manifest"`
 	Files       []File     `json:"files"`
 }
 
 // visibleProject checks the caller can see the project (RLS) and returns its name.
 func (s *Service) visibleProject(ctx context.Context, p *auth.Principal, projectID uuid.UUID) (string, error) {
-	var name string
+	pr, err := s.project(ctx, p, projectID)
+	return pr.Name, err
+}
+
+func (s *Service) project(ctx context.Context, p *auth.Principal, projectID uuid.UUID) (store.GetProjectForWorkRow, error) {
+	var pr store.GetProjectForWorkRow
 	err := s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
-		pr, err := store.New(tx).GetProjectForWork(ctx, projectID)
+		var err error
+		pr, err = store.New(tx).GetProjectForWork(ctx, projectID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
-		name = pr.Name
 		return err
 	})
-	return name, err
+	return pr, err
 }
 
 // Export builds a new version of the project's deliverable from its final
@@ -107,6 +116,9 @@ func (s *Service) Export(ctx context.Context, p *auth.Principal, projectID uuid.
 		pr, err := q.LockProjectForExport(ctx, projectID)
 		if err != nil {
 			return err
+		}
+		if pr.ContentPurgedAt != nil {
+			return ErrPurged
 		}
 		cfg, err := quality.ValidateConfig(pr.TaskType, pr.Config)
 		if err != nil {
@@ -257,7 +269,7 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, projectID uuid.UU
 		}
 		for _, r := range rows {
 			if len(out) == 0 || out[len(out)-1].Version != r.Version {
-				v := Version{Version: r.Version, Items: r.ItemCount, CreatedAt: r.CreatedAt, PublishedAt: r.PublishedAt, Files: []File{}}
+				v := Version{Version: r.Version, Items: r.ItemCount, CreatedAt: r.CreatedAt, PublishedAt: r.PublishedAt, PurgedAt: r.PurgedAt, Files: []File{}}
 				if err := json.Unmarshal(r.Manifest, &v.Manifest); err != nil {
 					return err
 				}
@@ -287,8 +299,12 @@ func (s *Service) List(ctx context.Context, p *auth.Principal, projectID uuid.UU
 
 // Publish makes a version visible to the project's client.
 func (s *Service) Publish(ctx context.Context, p *auth.Principal, projectID uuid.UUID, version int32, m auth.Meta) error {
-	if _, err := s.visibleProject(ctx, p, projectID); err != nil {
+	pr, err := s.project(ctx, p, projectID)
+	if err != nil {
 		return err
+	}
+	if pr.ContentPurgedAt != nil {
+		return ErrPurged
 	}
 	return s.pool.InScope(ctx, p.Scope(), func(tx pgx.Tx) error {
 		q := store.New(tx)

@@ -31,6 +31,8 @@ func (h *deliveryHandlers) fail(c *gin.Context, err error) {
 		status, code = http.StatusUnprocessableEntity, "too_large"
 	case errors.Is(err, delivery.ErrAlreadyPublished):
 		code = "already_published"
+	case errors.Is(err, delivery.ErrPurged):
+		status, code = http.StatusGone, "content_deleted"
 	case errors.Is(err, delivery.ErrLinkInvalid):
 		status, code = http.StatusForbidden, "link_expired"
 	case errors.Is(err, delivery.ErrStorage):

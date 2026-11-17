@@ -16,6 +16,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/earnings"
 	"github.com/MboyaDan/mezai/backend/internal/payouts"
 	"github.com/MboyaDan/mezai/backend/internal/portal"
+	"github.com/MboyaDan/mezai/backend/internal/privacy"
 	"github.com/MboyaDan/mezai/backend/internal/projects"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -141,6 +142,20 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		nh := &notificationHandlers{pool: d.Auth.Pool, log: d.Log}
 		a.handle(http.MethodGet, "/me/notifications", Perm("profile.manage"), nh.get)
 		a.handle(http.MethodPut, "/me/notifications", Perm("profile.manage"), rateLimitUser(newLimiter(30, time.Minute)), nh.put)
+		// Privacy (Stage 17b): a copy of one's data, erasure requests, the
+		// retention rule for task content, and Ops tools for both.
+		pvh := &privacyHandlers{svc: privacy.NewService(d.Auth.Pool, d.Auth.Files, d.Log), log: d.Log}
+		a.handle(http.MethodGet, "/me/data-export", Perm("profile.manage"), rateLimitUser(newLimiter(5, time.Hour)), pvh.myExport)
+		a.handle(http.MethodGet, "/me/erasure", Perm("profile.manage"), pvh.myErasure)
+		a.handle(http.MethodPost, "/me/erasure", Perm("profile.manage"), rateLimitUser(newLimiter(10, time.Hour)), pvh.requestMyErasure)
+		a.handle(http.MethodDelete, "/me/erasure", Perm("profile.manage"), pvh.withdrawMyErasure)
+		a.handle(http.MethodGet, "/erasure-requests", Perm("privacy.manage"), pvh.listRequests)
+		a.handle(http.MethodGet, "/contributors/:id/data-export", Perm("privacy.manage"), rateLimitUser(newLimiter(30, time.Hour)), pvh.contributorExport)
+		a.handle(http.MethodGet, "/contributors/:id/erasure", Perm("privacy.manage"), pvh.contributorErasure)
+		a.handle(http.MethodPost, "/contributors/:id/erasure", Perm("privacy.manage"), pvh.erase)
+		a.handle(http.MethodDelete, "/contributors/:id/erasure", Perm("privacy.manage"), pvh.withdrawErasure)
+		a.handle(http.MethodGet, "/projects/:id/retention", Perm("project.manage", "org.project.read"), pvh.retention)
+		a.handle(http.MethodPost, "/projects/:id/purge", Perm("privacy.manage"), pvh.purge)
 		// Rate limited: a number already on another account is refused, so
 		// saves must not become a way to test many numbers (D-078).
 		a.handle(http.MethodPut, "/me/contributor/profile", Perm("profile.manage"), rateLimitUser(newLimiter(30, time.Hour)), ch.updateMyProfile)

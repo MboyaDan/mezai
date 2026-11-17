@@ -23,6 +23,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/mpesa"
 	"github.com/MboyaDan/mezai/backend/internal/payouts"
+	"github.com/MboyaDan/mezai/backend/internal/privacy"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
 )
@@ -79,6 +80,10 @@ func run() error {
 	go mailer.Run(ctx, 5*time.Second)
 	// CVs are deleted 90 days after the screening decision (D-100).
 	go contributors.NewService(pool, cfg.IdentityKey, store).RunCVSweep(ctx, time.Hour, log)
+	// Retention (Stage 17b, brief 12): closed projects' task content after
+	// their retention period, declined request samples, sent emails' merge
+	// data, expired idempotency records, and queued file deletions.
+	go privacy.NewService(pool, store, log).RunSweep(ctx, time.Hour)
 	// Lapsed task reservations are marked expired in the background (D-105).
 	go tasks.NewService(pool).RunExpirySweep(ctx, time.Minute, log)
 	// Nightly quality jobs (agreement snapshots, gold feedback) from the
