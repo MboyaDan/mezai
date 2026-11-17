@@ -1,6 +1,6 @@
 # Security review
 
-Started in Stage 17a (2026-11-16); retention and data subject tooling added in 17b (2026-11-17). The threat review and TOTP are Stage 17c. This file records what was checked, what was found and what was done. "Checked" means read in code or run; nothing here is a certification.
+Started in Stage 17a (2026-11-16); retention and data subject tooling added in 17b, the tenancy review, upload checks, log review, secrets scan and threat model in 17c (2026-11-17). Optional TOTP is Stage 17d. This file records what was checked, what was found and what was done. "Checked" means read in code or run; nothing here is a certification.
 
 ## One person, one account
 
@@ -28,7 +28,7 @@ Started in Stage 17a (2026-11-16); retention and data subject tooling added in 1
 | 7 | Site policy allows inline scripts | Low | Open: A-081 |
 | 9 | Stored M-Pesa callbacks held the payee's registered name and full phone number, and the echo of our callback URL with its secret token | Medium | Fixed (D-139): removed before storing; migration 00024 cleans earlier rows |
 | 10 | Contributor detail page scrolled sideways at 390 px for anyone with qualification attempts | Low (layout) | Fixed: the column's grid track can shrink; the table scrolls in its own frame |
-| 8 | 17 moderate `npm audit` findings in development dependencies (not shipped) | Low | Open: waiting for upstream; production dependencies have 0 |
+| 8 | 17 moderate `npm audit` findings in development dependencies (not shipped) | Low | Open: waiting for upstream; production dependencies have 0 (re-checked 17c) |
 
 ## Checked and found sound
 
@@ -48,6 +48,53 @@ Sessions (hashed tokens, HttpOnly, Secure, SameSite=Lax, idle and absolute expir
 | Other data with no further use | Declined request samples after the same period as closed projects, sent emails' merge data after 30 days, expired idempotency records (D-144). |
 | Not covered | Database backups still hold erased or purged data until they expire: the backup retention period is set in Stage 19 and must be stated in the privacy notice. Mailpit (local only) and the email provider's own logs hold sent emails. |
 
-## Still to do (Stage 17c)
+## Findings, Stage 17c
 
-Endpoint-by-endpoint tenancy review, upload content checks, optional TOTP for Ops and payout roles, log review, secrets scan in CI, written threat model.
+| # | Finding | Severity | Status |
+|---|---|---|---|
+| 11 | A contributor asking for the next task on an unpublished (draft or ready) project of any organisation got 409 "not live", confirming the project exists | Low (IDs are random UUIDs) | Fixed: 404 like every other unseen project. `TestCrossTenantMatrix` |
+| 12 | A PDF upload (CV, invoice) was accepted on its first five bytes; a PDF with scripts, launch actions or embedded files reached Ops, who open them in desktop readers | Medium | Fixed (D-145): whole file and no active content names. Compressed object streams are not unpacked, so this is a filter, not a scanner |
+| 13 | A project request "sample" was checked by extension only: a web page, SVG or binary renamed `.csv` was stored and offered for download | Low (downloads are attachments with `nosniff`) | Fixed (D-145): UTF-8 text, no NUL bytes, not markup |
+| 14 | Error text from outside services is logged as is: an SMTP rejection quotes the recipient's address; M-Pesa and database errors can carry numbers | Medium | Fixed (D-146): every log line and stored email error passes through a redacting handler |
+| 15 | No secrets scan | Medium | Fixed (D-147): gitleaks over the whole history on every PR; one test fixture allowlisted by exact value; history clean |
+| 16 | Local `node_modules` held Next.js 16.4.4 with a known advisory; the lockfile already pins 16.4.6 | Low (local only) | Fixed by `npm ci`; CI installs from the lockfile |
+
+## Tenancy review (Stage 17c)
+
+Every route was read for how it finds its rows. Staff routes see every organisation by design and are guarded by permission keys (`TestAuthorisationMatrix`). For the rest, the review is a test that keeps running:
+
+- `TestCrossTenantMatrix` takes from the router every route a client, contributor or reviewer can call with an `:id` (27 routes) and calls each as the wrong person with a real ID that belongs to someone else: another organisation's client admin, another contributor, an unassigned reviewer. Each must answer 403 or 404 with no data, and the rightful caller must not be refused (so the ID was real). A new route without a probe fails the test.
+- `TestCrossTenantParameters` passes another organisation's ID in query and body parameters (`org_id` on projects, activity, team, invoices, invitations, project requests; `project_id` on the review queue). Nothing leaks and nothing is created in the other organisation.
+- Marking someone else's feedback read answers 204 (the route is idempotent), but the update is scoped to the caller and changes nothing; the test checks the row.
+- Below the API, row-level security enforces the same split again (`TestOrganisationIsolation` and the other `rls_test.go` tests). `TestEveryOrgTableHasRLS` requires a policy on every table with an `org_id`, with four named exceptions.
+
+## Logs (Stage 17c)
+
+Read every log call. Request lines carry the route template, method, status, duration and request ID, never the path, query or body. Other lines carry IDs, counts, kinds and errors. Errors are the risk (finding 14), so the logger now masks email addresses (domain kept) and Kenyan mobile numbers (last three digits kept) everywhere (`pii.RedactHandler`, `TestRedactHandler`). Passwords, session tokens, CSRF secrets and task content are not passed to any log call. Seed and setup commands print sample or the operator's own admin email to the terminal, not to the API log.
+
+## Threat model (pilot)
+
+**What we protect:** client task content and deliverables; contributor personal data (contact details, M-Pesa number, ID fingerprint, CV, interview notes); money (ledger, payout batches, M-Pesa credentials); the integrity of quality figures (gold answers, consensus, trust); staff accounts.
+
+**Who might attack:** an outsider on the internet; a contributor (gaming quality or pay, scraping content, a second account); a client user (looking at another client); a curious or compromised staff account; someone who obtains a database dump, backup or log export.
+
+**Trust boundaries:** browser to the site (Next.js, rewrite to `/api`); site to Go API; API to PostgreSQL (non-owner `mezai_app` role, row-level security); API to object storage (signed, server-side only); API to Daraja and SMTP; the M-Pesa callback endpoint, the one place the internet calls us unauthenticated.
+
+| Threat | Controls in place | Residual risk and next step |
+|---|---|---|
+| Account takeover by password guessing or stuffing | Argon2id, 12-character minimum, per-IP and per-email limits, lockout, audited sign-ins | No second factor for staff and payout roles until Stage 17d. Rate limits are in memory per instance (finding 6). |
+| Session theft or cross-site requests | HttpOnly, Secure, SameSite=Lax cookie; hashed tokens; idle and absolute expiry; CSRF token and origin check; strict headers and content policy | Inline scripts allowed on the site (A-081). |
+| A client reads another client's data | Org scope in every query, RLS on client tables, the two cross-tenant tests | A new client-owned table must get a policy: `TestEveryOrgTableHasRLS` fails for any table with `org_id` and no row-level security unless it is a named exception (audit log, enquiries, invitations, user roles, each with its reason). |
+| A contributor reads content beyond their assigned item, or the gold answers | Item-by-item serving, contributor scope, gold indistinguishable, delayed batched gold feedback, export excludes qualification answers | A contributor can copy what they are shown; contributor terms carry confidentiality (brief 12). |
+| A contributor games quality or pay (second account, scripted answers, double submit) | One account per M-Pesa number and ID fingerprint, interview, name check on payment, gold mixing and trust auto-pause, idempotent submit, QA checks | Someone using another person's ID and line in that person's name (see "One person, one account"). |
+| Money paid twice or to the wrong person | Two-person approval, idempotency keys, B2C mark-then-send, status queries before retry, callbacks matched and stored before use, name comparison, append-only ledger, reconciliation | Daraja production not yet exercised (DG-02). M-Pesa credentials live in environment variables; anyone with server access has them. |
+| Forged M-Pesa callbacks | Secret token in the callback URL, optional source address list, match on conversation IDs and amount, stored with a verdict | The token is in the URL, so it appears in Daraja's configuration; rotate it if exposed. |
+| Malicious uploads | Size caps, type checks inside the file (D-145), stored outside the web root, served only as attachments with `nosniff` and a deny-all policy | No malware scanning; Ops should open CVs and invoices in a browser's PDF viewer rather than a desktop reader. |
+| Data exposure from a dump, backup or log | ID numbers never stored (keyed fingerprint), phone numbers masked in lists and logs, log redaction, retention and erasure (17b), secrets out of git (scan) | Backups keep erased and purged data until they expire: set and state the backup period in Stage 19. A dump plus `IDENTITY_HMAC_KEY` allows matching ID numbers. |
+| A compromised or careless staff account | Permission keys per action, Super Admin protections, audit log on every write, two-person payouts, purge and erasure need typed confirmation and a reason | Ops Managers can read all contributor data by design; TOTP in 17d; no alerting on unusual staff activity yet. |
+| Vulnerable dependencies | Dependabot, weekly govulncheck, `npm audit` (0 production findings) | Development-only npm advisories (finding 8). |
+| Denial of service | Request size cap, per-route limits, statement and lock timeouts | No edge protection until Cloudflare is in front (Stage 19). |
+
+## Still to do
+
+Stage 17d: optional TOTP for Ops and payout roles. Stage 19: shared rate-limit store if more than one API instance runs, backup period, edge protection.
