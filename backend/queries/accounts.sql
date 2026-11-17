@@ -131,6 +131,7 @@ INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2) ON CONFLIC
 -- name: ListUsersWithRoles :many
 -- Staff and client users (contributors are managed in their own screens).
 SELECT u.id, u.email, u.display_name, u.status, u.email_verified_at, u.last_login_at,
+       (u.totp_enabled_at IS NOT NULL)::boolean AS two_step,
        coalesce(array_agg(r.key || coalesce(':' || ur.org_id::text, '') ORDER BY r.key)
                 FILTER (WHERE r.key IS NOT NULL), '{}')::text[] AS roles
 FROM users u

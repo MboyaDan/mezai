@@ -3018,7 +3018,7 @@ components:
         created_at: { type: string, format: date-time }
     UserSummary:
       type: object
-      required: [id, email, display_name, status, email_verified, roles]
+      required: [id, email, display_name, status, email_verified, roles, two_step]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -3026,6 +3026,7 @@ components:
         status: { type: string, enum: [active, disabled] }
         email_verified: { type: boolean }
         last_login_at: { type: [string, "null"], format: date-time }
+        two_step: { type: boolean, description: Two-step sign-in is on (Stage 17d) }
         roles:
           type: array
           items: { type: string }
