@@ -1,6 +1,6 @@
 # Security review
 
-Started in Stage 17a (2026-11-16). The full threat review, retention job, data subject tooling and TOTP are still Stage 17. This file records what was checked, what was found and what was done. "Checked" means read in code or run; nothing here is a certification.
+Started in Stage 17a (2026-11-16); retention and data subject tooling added in 17b (2026-11-17). The threat review and TOTP are Stage 17c. This file records what was checked, what was found and what was done. "Checked" means read in code or run; nothing here is a certification.
 
 ## One person, one account
 
@@ -34,6 +34,20 @@ Started in Stage 17a (2026-11-16). The full threat review, retention job, data s
 
 Sessions (hashed tokens, HttpOnly, Secure, SameSite=Lax, idle and absolute expiry), CSRF (origin checks and token), Argon2id passwords with a 12-character minimum, permission check on every route (`TestAuthorisationMatrix`), row-level security for client data, phone masking, uploads capped and read through one function, M-Pesa callbacks (token, optional address list, matched before use), no secrets or full phone numbers in logs (checked during the Stage 15a run).
 
-## Still to do (Stage 17)
+## Retention and data subject requests (Stage 17b)
 
-Endpoint-by-endpoint tenancy review, upload content checks, data retention job, data subject export and delete, optional TOTP for Ops and payout roles, log review, secrets scan in CI, written threat model.
+| Question | Answer |
+|---|---|
+| When does client task content go? | `retention_days` after the project closes (default 90), checked hourly; or at once when Ops with `privacy.manage` types the project name and records who asked (D-142). |
+| What goes, what stays? | Item text, every answer and final answer, gold answers, review and feedback text, rejection reasons, notes, import errors, and the stored files (deliverables, imports, request sample). Counts, quality figures, earnings and the audit trail stay. Qualification tests copied from the project's gold are retired and blanked (A-089). |
+| Can the app rewrite answers to "purge" them some other way? | No. The append-only grants are unchanged; only `purge_project_content` (SECURITY DEFINER) can blank them, and `TestRetentionPurge` proves the app role is still refused. |
+| What if file deletion fails? | The key stays in `storage_deletions` with the error and the hourly sweep retries it (up to 20 times, then it waits for a person). |
+| How does a contributor see their data? | `GET /v1/me/data-export`: one JSON file, 5 an hour, audited; Ops can produce the same for an outside request (D-143). |
+| What does erasure keep? | The public code, ledger entries, payout amounts and receipts, submissions (the client's dataset), status history and audit actions. Name, email, numbers, profile, CV, interviews, sessions and IPs go; the payee on payout lines becomes `erased`. |
+| Can erasure lose someone's pay? | No: it is refused while any money is owed either way, a payout line is pending, or answers await a decision (A-088). |
+| Other data with no further use | Declined request samples after the same period as closed projects, sent emails' merge data after 30 days, expired idempotency records (D-144). |
+| Not covered | Database backups still hold erased or purged data until they expire: the backup retention period is set in Stage 19 and must be stated in the privacy notice. Mailpit (local only) and the email provider's own logs hold sent emails. |
+
+## Still to do (Stage 17c)
+
+Endpoint-by-endpoint tenancy review, upload content checks, optional TOTP for Ops and payout roles, log review, secrets scan in CI, written threat model.

@@ -13,6 +13,7 @@ import { useCan } from "../workspace";
 import { ProjectFigures, WorkforcePanel } from "./figures";
 import { useProject } from "./frame";
 import { ImportHistory } from "./imports";
+import { RetentionCard } from "./retention";
 import { Reviewers } from "./reviewers";
 
 export function skillText(s: ProjectSkill): string {
@@ -162,6 +163,7 @@ export function ProjectOverview() {
       <div className="grid content-start gap-6">
         <Readiness />
         <Facts />
+        <RetentionCard />
         {can("project.manage") && <Reviewers />}
       </div>
     </div>

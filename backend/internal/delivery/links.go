@@ -49,8 +49,12 @@ func (s *Service) CreateLink(ctx context.Context, p *auth.Principal, id uuid.UUI
 	if !validFile(file) {
 		return Link{}, ErrInvalidInput
 	}
-	if _, err := s.visibleDeliverable(ctx, p, id); err != nil {
+	d, err := s.visibleDeliverable(ctx, p, id)
+	if err != nil {
 		return Link{}, err
+	}
+	if d.PurgedAt != nil {
+		return Link{}, ErrPurged
 	}
 	exp := s.now().Add(LinkTTL).Truncate(time.Second)
 	v := url.Values{"file": {file}, "expires": {strconv.FormatInt(exp.Unix(), 10)},
@@ -94,6 +98,9 @@ func (s *Service) Download(ctx context.Context, p *auth.Principal, id uuid.UUID,
 	d, err := s.visibleDeliverable(ctx, p, id)
 	if err != nil {
 		return Download{}, err
+	}
+	if d.PurgedAt != nil {
+		return Download{}, ErrPurged
 	}
 	key, name, ctype := d.FileKey, FileName(d.ProjectName, d.Version, d.Format), "text/csv; charset=utf-8"
 	switch {

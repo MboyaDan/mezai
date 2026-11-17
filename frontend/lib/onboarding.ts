@@ -229,6 +229,12 @@ export function errorMessage(e: ApiError): string {
     too_large: "This project has more final items than one export can hold. Contact the engineering team.",
     already_published: "This version is already published.",
     link_expired: "That download link has expired. Choose Download again.",
+    content_deleted: "These files were deleted under the project's retention rule.",
+    project_not_closed: "Task content can only be deleted once the project is closed.",
+    already_deleted: "This project's task content has already been deleted.",
+    erasure_blocked: "This account cannot be erased yet. See what is still open.",
+    erased: "This contributor's personal data has been erased.",
+    no_open_request: "There is no open deletion request.",
     identity_incomplete:
       "The contributor has not given a confirmed M-Pesa number and National ID number yet.",
     email_in_use: "That email address already has a MezAI account.",

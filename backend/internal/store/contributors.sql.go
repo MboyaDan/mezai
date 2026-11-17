@@ -254,7 +254,7 @@ INSERT INTO contributor_profiles (
   $1, 'C-' || lpad(nextval('contributor_public_code_seq')::text, 4, '0'),
   $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at, national_id_fp_v, mpesa_name_mismatch_at
+RETURNING id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at, national_id_fp_v, mpesa_name_mismatch_at, erased_at
 `
 
 type CreateContributorProfileParams struct {
@@ -313,6 +313,7 @@ func (q *Queries) CreateContributorProfile(ctx context.Context, arg CreateContri
 		&i.ScreeningDecidedAt,
 		&i.NationalIDFpV,
 		&i.MpesaNameMismatchAt,
+		&i.ErasedAt,
 	)
 	return i, err
 }
@@ -420,7 +421,7 @@ func (q *Queries) DecideScreening(ctx context.Context, arg DecideScreeningParams
 }
 
 const getContributorProfile = `-- name: GetContributorProfile :one
-SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, cp.experience, cp.linkedin_url, cp.cv_file_key, cp.cv_file_name, cp.cv_uploaded_at, cp.cv_delete_after, cp.screening_status, cp.screening_note, cp.screening_decided_by, cp.screening_decided_at, cp.national_id_fp_v, cp.mpesa_name_mismatch_at, u.email, u.display_name
+SELECT cp.id, cp.user_id, cp.public_code, cp.status, cp.country, cp.city, cp.education_level, cp.weekly_hours, cp.mpesa_phone, cp.mpesa_phone_confirmed_at, cp.created_at, cp.updated_at, cp.national_id_fp, cp.national_id_last3, cp.identity_status, cp.identity_note, cp.identity_decided_by, cp.identity_decided_at, cp.mpesa_name_checked_at, cp.mpesa_name_checked_by, cp.experience, cp.linkedin_url, cp.cv_file_key, cp.cv_file_name, cp.cv_uploaded_at, cp.cv_delete_after, cp.screening_status, cp.screening_note, cp.screening_decided_by, cp.screening_decided_at, cp.national_id_fp_v, cp.mpesa_name_mismatch_at, cp.erased_at, u.email, u.display_name
 FROM contributor_profiles cp JOIN users u ON u.id = cp.user_id
 WHERE cp.id = $1
 `
@@ -458,6 +459,7 @@ type GetContributorProfileRow struct {
 	ScreeningDecidedAt    *time.Time
 	NationalIDFpV         *int16
 	MpesaNameMismatchAt   *time.Time
+	ErasedAt              *time.Time
 	Email                 string
 	DisplayName           string
 }
@@ -498,6 +500,7 @@ func (q *Queries) GetContributorProfile(ctx context.Context, id uuid.UUID) (GetC
 		&i.ScreeningDecidedAt,
 		&i.NationalIDFpV,
 		&i.MpesaNameMismatchAt,
+		&i.ErasedAt,
 		&i.Email,
 		&i.DisplayName,
 	)
@@ -924,7 +927,7 @@ func (q *Queries) ListSameNameContributors(ctx context.Context, arg ListSameName
 }
 
 const lockContributorProfile = `-- name: LockContributorProfile :one
-SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at, national_id_fp_v, mpesa_name_mismatch_at FROM contributor_profiles WHERE id = $1 FOR UPDATE
+SELECT id, user_id, public_code, status, country, city, education_level, weekly_hours, mpesa_phone, mpesa_phone_confirmed_at, created_at, updated_at, national_id_fp, national_id_last3, identity_status, identity_note, identity_decided_by, identity_decided_at, mpesa_name_checked_at, mpesa_name_checked_by, experience, linkedin_url, cv_file_key, cv_file_name, cv_uploaded_at, cv_delete_after, screening_status, screening_note, screening_decided_by, screening_decided_at, national_id_fp_v, mpesa_name_mismatch_at, erased_at FROM contributor_profiles WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (ContributorProfile, error) {
@@ -963,6 +966,7 @@ func (q *Queries) LockContributorProfile(ctx context.Context, id uuid.UUID) (Con
 		&i.ScreeningDecidedAt,
 		&i.NationalIDFpV,
 		&i.MpesaNameMismatchAt,
+		&i.ErasedAt,
 	)
 	return i, err
 }

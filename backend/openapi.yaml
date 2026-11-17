@@ -592,6 +592,189 @@ paths:
         "200": { description: Choices, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/me/data-export:
+    get:
+      operationId: exportMyData
+      summary: Download everything held about the caller as one JSON file (`profile.manage`, Stage 17b).
+      description: >-
+        Right of access under the Kenya Data Protection Act 2019. Task content, other people's
+        answers and qualification answers are left out and `not_included` says why. Audited;
+        5 an hour per account.
+      tags: [privacy]
+      responses:
+        "200": { description: "JSON file (`Content-Disposition: attachment`)", content: { application/json: { schema: { $ref: "#/components/schemas/DataExport" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /v1/me/erasure:
+    get:
+      operationId: getMyErasure
+      summary: The caller's erasure request and what must be settled first (`profile.manage`).
+      tags: [privacy]
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/Erasure" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: requestMyErasure
+      summary: Ask for the caller's account and personal data to be deleted (audited; asking again returns the open request).
+      tags: [privacy]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { note: { type: string, maxLength: 1000 } } }
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/Erasure" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "410": { description: "`erased`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      operationId: withdrawMyErasure
+      summary: Withdraw the caller's open erasure request.
+      tags: [privacy]
+      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/Erasure" } } } }
+        "404": { description: "`no_open_request`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/erasure-requests:
+    get:
+      operationId: listErasureRequests
+      summary: Open erasure requests, oldest first (`privacy.manage`).
+      tags: [privacy]
+      responses:
+        "200":
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, contributor_id, public_code, by_contributor, created_at]
+                      properties:
+                        id: { type: string, format: uuid }
+                        contributor_id: { type: string, format: uuid }
+                        public_code: { type: string }
+                        by_contributor: { type: boolean, description: "false when Ops recorded a request made by email or phone" }
+                        created_at: { type: string, format: date-time }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/contributors/{id}/data-export:
+    get:
+      operationId: exportContributorData
+      summary: Download a contributor's data for a request made outside the app (`privacy.manage`, audited).
+      tags: [privacy]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: JSON file, content: { application/json: { schema: { $ref: "#/components/schemas/DataExport" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "410": { description: "`erased`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/contributors/{id}/erasure:
+    get:
+      operationId: getContributorErasure
+      summary: A contributor's erasure state (`privacy.manage`).
+      tags: [privacy]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/Erasure" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: eraseContributor
+      summary: Erase a contributor's personal data and close the account (`privacy.manage`).
+      description: >-
+        Refused while money is owed either way, a payout line is pending or answers await a decision
+        (A-088). Ledger, payout and audit rows stay, pointing at the public code only; the payee on
+        payout lines becomes `erased`. `confirm` must be the public code. Cannot be undone.
+      tags: [privacy]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm, reason]
+              properties:
+                confirm: { type: string, description: The contributor's public code }
+                reason: { type: string, maxLength: 500, description: How the request reached us }
+      responses:
+        "200": { description: Erased, content: { application/json: { schema: { $ref: "#/components/schemas/Erasure" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: "`erasure_blocked`"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, blockers]
+                properties:
+                  error: { type: string }
+                  blockers: { $ref: "#/components/schemas/ErasureBlockers" }
+        "410": { description: "`erased`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/InvalidField" }
+    delete:
+      operationId: withdrawContributorErasure
+      summary: Close a contributor's open erasure request without erasing (`privacy.manage`).
+      tags: [privacy]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: State, content: { application/json: { schema: { $ref: "#/components/schemas/Erasure" } } } }
+        "404": { description: "`no_open_request`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /v1/projects/{id}/retention:
+    get:
+      operationId: getProjectRetention
+      summary: When the project's task content is deleted (`project.manage` or `org.project.read`).
+      description: Content goes `retention_days` after the project closes (brief 12); `due_at` is null until it closes or once it is gone.
+      tags: [privacy]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        "200": { description: Retention, content: { application/json: { schema: { $ref: "#/components/schemas/Retention" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/projects/{id}/purge:
+    post:
+      operationId: purgeProjectContent
+      summary: Delete a closed project's task content now, for example on the client's request (`privacy.manage`).
+      description: >-
+        Blanks item content, every answer, gold answers, review notes and feedback text, retires
+        qualification tests made from the project's gold and deletes its stored files (deliverables,
+        imports, the request sample). Counts, quality figures, earnings and the audit trail stay.
+        `confirm` must be the project's name. Cannot be undone.
+      tags: [privacy]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm, reason]
+              properties:
+                confirm: { type: string }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [retention, counts]
+                properties:
+                  retention: { $ref: "#/components/schemas/Retention" }
+                  counts: { type: object, additionalProperties: { type: integer } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "`project_not_closed` or `already_deleted`", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/me/qualification/tests:
     get:
       operationId: listMyQualificationTests
@@ -1113,6 +1296,7 @@ paths:
       responses:
         "200": { description: Link, content: { application/json: { schema: { $ref: "#/components/schemas/DeliverableLink" } } } }
         "404": { $ref: "#/components/responses/Error" }
+        "410": { description: "`content_deleted`: files deleted under the retention rule", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "422": { $ref: "#/components/responses/Error" }
   /v1/deliverables/{id}/download:
     get:
@@ -2584,6 +2768,53 @@ components:
       schema:
         type: string
   schemas:
+    Retention:
+      type: object
+      required: [retention_days, closed_at, due_at, purged_at]
+      properties:
+        retention_days: { type: integer, minimum: 0 }
+        closed_at: { type: [string, "null"], format: date-time }
+        due_at: { type: [string, "null"], format: date-time }
+        purged_at: { type: [string, "null"], format: date-time }
+    ErasureBlockers:
+      type: object
+      required: [balance_cents, pending_payout_lines, undecided_answers]
+      properties:
+        balance_cents: { type: integer, format: int64, description: Approved earnings not yet paid }
+        pending_payout_lines: { type: integer }
+        undecided_answers: { type: integer, description: Submitted answers that may still earn }
+    Erasure:
+      type: object
+      required: [public_code, erased_at, request, blockers, can_erase]
+      properties:
+        public_code: { type: string }
+        erased_at: { type: [string, "null"], format: date-time }
+        request:
+          oneOf:
+            - { type: "null" }
+            - type: object
+              required: [id, by_contributor, created_at]
+              properties:
+                id: { type: string, format: uuid }
+                by_contributor: { type: boolean }
+                note: { type: string }
+                created_at: { type: string, format: date-time }
+        blockers: { $ref: "#/components/schemas/ErasureBlockers" }
+        can_erase: { type: boolean }
+    DataExport:
+      type: object
+      required: [about, generated_at, not_included, data]
+      properties:
+        about: { type: string }
+        generated_at: { type: string, format: date-time }
+        not_included: { type: array, items: { type: string } }
+        data:
+          type: object
+          description: >-
+            account, profile, languages, domains, consents, status_history, qualification_attempts,
+            interviews, answers (metadata only), skips, content_reports, feedback, trust_scores,
+            earnings, payouts, email_choices, sessions, erasure_requests.
+          additionalProperties: true
     NotificationPreferences:
       type: object
       required: [project_available, feedback_received, updated_at, always]
@@ -3290,12 +3521,13 @@ components:
         notes: { type: array, items: { type: string } }
     DeliverableVersion:
       type: object
-      required: [version, items, created_at, published_at, manifest, files]
+      required: [version, items, created_at, published_at, purged_at, manifest, files]
       properties:
         version: { type: integer }
         items: { type: integer }
         created_at: { type: string, format: date-time }
         published_at: { type: [string, "null"], format: date-time }
+        purged_at: { type: [string, "null"], format: date-time, description: Files deleted under the retention rule (Stage 17b); links answer 410 }
         manifest: { $ref: "#/components/schemas/DeliverableManifest" }
         files: { type: array, items: { $ref: "#/components/schemas/DeliverableFile" } }
     DeliverableLink:

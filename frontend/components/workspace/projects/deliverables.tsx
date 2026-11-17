@@ -178,6 +178,7 @@ function VersionCard({
             <StatusPill status="neutral">Not published</StatusPill>
           )}
           {m.items.complete && <StatusPill status="info">All items final</StatusPill>}
+          {v.purged_at && <StatusPill status="neutral">Files deleted</StatusPill>}
           <p className="text-sm">{itemsSentence(m.items)}</p>
         </div>
         <StatGroup>
@@ -228,12 +229,18 @@ function VersionCard({
             Agreement needs at least two answers on each item, so none is shown for this version.
           </p>
         )}
+        {v.purged_at && (
+          <p className="text-sm text-fg-muted">
+            The files were deleted on {shortDate(v.purged_at)} under the project&rsquo;s retention rule. The
+            figures above are kept.
+          </p>
+        )}
         <ul className="grid gap-2" aria-label={`Version ${v.version} files`}>
           {orderedFiles(v.files).map((f) => (
-            <FileRow key={`${f.id}-${f.file}`} f={f} staff={staff} />
+            <FileRow key={`${f.id}-${f.file}`} f={f} staff={staff} gone={Boolean(v.purged_at)} />
           ))}
         </ul>
-        {staff && !v.published_at && (
+        {staff && !v.published_at && !v.purged_at && (
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
             <Button icon={<PackageCheck />} onClick={onPublish} disabled={busy}>
               Publish to client
@@ -246,7 +253,7 @@ function VersionCard({
   );
 }
 
-function FileRow({ f, staff }: { f: DeliverableFile; staff: boolean }) {
+function FileRow({ f, staff, gone }: { f: DeliverableFile; staff: boolean; gone: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -281,17 +288,19 @@ function FileRow({ f, staff }: { f: DeliverableFile; staff: boolean }) {
             </span>
           )}
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Download />}
-          loading={busy}
-          disabled={busy}
-          onClick={download}
-          aria-label={`Download ${fileLabel(f)}`}
-        >
-          Download
-        </Button>
+        {!gone && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Download />}
+            loading={busy}
+            disabled={busy}
+            onClick={download}
+            aria-label={`Download ${fileLabel(f)}`}
+          >
+            Download
+          </Button>
+        )}
       </div>
       {error && <Alert tone="danger" title={errorMessage(error)} />}
     </li>

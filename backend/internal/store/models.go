@@ -146,6 +146,7 @@ type ContributorProfile struct {
 	ScreeningDecidedAt    *time.Time
 	NationalIDFpV         *int16
 	MpesaNameMismatchAt   *time.Time
+	ErasedAt              *time.Time
 }
 
 type ContributorStatusHistory struct {
@@ -176,6 +177,7 @@ type Deliverable struct {
 	Version        int32
 	ByteSize       int64
 	CreatedBy      *uuid.UUID
+	PurgedAt       *time.Time
 }
 
 type DeliverableDownload struct {
@@ -252,6 +254,18 @@ type EnquiryNote struct {
 	Body         string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+}
+
+type ErasureRequest struct {
+	ID            uuid.UUID
+	ContributorID uuid.UUID
+	Status        string
+	RequestedBy   uuid.UUID
+	Note          *string
+	ClosedBy      *uuid.UUID
+	ClosedAt      *time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type Feedback struct {
@@ -344,6 +358,7 @@ type ImportJob struct {
 	SizeBytes   int64
 	Sha256      string
 	CommittedAt *time.Time
+	PurgedAt    *time.Time
 }
 
 type Interview struct {
@@ -604,6 +619,7 @@ type Project struct {
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	QaChecks              []byte
+	ContentPurgedAt       *time.Time
 }
 
 type ProjectGuideline struct {
@@ -785,6 +801,15 @@ type Stat struct {
 	Published  bool
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+type StorageDeletion struct {
+	ID        uuid.UUID
+	Key       string
+	Reason    string
+	Attempts  int32
+	LastError *string
+	CreatedAt time.Time
 }
 
 type Submission struct {

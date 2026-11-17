@@ -297,6 +297,47 @@ function All() {
   );
 }
 
+type ErasureRequest = {
+  id: string;
+  contributor_id: string;
+  public_code: string;
+  by_contributor: boolean;
+  created_at: string;
+};
+
+/** Open deletion requests (Stage 17b), oldest first. */
+function ErasureQueue() {
+  const list = useLoad(() =>
+    api<{ requests: ErasureRequest[] }>("GET", "/v1/erasure-requests").then((r) => r.requests),
+  );
+  if (list.status === "loading") return <Skeleton className="h-40 w-full" />;
+  if (list.status === "error") return <Alert tone="danger" title={errorMessage(list.error)} />;
+  return (
+    <Table
+      caption="Open requests to delete an account, oldest first"
+      rows={list.data}
+      rowKey={(r) => r.id}
+      empty="No open deletion requests."
+      columns={[
+        {
+          key: "code",
+          header: "ID",
+          cell: (r) => (
+            <Link
+              href={`/w/contributors/${r.contributor_id}`}
+              className="font-mono underline underline-offset-4"
+            >
+              {r.public_code}
+            </Link>
+          ),
+        },
+        { key: "from", header: "From", cell: (r) => (r.by_contributor ? "In the app" : "Recorded by Ops") },
+        { key: "at", header: "Asked", cell: (r) => shortDate(r.created_at), sortValue: (r) => r.created_at },
+      ]}
+    />
+  );
+}
+
 export function Contributors() {
   const can = useCan();
   const params = useSearchParams();
@@ -335,6 +376,9 @@ export function Contributors() {
         ]
       : []),
     { id: "all", label: "All contributors", content: <All /> },
+    ...(can("privacy.manage")
+      ? [{ id: "erasure", label: "Deletion requests", content: <ErasureQueue /> }]
+      : []),
   ];
   return (
     <>
@@ -345,7 +389,7 @@ export function Contributors() {
         defaultTab={
           !approve
             ? "all"
-            : ["all", "identity", "applications", "interviews"].includes(params.get("tab") ?? "")
+            : ["all", "identity", "applications", "interviews", "erasure"].includes(params.get("tab") ?? "")
               ? params.get("tab")!
               : "queue"
         }

@@ -17,7 +17,7 @@ ORDER BY p.published_at DESC NULLS LAST, p.id;
 -- name: GetProjectForWork :one
 SELECT p.id, p.org_id, p.name, p.status, p.task_type, p.instructions_md, p.config, p.overlap_k, p.gold_rate,
   p.pay_per_task_cents, p.currency, p.deadline, p.reservation_minutes, p.qa_checks, p.min_rationale_chars,
-  p.review_spread_threshold, p.audit_sample_rate
+  p.review_spread_threshold, p.audit_sample_rate, p.content_purged_at
 FROM projects p WHERE p.id = $1;
 
 -- name: ListSkillsForProjects :many
