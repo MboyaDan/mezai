@@ -233,7 +233,8 @@ BEGIN
   DELETE FROM contributor_languages WHERE contributor_id = p_contributor;
   DELETE FROM contributor_domains WHERE contributor_id = p_contributor;
   DELETE FROM identity_flags WHERE contributor_id = p_contributor OR other_contributor_id = p_contributor;
-  UPDATE interviews SET note = NULL, availability = NULL WHERE contributor_id = p_contributor;
+  -- The privacy notice says interview scores and notes go with the account.
+  DELETE FROM interviews WHERE contributor_id = p_contributor;
   UPDATE qualification_attempts SET answers = '{}', decision_note = NULL WHERE contributor_id = p_contributor;
   UPDATE skips SET note = NULL WHERE contributor_id = p_contributor AND note IS NOT NULL;
   UPDATE content_reports SET note = NULL WHERE contributor_id = p_contributor AND note IS NOT NULL;

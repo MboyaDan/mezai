@@ -353,6 +353,7 @@ func TestContributorExportAndErasure(t *testing.T) {
 		"account":        `SELECT count(*) FROM users u JOIN contributor_profiles cp ON cp.user_id = u.id WHERE cp.id = $1 AND (u.email NOT LIKE 'erased-%@erased.invalid' OR u.password_hash IS NOT NULL OR u.status <> 'disabled' OR u.display_name <> 'Erased contributor')`,
 		"profile":        `SELECT count(*) FROM contributor_profiles WHERE id = $1 AND (mpesa_phone IS NOT NULL OR national_id_fp IS NOT NULL OR city IS NOT NULL OR cv_file_key IS NOT NULL OR experience <> '{}' OR status <> 'removed' OR erased_at IS NULL)`,
 		"languages":      `SELECT count(*) FROM contributor_languages WHERE contributor_id = $1`,
+		"interviews":     `SELECT count(*) FROM interviews WHERE contributor_id = $1`,
 		"sessions":       `SELECT count(*) FROM sessions s JOIN contributor_profiles cp ON cp.user_id = s.user_id WHERE cp.id = $1`,
 		"roles":          `SELECT count(*) FROM user_roles r JOIN contributor_profiles cp ON cp.user_id = r.user_id WHERE cp.id = $1`,
 		"payout payee":   `SELECT count(*) FROM payout_lines WHERE contributor_id = $1 AND (mpesa_phone <> 'erased' OR payee_name <> 'Erased contributor')`,
