@@ -1,12 +1,12 @@
 package portal
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/MboyaDan/mezai/backend/internal/filecheck"
 	"path"
 	"regexp"
 	"strings"
@@ -123,7 +123,7 @@ func (s *Service) UploadInvoice(ctx context.Context, p *auth.Principal, in NewIn
 		}
 		due = &d
 	}
-	if len(data) == 0 || len(data) > MaxInvoiceBytes || !bytes.HasPrefix(data, []byte("%PDF-")) ||
+	if len(data) == 0 || len(data) > MaxInvoiceBytes || filecheck.PDF(data) != nil ||
 		!strings.EqualFold(path.Ext(name), ".pdf") {
 		return Invoice{}, ErrInvalidInput
 	}

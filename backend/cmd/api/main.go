@@ -23,6 +23,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/mpesa"
 	"github.com/MboyaDan/mezai/backend/internal/payouts"
+	"github.com/MboyaDan/mezai/backend/internal/pii"
 	"github.com/MboyaDan/mezai/backend/internal/privacy"
 	"github.com/MboyaDan/mezai/backend/internal/storage"
 	"github.com/MboyaDan/mezai/backend/internal/tasks"
@@ -145,12 +146,15 @@ func run() error {
 	return srv.Shutdown(shutdownCtx)
 }
 
+// newLogger masks email addresses and phone numbers in everything it writes,
+// including error text from outside services (Stage 17c).
 func newLogger(cfg config.Config) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
+	var h slog.Handler = slog.NewJSONHandler(os.Stdout, opts)
 	if cfg.LogFormat == "text" {
-		return slog.New(slog.NewTextHandler(os.Stdout, opts))
+		h = slog.NewTextHandler(os.Stdout, opts)
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	return slog.New(pii.NewRedactHandler(h))
 }
 
 // probe lets the distroless image (no shell, no curl) run its own health check.

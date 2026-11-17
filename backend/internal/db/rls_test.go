@@ -394,3 +394,44 @@ func TestInvoiceIsolation(t *testing.T) {
 		return err
 	}))
 }
+
+// Stage 17c: every table that carries an org_id has row-level security, or
+// is named here with the reason it does not. A new client-owned table
+// without a policy fails this test.
+func TestEveryOrgTableHasRLS(t *testing.T) {
+	pool, _ := dbtest.New(t)
+	exceptions := map[string]string{
+		"audit_log":   "staff only; clients read it through /activity, which filters by organisation and an allowlist (D-124)",
+		"enquiries":   "public enquiries before a client exists; staff only (enquiry.manage)",
+		"invitations": "identity table; client admins reach it only through the accounts service, which scopes it (TestCrossTenantParameters)",
+		"user_roles":  "identity table; org-scoped roles are granted only through the accounts service",
+	}
+	rows, err := pool.Query(context.Background(), `
+		SELECT c.relname, c.relrowsecurity
+		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'org_id' AND NOT a.attisdropped
+		WHERE n.nspname = 'public' AND c.relkind = 'r'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	seen := 0
+	for rows.Next() {
+		var name string
+		var rls bool
+		if err := rows.Scan(&name, &rls); err != nil {
+			t.Fatal(err)
+		}
+		seen++
+		_, excepted := exceptions[name]
+		switch {
+		case !rls && !excepted:
+			t.Errorf("%s has org_id but no row-level security: add a policy in a migration or an exception here", name)
+		case rls && excepted:
+			t.Errorf("%s now has row-level security: remove its exception", name)
+		}
+	}
+	if seen < 20 {
+		t.Fatalf("only %d tables with org_id: the query is wrong", seen)
+	}
+}

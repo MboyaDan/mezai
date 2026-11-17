@@ -3,6 +3,7 @@ package projects
 import (
 	"context"
 	"errors"
+	"github.com/MboyaDan/mezai/backend/internal/filecheck"
 	"net/mail"
 	"slices"
 	"strings"
@@ -142,6 +143,9 @@ func (s *Service) CreateRequest(ctx context.Context, p *auth.Principal, in Reque
 		}
 		if len(sample.Data) == 0 || len(sample.Data) > MaxSampleBytes {
 			return Request{}, fieldErr("sample", "attach a file of up to 5 MB")
+		}
+		if filecheck.Text(sample.Data) != nil {
+			return Request{}, fieldErr("sample", "attach a plain text data file (UTF-8 CSV, TSV, JSON or JSONL)")
 		}
 		k := "requests/" + p.OrgID.String() + "/" + id.String() + "." + ext
 		if err := s.blobs.Put(ctx, k, "application/octet-stream", sample.Data); err != nil {

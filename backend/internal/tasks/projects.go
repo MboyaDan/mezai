@@ -213,6 +213,12 @@ func eligibleProject(ctx context.Context, q *store.Queries, contributor, project
 	if err != nil {
 		return pr, nil, err
 	}
+	// A project that was never published does not exist for contributors
+	// (Stage 17c): "not live" is kept for paused and closed projects, where
+	// someone may have been working.
+	if pr.Status == "draft" || pr.Status == "ready" {
+		return pr, nil, ErrNotFound
+	}
 	if pr.Status != "live" {
 		return pr, nil, ErrProjectClosed
 	}
