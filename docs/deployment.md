@@ -42,7 +42,7 @@ The browser only talks to Vercel. Vercel forwards `/api/*` to Render. Render is 
 
    Use the **session pooler**, not the direct connection (IPv6 only, Render cannot reach it) and not the transaction pooler on port 6543 (it breaks the API's prepared statements and `SET LOCAL ROLE`).
 
-**Check:** left menu **SQL Editor** → run `select version();`. It should say PostgreSQL 17. If it says 18, tell me: the backup script's `PG_IMAGE` must change to `postgres:18-alpine`.
+**Check:** left menu **SQL Editor** → run `select version();`. It should say PostgreSQL 17 (17.12 on 2026-11-18). If it says 18, tell me: the backup script's `PG_IMAGE` must change to `postgres:18-alpine`.
 
 ## Step 2. Supabase Storage (files)
 
@@ -66,7 +66,7 @@ Staging has no domain yet (DG-01), so email goes out from an address you own thr
    - **Login** (like `8a1b2c001@smtp-brevo.com`)
    - **SMTP key** (the password; shown once)
 
-Port **2525** is on purpose: Render's free plan blocks outgoing mail on ports 25, 465 and 587.
+Brevo's free plan (300 emails a day, no card) is enough for staging: pick **Free** when Brevo offers plans. Port **2525** is on purpose: Render's free plan blocks outgoing mail on ports 25, 465 and 587. Whether 2525 is open on Render is not confirmed; if sending times out (`mail` errors in Render **Logs**), the fallback is Brevo's HTTPS API on port 443, which needs a small API change (19b).
 
 ## Step 4. Prepare the database from your laptop
 
