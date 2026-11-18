@@ -1,0 +1,77 @@
+# Render Blueprint for the MezAI API on staging (Stage 19a, D-152).
+# Render reads this file when you create a Blueprint from the repo.
+# Step-by-step setup: docs/deployment.md. Values marked sync: false are
+# secrets: Render asks for them once and never stores them in this file.
+# Free instances sleep after 15 minutes without traffic; the uptime ping in
+# docs/deployment.md keeps staging awake so the job runner keeps working.
+services:
+  - type: web
+    name: mezai-api-staging
+    runtime: docker
+    plan: free
+    region: frankfurt # same region as the Supabase project (eu-central-1)
+    branch: main
+    autoDeploy: true
+    # rootDir limits auto-deploys to backend changes. The two Docker paths
+    # are relative to the repo root, not to rootDir (Render blueprint spec).
+    rootDir: backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # /readyz checks the database and object storage, so a deploy with a
+    # wrong DATABASE_URL or bucket never goes live.
+    healthCheckPath: /readyz
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: PORT
+        value: "8080"
+      - key: HTTP_ADDR
+        value: ":8080"
+      - key: LOG_LEVEL
+        value: info
+      - key: LOG_FORMAT
+        value: json
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SESSION_TTL
+        value: 168h
+      - key: SESSION_IDLE
+        value: 48h
+      # Render's load balancer reaches the service from its private network.
+      # Checked after the first deploy (docs/deployment.md, step 7).
+      - key: TRUSTED_PROXIES
+        value: 10.0.0.0/8
+      - key: S3_USE_PATH_STYLE
+        value: "true"
+      - key: MPESA_ENV
+        value: "off"
+      # The Vercel site's address, e.g. https://mezai-staging.vercel.app
+      - key: APP_ORIGIN
+        sync: false
+      # Supabase session pooler URL with sslmode=require&pool_max_conns=5
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      # openssl rand -base64 32 (never change it once contributors join)
+      - key: IDENTITY_HMAC_KEY
+        sync: false
+      # Brevo SMTP on port 2525: Render's free plan blocks 25, 465 and 587
+      - key: SMTP_ADDR
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: ENQUIRY_NOTIFY_TO
+        sync: false
