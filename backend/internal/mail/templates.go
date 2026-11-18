@@ -19,10 +19,13 @@ const (
 	TemplateTrustPause     = "trust_pause"
 )
 
-// Plain text only (D-141): readable in every client and on a basic phone.
-var templates = map[string]struct{ subject, body string }{
+// Plain text (D-141): readable in every client and on a basic phone. Render
+// also builds a branded HTML version from the same text (D-155, html.go);
+// action labels the button for the first link on its own line.
+var templates = map[string]struct{ subject, action, body string }{
 	TemplateVerifyEmail: {
 		subject: "Confirm your email address",
+		action:  "Confirm email address",
 		body: `Hello {{.Name}},
 
 Confirm your email address for {{.Brand}} by opening this link:
@@ -34,6 +37,7 @@ The link works once and expires in 24 hours. If you did not create an account, i
 	},
 	TemplatePasswordReset: {
 		subject: "Reset your password",
+		action:  "Choose a new password",
 		body: `Hello {{.Name}},
 
 Someone asked to reset the password for your {{.Brand}} account. To choose a new password, open this link:
@@ -45,6 +49,7 @@ The link works once and expires in 1 hour. If you did not ask for this, ignore t
 	},
 	TemplateInvitation: {
 		subject: "You are invited to {{.Brand}}",
+		action:  "Accept invitation",
 		body: `Hello,
 
 {{.InvitedBy}} has invited you to {{.Brand}} as {{.Role}}{{if .Org}} for {{.Org}}{{end}}.
@@ -79,6 +84,7 @@ It is saved in the enquiries inbox with status "new".
 	// To the ops inbox when a contributor is paused automatically (brief 8.4).
 	TemplateTrustPause: {
 		subject: "Contributor {{.Code}} paused automatically",
+		action:  "Open contributor",
 		body: `{{.Code}} was paused from new tasks because their trust score fell below the floor.
 
 Trust score:        {{.Score}} (floor {{.Floor}})
@@ -92,6 +98,7 @@ Review their work and reinstate them with a note if the pause is not deserved:
 	},
 	TemplateProjectRequest: {
 		subject: "Project request from {{.Organisation}}: {{.Title}}",
+		action:  "Open the request",
 		body: `{{.Organisation}} submitted a project request in the {{.Brand}} workspace.
 
 Title:      {{.Title}}
@@ -107,6 +114,7 @@ Reference: {{.ID}}
 	// Contributor notifications (Stage 16). {{.Origin}} is added by the worker.
 	TemplateQualificationResult: {
 		subject: "Your {{.Test}} result",
+		action:  "Open qualification",
 		body: `Hello {{.Name}},
 
 {{if eq .Passed "yes"}}You passed the {{.Test}}. Projects that need this skill can now offer you tasks.{{else}}You did not pass the {{.Test}} this time.{{end}}
@@ -122,6 +130,7 @@ Your tests page shows your result and when you can try again:
 	},
 	TemplateProjectAvailable: {
 		subject: "New project open to you: {{.Project}}",
+		action:  "Open the project",
 		body: `Hello {{.Name}},
 
 A new project you qualify for is open:
@@ -141,6 +150,7 @@ You get this email because "New projects" is on. Change it on your profile:
 	},
 	TemplateFeedbackReceived: {
 		subject: "New feedback on your work",
+		action:  "Read the feedback",
 		body: `Hello {{.Name}},
 
 A reviewer left feedback on your work in {{.Project}}. Read it on your dashboard:
@@ -154,6 +164,7 @@ You get this email because "Feedback" is on. Change it on your profile:
 	},
 	TemplatePayoutSent: {
 		subject: "Payout sent: {{.Amount}}",
+		action:  "Open your statement",
 		body: `Hello {{.Name}},
 
 {{.Amount}} was sent to your M-Pesa number ending {{.PhoneEnd}}.
@@ -172,6 +183,8 @@ If the money has not arrived, reply to the operations team with the receipt abov
 // Rendered is a ready-to-send message.
 type Rendered struct {
 	Subject, Body string
+	// HTML is the branded version of Body (D-155); empty sends text only.
+	HTML string
 }
 
 // Render fills a template with data from the outbox row.
@@ -203,6 +216,11 @@ func Render(name string, data map[string]string) (Rendered, error) {
 	if err != nil {
 		return Rendered{}, err
 	}
+	action := t.action
+	if action == "" {
+		action = "Open " + brand.Name
+	}
+	page := renderHTML(subject, body, action, vars["Origin"])
 	body += "\n-- \n" + brand.Name + ", " + brand.Descriptor + "\n"
-	return Rendered{Subject: subject, Body: body}, nil
+	return Rendered{Subject: subject, Body: body, HTML: page}, nil
 }
