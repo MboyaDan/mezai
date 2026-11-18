@@ -6,7 +6,10 @@
 import { mkdir, readFile } from "node:fs/promises";
 import sharp from "sharp";
 
-const src = new URL("../../docs/brand/mezai-logo/mezai-logo-horizontal-reversed-transparent.svg", import.meta.url);
+const src = new URL(
+  "../../docs/brand/mezai-logo/mezai-logo-horizontal-reversed-transparent.svg",
+  import.meta.url,
+);
 const out = new URL("../public/brand/email/mezai-logo-email.png", import.meta.url);
 const displayWidth = 132;
 
