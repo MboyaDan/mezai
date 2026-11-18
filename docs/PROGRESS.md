@@ -4,8 +4,8 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 18b (design quality gate). Branch `stage-18b-design-gate`, PR #59 open. 18a merged as #58.
-- **Next stage:** 19 (deployment to staging). Proposed before or with it: server-render the contributor pages' session and first data (they paint at 3.4 to 4.2 s on a throttled phone; see `docs/screenshots/stage-18a/performance.md`).
+- **Last stage:** 19a (staging deployment: repo side and guide). Branch `stage-19a-staging`. 18b merged as #59.
+- **Next:** Dan follows `docs/deployment.md` steps 1 to 9 and reports the smoke test (step 9). Then **19b**: fix what the smoke test finds, settle proxy trust (A-093), error monitoring (D-154), run the brief's demo script (section 18) end to end on staging, record a tested restore. Proposed alongside: server-render the contributor pages' session and first data (`docs/screenshots/stage-18a/performance.md`).
 - **M-Pesa sandbox (A-078):** Dan added Daraja sandbox consumer key, secret and shortcode to `backend/.env` (2026-11-17); a token request to the sandbox succeeded. Still needed to run B2C in sandbox: `MPESA_ENV=sandbox`, `MPESA_INITIATOR_NAME`, `MPESA_SECURITY_CREDENTIAL`, a public HTTPS `MPESA_CALLBACK_BASE_URL` (a tunnel locally) and `MPESA_CALLBACK_TOKEN` (32+ characters). DG-02 is **not** cleared. A-086 (email provider), A-087 (SMS, DG-06), A-088 to A-090 wait for Dan.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
 
@@ -20,6 +20,10 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | Plan, questions, risks | `docs/design/build-plan.md` |
 | Research notes | `docs/design/research-notes.md` |
 | Run instructions | `README.md` |
+| Staging setup guide and env table | `docs/deployment.md` |
+| Staging runbook (deploy, migrate, rollback, backups) | `docs/runbook.md` |
+| Render blueprint | `render.yaml` (repo root) |
+| Staging chores (migrate, setup, seed, backup, restore-test) | `backend/scripts/staging.sh`, settings template `backend/.env.staging.example` |
 | Tokens | `frontend/app/globals.css` |
 | Components and shells | `frontend/components/{ui,brand,shells}/`, gallery at `/design` (dev) |
 | Charts | `frontend/components/charts/`, scale helper in `frontend/lib/charts/` |
@@ -189,3 +193,4 @@ Read this first after `/clear`. Then read only what the next stage needs.
 - Stage 18a: measure on a fresh database, not the local one. Recipe: create `mezai_measure` (drop, create, `goose up`, seed), run the API with that `DATABASE_URL`, `HTTP_ADDR=:8081`, `APP_ORIGIN=http://localhost:3001`, then `API_ORIGIN=http://localhost:8081 next build` (the rewrite target is fixed at build time) and `next start -p 3001`. Lighthouse 13.5.0 needs Chromium build 1248 (1254 fails with NO_NAVSTART). A new page must be added to `tests/full/sweep.spec.ts`.
 - Before opening a PR, run the secrets scan locally: `docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 detect --source=/repo --config=/repo/.gitleaks.toml --redact` (repo root). Test vectors such as the RFC 6238 key look like API keys; allowlist the exact value in `.gitleaks.toml`, never a file. Check `gh pr checks` before reporting a stage (main was red after #57 because this was missed).
 - Stage 18b: `cn` (lib/cn.ts) joins classes without merging, so a caller's `hidden` can lose to a component's own `inline-flex` or `flex`; use a variant (`max-sm:hidden`) when hiding a component that sets its display.
+- Stage 19a: staging migrations are run by hand (`backend/scripts/staging.sh migrate`) after a PR with a migration merges; say so in the PR's migration notes. Keep migrations backward compatible with the previous API (Render deploys the API on merge, possibly before the migration runs). New `CHECK_TABLES` in `staging.sh` if a key table is added. On Supabase, the roles `anon` and `authenticated` must never get grants (00028 removed their default privileges).
