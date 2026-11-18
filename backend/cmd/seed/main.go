@@ -37,7 +37,16 @@ func run() error {
 		pw = devPassword
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// SEED_TIMEOUT allows for a distant database (staging over the internet).
+	timeout := time.Minute
+	if v := os.Getenv("SEED_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return fmt.Errorf("SEED_TIMEOUT must be a positive duration such as 10m, got %q", v)
+		}
+		timeout = d
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	pool, err := db.Open(ctx, url)
 	if err != nil {
