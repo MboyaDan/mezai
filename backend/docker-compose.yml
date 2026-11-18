@@ -27,6 +27,8 @@ services:
       MAIL_FROM: ${MAIL_FROM:-MezAI <no-reply@mezai.invalid>}
       ENQUIRY_NOTIFY_TO: ${ENQUIRY_NOTIFY_TO:-ops@mezai.invalid}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      # Shared with the site so the API believes its visitor address (D-156).
+      PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
       IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:-}
       # M-Pesa B2C (Stage 15, DG-02): off unless MPESA_ENV is set. "fake" runs a
       # fake Daraja inside the API that posts results back to it.

@@ -38,15 +38,16 @@ services:
         value: 168h
       - key: SESSION_IDLE
         value: 48h
-      # Render's load balancer reaches the service from its private network.
-      # Checked after the first deploy (docs/deployment.md, step 7).
+      # Render's proxy reaches the API as ::1, so forwarded headers are not
+      # used: the visitor's address comes from the site (PROXY_SHARED_SECRET,
+      # D-156). Kept narrow so nothing else is believed.
       - key: TRUSTED_PROXIES
-        value: 10.0.0.0/8
+        value: 127.0.0.1
       - key: S3_USE_PATH_STYLE
         value: "true"
       - key: MPESA_ENV
         value: "off"
-      # The Vercel site's address, e.g. https://mezai-staging.vercel.app
+      # The Vercel site's address, e.g. https://mezai.vercel.app
       - key: APP_ORIGIN
         sync: false
       # Supabase session pooler URL with sslmode=require&pool_max_conns=5
@@ -61,6 +62,10 @@ services:
       - key: S3_ACCESS_KEY_ID
         sync: false
       - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      # openssl rand -hex 32; the same value goes into Vercel (D-156). The
+      # site sends each visitor's address with it.
+      - key: PROXY_SHARED_SECRET
         sync: false
       # openssl rand -base64 32 (never change it once contributors join)
       - key: IDENTITY_HMAC_KEY

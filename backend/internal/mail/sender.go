@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"mime"
+	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -66,7 +67,31 @@ func message(from, to *mail.Address, m Rendered) []byte {
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", m.Subject))
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(&b, "Message-ID: <%s@%s>\r\n", hex.EncodeToString(id), domain)
-	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
-	b.WriteString(strings.ReplaceAll(m.Body, "\n", "\r\n"))
+	b.WriteString("MIME-Version: 1.0\r\n")
+	if m.HTML == "" {
+		b.WriteString("Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
+		b.WriteString(crlf(m.Body))
+		return []byte(b.String())
+	}
+	// Text first, HTML last: clients show the last part they can display.
+	boundary := "mezai-" + hex.EncodeToString(id)
+	fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary)
+	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n", boundary)
+	b.WriteString(qp(m.Body))
+	fmt.Fprintf(&b, "\r\n--%s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n", boundary)
+	b.WriteString(qp(m.HTML))
+	fmt.Fprintf(&b, "\r\n--%s--\r\n", boundary)
 	return []byte(b.String())
+}
+
+func crlf(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+
+// qp encodes a part as quoted-printable, which keeps every line under SMTP's
+// length limit whatever the text holds.
+func qp(s string) string {
+	var buf strings.Builder
+	w := quotedprintable.NewWriter(&buf)
+	_, _ = w.Write([]byte(crlf(s)))
+	_ = w.Close()
+	return buf.String()
 }
