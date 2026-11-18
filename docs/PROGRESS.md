@@ -4,7 +4,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 19a (staging deployment: repo side and guide). Branch `stage-19a-staging`. 18b merged as #59.
+- **Last stage:** 19a (staging deployment: repo side and guide). Branch `stage-19a-staging`, PR #60. 18b merged as #59.
 - **Next:** Dan follows `docs/deployment.md` steps 1 to 9 and reports the smoke test (step 9). Then **19b**: fix what the smoke test finds, settle proxy trust (A-093), error monitoring (D-154), run the brief's demo script (section 18) end to end on staging, record a tested restore. Proposed alongside: server-render the contributor pages' session and first data (`docs/screenshots/stage-18a/performance.md`).
 - **M-Pesa sandbox (A-078):** Dan added Daraja sandbox consumer key, secret and shortcode to `backend/.env` (2026-11-17); a token request to the sandbox succeeded. Still needed to run B2C in sandbox: `MPESA_ENV=sandbox`, `MPESA_INITIATOR_NAME`, `MPESA_SECURITY_CREDENTIAL`, a public HTTPS `MPESA_CALLBACK_BASE_URL` (a tunnel locally) and `MPESA_CALLBACK_TOKEN` (32+ characters). DG-02 is **not** cleared. A-086 (email provider), A-087 (SMS, DG-06), A-088 to A-090 wait for Dan.
 - **Blocking questions:** none. Privacy notice 0.2 and contributor terms 0.2 are drafts awaiting the advocate (DG-05) before real contributors join.
