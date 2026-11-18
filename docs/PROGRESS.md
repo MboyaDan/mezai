@@ -4,7 +4,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 19b (branded HTML emails, visitor address from the site). Branch `stage-19b-email-ip`. 19a merged as #60, #61, #62.
+- **Last stage:** 19b (branded HTML emails, visitor address from the site). Branch `stage-19b-email-ip`, PR #63. 19a merged as #60, #61, #62.
 - **Staging is live (2026-11-18):** site https://mezai.vercel.app, API https://mezai-api-staging.onrender.com, Supabase Frankfurt (PostgreSQL 17.12, 28 migrations, seeded, Super Admin from `staging.sh setup`). Smoke test: pages, sign-in, enquiry email (after Brevo's Authorised IPs), CSV import to storage, backup and restore-test all passed; visitor IP failed (every audit entry `::1`), fixed in 19b (D-156). Two non-test files uploaded during the smoke test were removed (records deleted with an `import.removed` audit entry; Dan deletes the two stored objects in Supabase Storage).
 - **Before merging 19b:** `PROXY_SHARED_SECRET` (openssl rand -hex 32) must be set on Render **and** Vercel first, or the API refuses to start.
 - **Next:** after 19b merges and deploys: check audit IPs on staging, then run the brief's demo script (section 18) end to end on staging (19c). Proposed alongside: server-render the contributor pages' session and first data (`docs/screenshots/stage-18a/performance.md`).
