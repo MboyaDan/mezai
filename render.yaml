@@ -12,11 +12,12 @@ services:
     region: frankfurt # same region as the Supabase project (eu-central-1)
     branch: main
     autoDeploy: true
-    # rootDir limits auto-deploys to backend changes. The two Docker paths
-    # are relative to the repo root, not to rootDir (Render blueprint spec).
+    # rootDir limits auto-deploys to backend changes. The two Docker paths are
+    # resolved inside rootDir: ./backend here made Render look for
+    # backend/backend (first staging deploy, 2026-11-18).
     rootDir: backend
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     # /readyz checks the database and object storage, so a deploy with a
     # wrong DATABASE_URL or bucket never goes live.
     healthCheckPath: /readyz
