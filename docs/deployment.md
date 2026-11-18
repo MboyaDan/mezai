@@ -109,13 +109,14 @@ Sample accounts (`superadmin@sample.invalid`, `ops@sample.invalid`, `reviewer@sa
 
 Render reads `render.yaml` from `main`, so the Stage 19a PR must be merged first.
 
-1. Make the identity key now and save it in your password manager as **MezAI staging IDENTITY_HMAC_KEY**:
+1. Make two secrets now and save them in your password manager:
 
    ```sh
-   openssl rand -base64 32
+   openssl rand -base64 32   # MezAI staging IDENTITY_HMAC_KEY
+   openssl rand -hex 32      # MezAI staging PROXY_SHARED_SECRET
    ```
 
-   Never change it once real contributors join (stored National ID fingerprints would stop matching).
+   Never change the identity key once real contributors join (stored National ID fingerprints would stop matching). The proxy secret goes into Render and Vercel with the same value (D-156).
 
 2. Go to **dashboard.render.com**, sign in with GitHub.
 3. **New** (top right) → **Blueprint**. Connect GitHub if asked, and give Render access to the `MboyaDan/mezai` repository only.
@@ -131,6 +132,7 @@ Render reads `render.yaml` from `main`, so the Stage 19a PR must be merged first
    | `S3_ACCESS_KEY_ID` | from step 2.3 |
    | `S3_SECRET_ACCESS_KEY` | from step 2.3 |
    | `IDENTITY_HMAC_KEY` | from step 5.1 |
+   | `PROXY_SHARED_SECRET` | from step 5.1 (the same value goes into Vercel) |
    | `SMTP_ADDR` | `smtp-relay.brevo.com:2525` |
    | `SMTP_USERNAME` | Brevo login from step 3.3 |
    | `SMTP_PASSWORD` | Brevo SMTP key from step 3.3 |
@@ -160,6 +162,7 @@ If `/readyz` fails, its answer and the log name the check that failed: `database
      |---|---|
      | `API_ORIGIN` | `https://mezai-api-staging.onrender.com` (no slash at the end) |
      | `SITE_URL` | `https://mezai-staging.vercel.app` |
+     | `PROXY_SHARED_SECRET` | the same value as on Render |
 
      Do **not** add `SITE_INDEXABLE` (staging must stay out of search engines) or `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (DG-07).
 4. **Deploy**. About 3 minutes.
@@ -190,7 +193,7 @@ On `https://mezai-staging.vercel.app`, in a private window:
 2. **Sign in** with your Super Admin from step 4. (Proves cookies, CSRF and the origin check through Vercel's proxy.) Turn on two-step sign-in at `/w/account` if you like.
 3. Send the **Contact** form. The enquiry email should reach `ENQUIRY_NOTIFY_TO` within a minute or two (check spam). (Proves SMTP.)
 4. Sign in as `ops@sample.invalid`, open a sample project, upload a small CSV of items. (Proves storage.)
-5. Supabase → **SQL Editor** → run `select created_at, action, ip from audit_log where ip is not null order by created_at desc limit 5;` and note the IP of your sign-in. Compare with your public IP (search "what is my IP"). Tell me whether they match: that decides whether `TRUSTED_PROXIES` is right (A-093).
+5. Sign in again, then Supabase → **SQL Editor** → run `select created_at, action, ip from audit_log where ip is not null order by created_at desc limit 5;` and note the IP of your sign-in. Compare with your public IP (search "what is my IP"). They must match. If they show `::1`, `PROXY_SHARED_SECRET` is missing or differs between Render and Vercel (D-156).
 6. From your laptop: `backend/scripts/staging.sh backup` then `backend/scripts/staging.sh restore-test`. It should end with `row counts match`.
 
 Send me: which of 1 to 6 passed, the two IPs from 5, and any error text from Render **Logs**. Do not paste secrets.
@@ -208,7 +211,8 @@ Send me: which of 1 to 6 passed, the two IPs from 5, and any error text from Ren
 | `LOG_LEVEL`, `LOG_FORMAT` | `info`, `json` | no | `render.yaml` |
 | `APP_ORIGIN` | Vercel address | no | must match exactly (no slash) |
 | `COOKIE_SECURE` | `true` | no | refused if false outside development |
-| `TRUSTED_PROXIES` | `10.0.0.0/8` | no | checked in step 9.5 |
+| `TRUSTED_PROXIES` | `127.0.0.1` | no | `render.yaml`; visitor addresses come from the site (D-156) |
+| `PROXY_SHARED_SECRET` | `openssl rand -hex 32` | **yes** | same value on Vercel; required outside development |
 | `SESSION_TTL`, `SESSION_IDLE` | `168h`, `48h` | no | |
 | `DATABASE_URL` | session pooler URL | **yes** | `sslmode=require&pool_max_conns=5` |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET` | Supabase Storage | no | |
@@ -228,6 +232,7 @@ Send me: which of 1 to 6 passed, the two IPs from 5, and any error text from Ren
 |---|---|---|
 | `API_ORIGIN` | Render address | read at build time; redeploy after a change |
 | `SITE_URL` | Vercel address | canonical links, sitemap, Open Graph |
+| `PROXY_SHARED_SECRET` | same as Render | secret; server only, never `NEXT_PUBLIC_` |
 | `SITE_INDEXABLE` | unset | unset means `noindex` and a closed `robots.txt` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | unset | DG-07 |
 
@@ -246,5 +251,5 @@ Staging uses Render's **Logs** (JSON, searchable, 7 days on the free plan) and V
 3. **Email.** A sending domain with SPF, DKIM and DMARC (A-086 picks the provider).
 4. **Data location.** Everything here sits in Frankfurt. Personal data leaving Kenya needs the safeguards in the Data Protection Act 2019 (cross-border transfer): confirm with the advocate under DG-05 before contributors join.
 5. **Separate production.** A new Supabase project, Render service and Vercel project; new secrets (never reuse staging's `IDENTITY_HMAC_KEY` or keys); no seed; migrations run by hand with the command in the PR notes.
-6. **Proxy trust (A-093)** settled, error monitoring in, two-step sign-in required for Super Admins and payout approvers (A-091).
+6. Error monitoring in, two-step sign-in required for Super Admins and payout approvers (A-091).
 7. **Sample data removed** (Stage 20).
