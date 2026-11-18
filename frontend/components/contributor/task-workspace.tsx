@@ -383,7 +383,7 @@ function TaskView({
         />
       </section>
 
-      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-surface/95 backdrop-blur md:bottom-0">
+      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-surface md:bottom-0">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 md:px-8">
           <p className="text-sm text-fg-muted" aria-live="polite">
             {save === "saving"
@@ -401,7 +401,7 @@ function TaskView({
           >
             <Keyboard aria-hidden="true" className="size-4" /> Shortcuts
           </button>
-          <KeyboardHint keys={["Ctrl", "Enter"]} label="submit" className="hidden sm:inline-flex" />
+          <KeyboardHint keys={["Ctrl", "Enter"]} label="submit" className="max-sm:hidden" />
           <Button onClick={submit} loading={busy} className="ml-auto sm:ml-0">
             Submit
           </Button>

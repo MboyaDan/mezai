@@ -58,6 +58,8 @@ Tried and dropped: inlining CSS (`experimental.inlineCss`) gave no measurable ga
 - no sideways page scroll;
 - at 1440 light, the keyboard: the first Tab stop is "Skip to content" and Enter moves focus to `<main>`; then the first 15 Tab stops each show a visible focus indicator (outline or ring).
 
+Correction (Stage 18b): in this run the 9 contributor pages showed only the "review the updated documents" prompt, because seed contributors had accepted older legal versions, so the real contributor pages were not checked. From 18b the sweep accepts the current versions first and fails any page that shows the prompt.
+
 Result (2026-11-17, fresh seed, production build): **all four passed in 14.3 minutes**: 57 pages × 3 views, no serious or critical axe issue, no sideways scroll, the skip link first on every page and moving focus to `<main>`, and a visible focus indicator on every checked Tab stop. Before the skip-link fix the same check found `<main>` could not take focus (fixed in this stage). Pages the fresh data could not reach (a project request, a review item, a payout batch) are covered by their own specs.
 
 ### Manual checklist

@@ -475,7 +475,9 @@ export function ProfileForm() {
           Save profile
         </Button>
         {profile.missing.length > 0 && !removed && (
-          <p className="text-sm text-fg-muted">Fill every required field to unlock qualification tests.</p>
+          <p className="text-sm text-fg-muted">
+            Qualification tests open once every required field is filled in.
+          </p>
         )}
       </div>
     </form>
