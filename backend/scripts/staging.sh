@@ -104,8 +104,10 @@ case ${1:-} in
     sleep 2
     docker exec "$name" psql -U postgres -q -c "DROP SCHEMA public CASCADE" -c "CREATE ROLE mezai_app NOLOGIN"
     # --no-acl: Supabase's own roles do not exist here. Grants are not part of
-    # what this test proves; a restore into Supabase keeps them.
-    docker exec "$name" pg_restore -U postgres -d postgres --no-owner --no-acl /backup.dump
+    # what this test proves; a restore into Supabase keeps them. Supabase adds a
+    # per-column option (pg_attver) stock PostgreSQL rejects, so those lines are
+    # dropped. ON_ERROR_STOP makes any other problem fail the test.
+    docker exec "$name" sh -c "pg_restore --no-owner --no-acl -f - /backup.dump | grep -v 'SET (pg_attver=' | psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 >/dev/null"
     docker exec "$name" psql -U postgres -At -F ' ' -c "$(for t in $CHECK_TABLES; do printf "SELECT '%s', count(*) FROM %s UNION ALL " "$t" "$t"; done | sed 's/ UNION ALL $//') ORDER BY 1" >"$BACKUP_DIR/restored.txt"
     counts "$DOCKER_DB_URL" >"$BACKUP_DIR/live.txt"
     echo "restore-test: $file"

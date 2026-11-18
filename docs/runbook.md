@@ -41,7 +41,7 @@ docker run --rm -v ~/mezai-backups:/b postgres:17-alpine \
   pg_restore --no-owner -d "<session pooler URL of the target>" /b/<file>.dump
 ```
 
-Then point Render's `DATABASE_URL` at it, redeploy, and run the smoke test (`docs/deployment.md` step 9). Run step 1.5 (Data API off) on the new project.
+Restoring into plain PostgreSQL instead (not Supabase) needs the `pg_attver` lines removed, as `restore-test` does. Then point Render's `DATABASE_URL` at it, redeploy, and run the smoke test (`docs/deployment.md` step 9). Run step 1.5 (Data API off) on the new project.
 
 ## Secrets
 
