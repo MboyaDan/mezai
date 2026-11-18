@@ -64,6 +64,10 @@ Frontend, in `frontend/`:
 | `npm run build` | Production build |
 | `npm run test:e2e` | Playwright smoke tests (starts the dev server if needed) |
 
+## Staging
+
+Supabase (database and files), Render (API, from `render.yaml`), Vercel (site), Brevo (email). Step-by-step setup and the environment variable table: [`docs/deployment.md`](docs/deployment.md). Deploys, migrations, rollback, backups: [`docs/runbook.md`](docs/runbook.md). Staging chores from your laptop: `backend/scripts/staging.sh` (reads the git-ignored `backend/.env.staging`).
+
 ## Rules worth knowing
 
 - Never commit `.env` files, secrets, real personal or client data, or database dumps.
