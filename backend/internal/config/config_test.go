@@ -159,3 +159,31 @@ func TestMpesaModes(t *testing.T) {
 		})
 	}
 }
+
+func TestProxySecret(t *testing.T) {
+	base := map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b"}
+	with := func(extra map[string]string) error {
+		env := map[string]string{}
+		for k, v := range base {
+			env[k] = v
+		}
+		for k, v := range extra {
+			env[k] = v
+		}
+		_, err := FromLookup(lookup(env))
+		return err
+	}
+	if err := with(map[string]string{"APP_ENV": "staging"}); err == nil || !strings.Contains(err.Error(), "PROXY_SHARED_SECRET is required") {
+		t.Fatalf("staging without the secret: %v", err)
+	}
+	if err := with(map[string]string{"PROXY_SHARED_SECRET": "too-short"}); err == nil || !strings.Contains(err.Error(), "at least 32") {
+		t.Fatalf("short secret: %v", err)
+	}
+	c, err := FromLookup(lookup(map[string]string{"DATABASE_URL": "postgres://x", "S3_BUCKET": "b", "PROXY_SHARED_SECRET": strings.Repeat("a", 64)}))
+	if err != nil || len(c.ProxySecret) != 64 {
+		t.Fatalf("valid secret: %v", err)
+	}
+	if c, err := FromLookup(lookup(base)); err != nil || c.ProxySecret != "" {
+		t.Fatalf("development may run without it: %v", err)
+	}
+}

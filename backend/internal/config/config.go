@@ -62,6 +62,11 @@ type Config struct {
 	// EnquiryNotifyTo receives a copy of every project enquiry from the
 	// public site. Required outside development and test.
 	EnquiryNotifyTo string
+	// ProxySecret (PROXY_SHARED_SECRET) is shared with the site, which sends
+	// the visitor's address with it (D-156). Required outside development and
+	// test, at least 32 characters; the site must hold the same value.
+	ProxySecret string
+
 	// TurnstileSecret turns on Cloudflare Turnstile checks on public forms
 	// (DG-07). Empty leaves them off; the honeypot and rate limits still apply.
 	TurnstileSecret string
@@ -145,6 +150,7 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		MailFrom:          get("MAIL_FROM", ""),
 		EnquiryNotifyTo:   get("ENQUIRY_NOTIFY_TO", ""),
 		TurnstileSecret:   get("TURNSTILE_SECRET_KEY", ""),
+		ProxySecret:       get("PROXY_SHARED_SECRET", ""),
 	}
 	if c.MailFrom == "" && c.IsDevLike() {
 		c.MailFrom = "MezAI <no-reply@mezai.invalid>"
@@ -216,6 +222,11 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 	c.Mpesa, err = loadMpesa(get, c.Env)
 	if err != nil {
 		errs = append(errs, err)
+	}
+	if c.ProxySecret != "" && len(c.ProxySecret) < 32 {
+		errs = append(errs, errors.New("PROXY_SHARED_SECRET must be at least 32 characters (openssl rand -hex 32)"))
+	} else if c.ProxySecret == "" && !c.IsDevLike() {
+		errs = append(errs, errors.New("PROXY_SHARED_SECRET is required outside development and test (openssl rand -hex 32; the site needs the same value)"))
 	}
 	if c.DatabaseURL == "" {
 		errs = append(errs, errors.New("DATABASE_URL is required"))

@@ -111,9 +111,10 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Log:    log,
-			HSTS:   !cfg.IsDevLike(),
-			Checks: map[string]httpapi.Checker{"database": pool, "storage": store},
+			Log:         log,
+			HSTS:        !cfg.IsDevLike(),
+			ProxySecret: cfg.ProxySecret,
+			Checks:      map[string]httpapi.Checker{"database": pool, "storage": store},
 			Auth: &httpapi.AuthDeps{
 				Service: authSvc, Pool: pool, AppOrigin: cfg.AppOrigin, CookieSecure: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
 				Enquiry:     enquiryDeps(cfg),

@@ -35,6 +35,9 @@ type Deps struct {
 	// HSTS sends Strict-Transport-Security (every environment served over
 	// HTTPS: all but development and test).
 	HSTS bool
+	// ProxySecret is PROXY_SHARED_SECRET: with it, the visitor address the
+	// site sends in ClientIPHeader is believed (D-156). Empty ignores it.
+	ProxySecret string
 }
 
 // AuthDeps configures sign-in and the /v1 API.
@@ -86,6 +89,7 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 	}
 	r := gin.New()
 	r.HandleMethodNotAllowed = true
+	useProxyClientIP(r, d.ProxySecret) // first, so logs and limits see the visitor
 	r.Use(RequestID(), AccessLog(d.Log), Recover(d.Log), SecurityHeaders(d.HSTS), BodyLimit())
 
 	r.GET("/healthz", healthz)
