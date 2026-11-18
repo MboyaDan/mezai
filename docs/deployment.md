@@ -89,6 +89,8 @@ The API never migrates the database by itself (CLAUDE.md section 2). You run mig
    - `SETUP_ADMIN_EMAIL`, `SETUP_ADMIN_NAME`, `SETUP_ADMIN_PASSWORD`: your own Super Admin (an address you read; a new, long password).
    - `SEED_PASSWORD`: a new password of 16+ characters. The repository is public, so the built-in sample password is public too.
 
+   One `NAME=value` per line; values may hold spaces and symbols (the script reads the file, it does not run it).
+
 3. Run, from the repository root:
 
    ```sh
@@ -99,7 +101,7 @@ The API never migrates the database by itself (CLAUDE.md section 2). You run mig
 
 4. Delete the `SETUP_ADMIN_PASSWORD` line from `backend/.env.staging`.
 
-**Check:** `backend/scripts/staging.sh status` lists every migration as applied, up to `00028_hosted_api_roles.sql`. The seed prints `19 users, 2 organisations, 12 contributors, 4 projects ...`.
+**Check:** `backend/scripts/staging.sh status` lists every migration as applied, up to `00028_hosted_api_roles.sql`. `backend/scripts/staging.sh check` shows 0 grants and 0 default privileges for Supabase's API roles from our role, and over 200 for `mezai_app` (the rules it lists for `supabase_admin` and Supabase's own schemas do not reach MezAI's tables). The seed prints `19 users, 2 organisations, 12 contributors, 4 projects ...`.
 
 Sample accounts (`superadmin@sample.invalid`, `ops@sample.invalid`, `reviewer@sample.invalid`, `contributor001@sample.invalid` and so on) sign in with your `SEED_PASSWORD`. Their emails go nowhere (`.invalid`). Stage 20 removes them.
 
