@@ -51,6 +51,7 @@ Restoring into plain PostgreSQL instead (not Supabase) needs the `pg_attver` lin
 | Storage keys | Supabase → **Storage → Settings → S3 Access Keys** | Create a new key, update Render, then delete the old key |
 | Brevo SMTP key | Brevo → **SMTP & API** | Generate a new key, update Render, delete the old one |
 | `IDENTITY_HMAC_KEY` | Render only | **Do not rotate** once contributors have joined (D-078) |
+| `PROXY_SHARED_SECRET` | Render and Vercel (same value) | Set the new value on both, deploy Render, then redeploy Vercel; in between, visitor addresses show as `::1` (sign-in limits shared) for a few minutes |
 
 After changing a Render variable choose **Save, rebuild and deploy**. Sessions survive an API restart (they are in the database).
 

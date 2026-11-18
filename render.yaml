@@ -47,7 +47,7 @@ services:
         value: "true"
       - key: MPESA_ENV
         value: "off"
-      # The Vercel site's address, e.g. https://mezai-staging.vercel.app
+      # The Vercel site's address, e.g. https://mezai.vercel.app
       - key: APP_ORIGIN
         sync: false
       # Supabase session pooler URL with sslmode=require&pool_max_conns=5
