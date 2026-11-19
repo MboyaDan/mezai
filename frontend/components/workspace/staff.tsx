@@ -14,6 +14,7 @@ import { staffOnly, staffRoleLabel } from "@/lib/two-step";
 import { useLoad } from "@/lib/use-load";
 import { useUser } from "@/lib/session";
 import { shortDate } from "./contributors";
+import { InvitePanel } from "./invite";
 import { PageTitle } from "./workspace";
 
 type User = Schemas["UserSummary"];
@@ -120,6 +121,16 @@ export function StaffPage() {
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} />
         </Field>
       </Dialog>
+      <div className="mt-10">
+        <InvitePanel
+          title="Invite a staff member"
+          roles={[
+            { value: "ops_manager", label: "Ops Manager" },
+            { value: "reviewer", label: "Reviewer" },
+            { value: "payout_approver", label: "Payout Approver" },
+          ]}
+        />
+      </div>
     </>
   );
 }

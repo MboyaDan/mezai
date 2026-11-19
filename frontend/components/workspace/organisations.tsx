@@ -12,6 +12,7 @@ import { ApiError, api, type Organisation } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
 import { useLoad } from "@/lib/use-load";
 import { shortDate } from "./contributors";
+import { InvitePanel } from "./invite";
 import { PageTitle, useCan } from "./workspace";
 
 function Create({ onCreated }: { onCreated: () => void }) {
@@ -144,6 +145,18 @@ export function Organisations() {
           />
         )}
         {can("org.manage") && <Create onCreated={list.reload} />}
+        {can("user.manage") && list.status === "ready" && list.data.some((o) => o.status === "active") && (
+          <InvitePanel
+            title="Invite a client user"
+            roles={[
+              { value: "client_admin", label: "Client Admin" },
+              { value: "client_viewer", label: "Client Viewer" },
+            ]}
+            organisations={list.data
+              .filter((o) => o.status === "active")
+              .map((o) => ({ value: o.id, label: o.name }))}
+          />
+        )}
       </div>
     </>
   );
