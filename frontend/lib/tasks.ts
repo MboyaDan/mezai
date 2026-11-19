@@ -55,7 +55,7 @@ export function submitKey(taskId: string, store: Pick<Storage, "getItem" | "setI
 
 /** Characters left before the rationale meets the project minimum, or 0. */
 export function rationaleShortBy(project: Pick<WorkProject, "task_type" | "min_rationale_chars">, a: Answer) {
-  if (project.task_type !== "pairwise") return 0;
+  if (project.task_type !== "pairwise" && project.task_type !== "rating") return 0;
   return Math.max(0, project.min_rationale_chars - [...(a.rationale ?? "").trim()].length);
 }
 

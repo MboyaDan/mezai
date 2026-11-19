@@ -120,6 +120,8 @@ export function checkList(p: WorkProject): string[] {
   const out: string[] = [];
   if (p.task_type === "pairwise" && p.min_rationale_chars > 0)
     out.push(`Your reason for a choice must be at least ${p.min_rationale_chars} characters.`);
+  if (p.task_type === "rating" && p.min_rationale_chars > 0)
+    out.push(`Your reason for your scores must be at least ${p.min_rationale_chars} characters.`);
   if (p.qa_checks.block_unchanged_translation)
     out.push("If you score a translation below 5, correct it before submitting.");
   if (p.qa_checks.warn_fast_seconds > 0)

@@ -43,6 +43,13 @@ export function QuestionContent({ type, content }: { type: QuestionType; content
           </div>
         </div>
       );
+    case "rating":
+      return (
+        <div className="grid gap-4">
+          <Panel label="Prompt">{str(content.prompt)}</Panel>
+          <Panel label="Response">{str(content.response)}</Panel>
+        </div>
+      );
     case "writing":
       return <Panel label="Writing prompt">{str(content.prompt)}</Panel>;
     case "translation_review":
@@ -84,6 +91,17 @@ export function AnswerSummary({ type, answer }: { type: QuestionType; answer: An
                 .join(" · ")}
             </span>
           )}
+          {answer.rationale && <span className="text-sm text-fg-muted">“{answer.rationale}”</span>}
+        </span>
+      );
+    case "rating":
+      return (
+        <span className="grid gap-1">
+          <span className="font-mono text-xs">
+            {Object.entries(answer.scores ?? {})
+              .map(([c, v]) => `${criterionLabel(c)} ${v}`)
+              .join(" · ") || "No scores"}
+          </span>
           {answer.rationale && <span className="text-sm text-fg-muted">“{answer.rationale}”</span>}
         </span>
       );

@@ -163,6 +163,18 @@ describe("project form", () => {
     );
   });
 
+  it("rating takes rubric criteria and a minimum rationale, and no mismatch check", () => {
+    const f = { ...emptyForm("rating", "o"), name: "X", criteria: "Helpfulness\nAccuracy", pay_kes: "1" };
+    expect(f.min_rationale_chars).toBe("40");
+    f.qa = { ...f.qa, warn_rationale_mismatch: true };
+    const { input, errors } = toInput(f, true);
+    expect(errors).toEqual({});
+    expect(input?.config).toEqual({ criteria: ["helpfulness", "accuracy"] });
+    expect(input?.min_rationale_chars).toBe(40);
+    expect(input?.qa_checks?.warn_rationale_mismatch).toBe(false);
+    expect(toInput({ ...f, criteria: "" }, true).errors["config.criteria"]).toBeDefined();
+  });
+
   it("drops checks that do not apply to the task type", () => {
     const f = { ...emptyForm("classification", "o"), name: "X", labels: "A\nB", pay_kes: "1" };
     f.qa = { ...f.qa, block_unchanged_translation: true, warn_rationale_mismatch: true };

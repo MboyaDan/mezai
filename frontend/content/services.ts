@@ -30,11 +30,12 @@ export const servicesPage = {
       id: "evaluation",
       name: "AI evaluation and RLHF",
       summary:
-        "Contributors compare two model responses to the same prompt, score each against your rubric and say which is better, and why.",
+        "Contributors compare two model responses to the same prompt, score each against your rubric and say which is better, and why. Or they score a single response against your rubric and explain their scores.",
       task: [
         "Read a prompt and two responses, side by side.",
         "Score each response on your rubric, for example accuracy, helpfulness, safety and language quality, 1 to 5.",
         "Choose A, B or a tie, and write a rationale of at least the length you set.",
+        "For single-response rating: score the one response on each criterion and explain the scores.",
       ],
       deliver: [
         "Rubric scores per response from each contributor.",
@@ -43,6 +44,7 @@ export const servicesPage = {
       ],
       checks: [
         "Gold comparisons with a known preference: the preference must match and each score fall within 1 point.",
+        "Gold ratings with known scores: each score must fall within 1 point.",
         "Items whose scores spread more than your threshold go to a reviewer.",
       ],
       goodFor: "Preference data, model comparisons and evaluating how a model handles African contexts.",

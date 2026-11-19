@@ -27,7 +27,7 @@ const statusText: Record<Status, { label: string; tone: "info" | "success" | "ne
   converted: { label: "Project created", tone: "success" },
   declined: { label: "Declined", tone: "neutral" },
 };
-const requestTypes = ["classification", "pairwise", "translation_review", "other"] as const;
+const requestTypes = ["classification", "pairwise", "rating", "translation_review", "other"] as const;
 const asError = (e: unknown) => (e instanceof ApiError ? e : new ApiError(0, "network"));
 
 function RequestStatus({ status }: { status: Status }) {

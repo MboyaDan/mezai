@@ -47,6 +47,7 @@ describe("rationaleShortBy", () => {
     expect(rationaleShortBy(p, { rationale: "  short  " })).toBe(15);
     expect(rationaleShortBy(p, { rationale: "A answers the question fully." })).toBe(0);
     expect(rationaleShortBy({ ...p, task_type: "classification" }, {})).toBe(0);
+    expect(rationaleShortBy({ ...p, task_type: "rating" }, { rationale: "short" })).toBe(15);
   });
 });
 

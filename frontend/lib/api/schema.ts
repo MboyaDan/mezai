@@ -2868,7 +2868,7 @@ export interface components {
       id: string;
       name: string;
       /** @enum {string} */
-      task_type: "classification" | "pairwise" | "translation_review";
+      task_type: "classification" | "pairwise" | "rating" | "translation_review";
       instructions_md: string;
       config: components["schemas"]["TaskConfig"];
       /** Format: int64 */
@@ -2897,7 +2897,7 @@ export interface components {
       /** Format: uuid */
       project_id: string;
       /** @enum {string} */
-      task_type: "classification" | "pairwise" | "translation_review";
+      task_type: "classification" | "pairwise" | "rating" | "translation_review";
       /** @enum {string} */
       status: "reserved" | "submitted" | "skipped" | "expired" | "reported";
       /** Format: date-time */
@@ -3229,13 +3229,13 @@ export interface components {
       /** Format: date-time */
       created_at: string;
     };
-    /** @description Labels for classification, rubric criteria (scored 1 to 5) for pairwise. */
+    /** @description Labels for classification, rubric criteria (scored 1 to 5) for pairwise and rating. */
     TaskConfig: {
       labels?: string[];
       multi_label?: boolean;
       criteria?: string[];
     };
-    /** @description Shape of the task template's submission schema. Classification: `labels` (optional `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and `scores_b` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and `fluency` 1 to 5, `corrected`, optional `error_tags`. Writing sample (core check): `text`, 60 to 250 words. */
+    /** @description Shape of the task template's submission schema. Classification: `labels` (optional `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and `scores_b` per criterion 1 to 5, `rationale`. Rating: `scores` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and `fluency` 1 to 5, `corrected`, optional `error_tags`. Writing sample (core check): `text`, 60 to 250 words. */
     Answer: {
       [key: string]: unknown;
     };
@@ -3253,7 +3253,7 @@ export interface components {
       skill_kind: "language" | "domain" | "task_type" | "core";
       skill_value: string;
       /** @enum {string} */
-      task_type: "classification" | "pairwise" | "translation_review";
+      task_type: "classification" | "pairwise" | "rating" | "translation_review";
       pass_threshold: number;
       instructions_md: string;
       question_count: number;
@@ -3283,7 +3283,7 @@ export interface components {
       test_id: string;
       title: string;
       /** @enum {string} */
-      task_type: "classification" | "pairwise" | "translation_review";
+      task_type: "classification" | "pairwise" | "rating" | "translation_review";
       config: components["schemas"]["TaskConfig"];
       instructions_md: string;
       pass_threshold: number;
@@ -3297,7 +3297,7 @@ export interface components {
          * @description The question's own type (the core check mixes them)
          * @enum {string}
          */
-        task_type: "classification" | "pairwise" | "translation_review" | "writing";
+        task_type: "classification" | "pairwise" | "rating" | "translation_review" | "writing";
         config: components["schemas"]["TaskConfig"];
       }[];
       answers: {
@@ -3403,7 +3403,7 @@ export interface components {
       created_at: string;
     };
     /** @enum {string} */
-    TaskType: "classification" | "pairwise" | "translation_review";
+    TaskType: "classification" | "pairwise" | "rating" | "translation_review";
     TaskTemplate: {
       task_type: components["schemas"]["TaskType"];
       name: string;
@@ -3414,7 +3414,7 @@ export interface components {
     };
     /** @enum {string} */
     ProjectStatus: "draft" | "ready" | "live" | "paused" | "closed";
-    /** @description classification: labels (2 to 50), multi_label. pairwise: criteria (1 to 8 keys), scale [1, 5]. translation_review: error_tags (optional). */
+    /** @description classification: labels (2 to 50), multi_label. pairwise and rating: criteria (1 to 8 keys), scale [1, 5]. translation_review: error_tags (optional). */
     ProjectConfig: {
       labels?: string[];
       multi_label?: boolean;
@@ -3460,7 +3460,7 @@ export interface components {
       target_count?: number | null;
       /** Format: date */
       deadline?: string | null;
-      /** @description Pairwise only */
+      /** @description Pairwise and rating only */
       min_rationale_chars?: number;
       skills?: components["schemas"]["ProjectSkill"][];
     };
@@ -3565,7 +3565,7 @@ export interface components {
     ProjectRequestInput: {
       title: string;
       /** @enum {string} */
-      task_type: "classification" | "pairwise" | "translation_review" | "other";
+      task_type: "classification" | "pairwise" | "rating" | "translation_review" | "other";
       brief_md: string;
       languages?: string[];
       volume_estimate?: number | null;
@@ -3583,7 +3583,7 @@ export interface components {
       org_name: string;
       title: string;
       /** @enum {string} */
-      task_type: "classification" | "pairwise" | "translation_review" | "other";
+      task_type: "classification" | "pairwise" | "rating" | "translation_review" | "other";
       brief_md: string;
       languages: string[];
       volume_estimate: number | null;

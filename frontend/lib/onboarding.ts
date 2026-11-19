@@ -119,7 +119,7 @@ export const testStateLabel: Record<MyTest["state"], string> = {
   expired: "Expired: take it again",
 };
 
-export type TaskType = "classification" | "pairwise" | "translation_review";
+export type TaskType = "classification" | "pairwise" | "rating" | "translation_review";
 /** A qualification question's type: a project task type, or a writing sample (core check). */
 export type QuestionType = TaskType | "writing";
 
@@ -135,6 +135,8 @@ export type Answer = {
   preference?: "a" | "b" | "tie";
   scores_a?: Record<string, number>;
   scores_b?: Record<string, number>;
+  /** Rating: one score per criterion (Stage 22b). */
+  scores?: Record<string, number>;
   rationale?: string;
   adequacy?: number;
   fluency?: number;
@@ -160,6 +162,10 @@ export function isComplete(type: QuestionType, config: TaskConfig, a: Answer | u
         (a.rationale ?? "").trim().length > 0
       );
     }
+    case "rating":
+      return (
+        (config.criteria ?? []).every((c) => score(a.scores?.[c])) && (a.rationale ?? "").trim().length > 0
+      );
     case "translation_review":
       return score(a.adequacy) && score(a.fluency);
     case "writing": {
