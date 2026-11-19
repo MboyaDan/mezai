@@ -2,14 +2,18 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/legal"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/password"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
@@ -30,8 +34,9 @@ type SignUp struct {
 // SignUpContributor creates an unverified contributor account in status
 // "applied", records consent with version, time and IP, and emails a
 // verification link. When the email is already registered it changes
-// nothing (an unverified contributor gets a fresh link) and returns nil, so
-// the response never reveals whether an address has an account.
+// nothing and returns nil, so the response never reveals whether an address
+// has an account: an unverified contributor gets a fresh link, and a
+// verified owner gets an "you already have an account" email (D-158).
 func (s *Service) SignUpContributor(ctx context.Context, in SignUp, m Meta) error {
 	email := strings.ToLower(strings.TrimSpace(in.Email))
 	name := strings.TrimSpace(in.DisplayName)
@@ -53,12 +58,19 @@ func (s *Service) SignUpContributor(ctx context.Context, in SignUp, m Meta) erro
 	return s.pool.InScope(ctx, db.System(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		if u, err := q.GetUserForLogin(ctx, email); err == nil {
-			if u.EmailVerifiedAt == nil && u.Status == "active" {
+			if u.Status != "active" {
+				return nil
+			}
+			if u.EmailVerifiedAt == nil {
 				if _, err := q.GetContributorIDByUser(ctx, u.ID); err == nil {
 					return s.enqueueVerification(ctx, q, u.ID, u.Email, u.DisplayName)
 				}
+				return nil
 			}
-			return nil
+			if u.PasswordHash == nil {
+				return nil // invited, not yet accepted: the invitation is the way in
+			}
+			return s.enqueueAccountExists(ctx, q, u.ID, u.Email, u.DisplayName)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -100,4 +112,20 @@ func (s *Service) SignUpContributor(ctx context.Context, in SignUp, m Meta) erro
 		return Audit(ctx, q, m, Entry{Actor: &u.ID, Action: "contributor.signed_up", EntityType: "contributor", EntityID: &cp.ID,
 			After: map[string]any{"public_code": cp.PublicCode, "status": cp.Status, "consents": accepted}})
 	})
+}
+
+// enqueueAccountExists tells the owner of an address that someone tried to
+// sign up with it (D-158). The page answers as for a new address, so nobody
+// learns who has an account; the owner hears about it here, at most once a
+// day so the form cannot be used to flood an inbox.
+func (s *Service) enqueueAccountExists(ctx context.Context, q *store.Queries, userID uuid.UUID, email, name string) error {
+	data, err := json.Marshal(map[string]string{
+		"Name": name, "Link": s.opt.AppOrigin + "/login", "ResetLink": s.opt.AppOrigin + "/forgot-password",
+	})
+	if err != nil {
+		return err
+	}
+	key := mail.TemplateAccountExists + ":" + userID.String() + ":" + time.Now().UTC().Format(time.DateOnly)
+	return q.EnqueueUserEmail(ctx, store.EnqueueUserEmailParams{ToAddress: email, Template: mail.TemplateAccountExists,
+		Data: data, UserID: &userID, DedupeKey: &key})
 }
