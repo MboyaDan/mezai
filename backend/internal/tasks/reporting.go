@@ -264,7 +264,7 @@ func (s *Service) GetProjectQuality(ctx context.Context, p *auth.Principal, proj
 		}
 		for _, sn := range snaps {
 			f := AgreementFigure{Label: sn.Label, Statistic: sn.Statistic, Value: sn.Value, Items: sn.NItems, Raters: sn.NRaters, WindowEnd: sn.WindowEnd}
-			if sn.Statistic == "cohen_kappa" || sn.Statistic == "fleiss_kappa" {
+			if quality.ChanceCorrected(sn.Statistic) {
 				b := quality.Band(sn.Value)
 				f.Band = &b
 			}

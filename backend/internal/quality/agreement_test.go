@@ -207,8 +207,46 @@ func TestProjectAgreement(t *testing.T) {
 	if ProjectAgreement(Classification, Config{}, [][]Answer{{lbl("a")}}, 1) != nil {
 		t.Fatal("k = 1 has no agreement")
 	}
-	tr := ProjectAgreement(TranslationReview, Config{}, [][]Answer{{{Adequacy: 4, Fluency: 5}, {Adequacy: 2, Fluency: 5}}}, 2)
-	if len(tr) != 2 || tr[0].Value != 2 || tr[1].Value != 0 {
-		t.Fatalf("translation MAD: %+v", tr)
+	stats = ProjectAgreement(TranslationReview, Config{}, [][]Answer{
+		{{Adequacy: 4, Fluency: 5}, {Adequacy: 2, Fluency: 5}},
+		{{Adequacy: 3, Fluency: 2}, {Adequacy: 3, Fluency: 3}},
+	}, 2)
+	for _, c := range []struct {
+		label, stat string
+		want        float64
+	}{
+		{"adequacy", "mean_abs_diff", 1}, {"adequacy", "percent", 0.5}, {"adequacy", "within_one", 0.5},
+		{"fluency", "mean_abs_diff", 0.5}, {"fluency", "percent", 0.5}, {"fluency", "within_one", 1},
+	} {
+		if v, ok := find(c.label, c.stat); !ok || v != c.want {
+			t.Errorf("translation %s %s = %v %v, want %v", c.label, c.stat, v, ok, c.want)
+		}
+	}
+	if _, ok := find("adequacy", "krippendorff_alpha"); !ok {
+		t.Error("translation alpha missing")
+	}
+}
+
+// Pairwise criteria compare A scores with A scores and B with B (D-163).
+// Averaging would hide that these raters disagree on both sides.
+func TestProjectAgreementPairwiseSides(t *testing.T) {
+	ans := func(a, b int) Answer {
+		return Answer{Preference: "a", ScoresA: map[string]int{"helpful": a}, ScoresB: map[string]int{"helpful": b}}
+	}
+	// Rater 1 gives A 5, B 1; rater 2 gives A 1, B 5. Averages would be 3 and 3.
+	items := [][]Answer{{ans(5, 1), ans(1, 5)}, {ans(4, 2), ans(4, 2)}}
+	stats := ProjectAgreement(Pairwise, Config{Criteria: []string{"helpful"}}, items, 2)
+	got := map[string]float64{}
+	for _, s := range stats {
+		if s.Label == "helpful" {
+			got[s.Statistic] = s.Value
+		}
+	}
+	// Units: (5,1) (1,5) (4,4) (2,2): differences 4, 4, 0, 0.
+	if got["mean_abs_diff"] != 2 || got["percent"] != 0.5 || got["within_one"] != 0.5 {
+		t.Fatalf("pairwise sides: %v", got)
+	}
+	if _, ok := got["krippendorff_alpha"]; !ok {
+		t.Fatalf("pairwise alpha missing: %v", got)
 	}
 }
