@@ -99,7 +99,7 @@ func TestOrganisationIsolation(t *testing.T) {
 
 	a := read(f.sampleOrg)
 	b := read(f.otherOrg)
-	if a != (counts{projects: 3, items: 16, deliverables: 3, orgs: 1, gold: 0}) {
+	if a != (counts{projects: 4, items: 20, deliverables: 4, orgs: 1, gold: 0}) {
 		t.Errorf("sample org sees %+v", a)
 	}
 	if b != (counts{projects: 1, items: 8, deliverables: 1, orgs: 1, gold: 0}) {
