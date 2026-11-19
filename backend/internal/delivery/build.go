@@ -307,3 +307,76 @@ func agreementStats(taskType string, cfg quality.ProjectConfig, k int, rows []st
 	}
 	return out, nil
 }
+
+// exportInput is everything one export reads from the database.
+type exportInput struct {
+	Project store.LockProjectForExportRow
+	Config  quality.ProjectConfig
+	Counts  store.ExportItemCountsRow
+	Rows    []store.ExportItemsRow
+	Answers []store.ExportAnswersRow
+	Gold    []store.ExportGoldByContributorRow
+	Reasons []store.ExportRouteReasonsRow
+	Version int32
+	Now     time.Time
+}
+
+// pkg is one delivery: the two data files and the manifest describing them.
+type pkg struct {
+	Manifest     Manifest
+	ManifestJSON []byte
+	JSONL, CSV   []byte
+}
+
+// assemble builds a delivery from what the export read. It touches no
+// database or storage, so the public sample package (sample.go) is made by
+// exactly the code that makes real deliveries.
+func assemble(in exportInput) (pkg, error) {
+	pr, counts := in.Project, in.Counts
+	jsonl, csvData, err := buildFiles(pr.TaskType, in.Config, in.Rows)
+	if err != nil {
+		return pkg{}, err
+	}
+	agreement, err := agreementStats(pr.TaskType, in.Config, int(pr.OverlapK), in.Answers)
+	if err != nil {
+		return pkg{}, err
+	}
+	people := map[string]bool{}
+	for _, r := range in.Rows {
+		for _, c := range r.Contributors {
+			people[c] = true
+		}
+	}
+	ids := make([]string, 0, len(people))
+	for c := range people {
+		ids = append(ids, c)
+	}
+	slices.Sort(ids)
+	man := Manifest{
+		Schema: "mezai.delivery-manifest", SchemaVersion: quality.ExportSchemaVersion,
+		Project: ManifestProject{ID: pr.ID, Name: pr.Name, TaskType: pr.TaskType, Organisation: pr.OrgName, OverlapK: pr.OverlapK},
+		Version: in.Version, ExportedAt: in.Now.UTC().Truncate(time.Second),
+		Items: ManifestItems{Total: counts.Total, Delivered: counts.Final, Consensus: counts.Consensus, Adjudicated: counts.Adjudicated,
+			Rejected: counts.Rejected, NotFinal: counts.Total - counts.Final - counts.Rejected,
+			Complete: counts.Final+counts.Rejected == counts.Total},
+		GoldAccuracy: goldSummary(in.Gold),
+		Agreement:    agreement,
+		Review: ManifestReview{Completed: counts.Completed, Routed: counts.Routed, ReviewRate: ratio(counts.Routed, counts.Completed),
+			Reasons: map[string]int32{}},
+		Contributors: ManifestPeople{Count: len(ids), IDs: ids},
+		Notes:        manifestNotes,
+	}
+	for _, r := range in.Reasons {
+		man.Review.Reasons[r.Reason] = r.N
+	}
+	data := map[string][]byte{"jsonl": jsonl, "csv": csvData}
+	for _, f := range []string{"jsonl", "csv"} {
+		man.Files = append(man.Files, ManifestFile{Name: FileName(pr.Name, in.Version, f), Format: f, Records: len(in.Rows),
+			Bytes: len(data[f]), SHA256: checksum(data[f])})
+	}
+	manJSON, err := json.MarshalIndent(man, "", "  ")
+	if err != nil {
+		return pkg{}, err
+	}
+	return pkg{Manifest: man, ManifestJSON: manJSON, JSONL: jsonl, CSV: csvData}, nil
+}

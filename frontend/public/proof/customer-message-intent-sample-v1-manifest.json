@@ -1,0 +1,200 @@
+{
+  "schema": "mezai.delivery-manifest",
+  "schema_version": 1,
+  "project": {
+    "id": "de2632f5-d2a6-5b14-922d-687d515281f3",
+    "name": "Customer message intent (Sample)",
+    "task_type": "classification",
+    "organisation": "Sample Client Ltd (Sample)",
+    "overlap_k": 3
+  },
+  "version": 1,
+  "exported_at": "2026-11-19T09:00:00Z",
+  "items": {
+    "total": 13,
+    "delivered": 12,
+    "consensus": 10,
+    "adjudicated": 2,
+    "rejected": 1,
+    "not_final": 0,
+    "complete": true
+  },
+  "gold_accuracy": {
+    "results": 38,
+    "correct": 33,
+    "accuracy": 0.8684,
+    "distribution": {
+      "contributors": 5,
+      "min": 0.7143,
+      "median": 0.875,
+      "max": 1
+    },
+    "by_contributor": [
+      {
+        "contributor": "C-0104",
+        "results": 8,
+        "accuracy": 1
+      },
+      {
+        "contributor": "C-0117",
+        "results": 8,
+        "accuracy": 0.875
+      },
+      {
+        "contributor": "C-0123",
+        "results": 7,
+        "accuracy": 0.8571
+      },
+      {
+        "contributor": "C-0131",
+        "results": 7,
+        "accuracy": 0.7143
+      },
+      {
+        "contributor": "C-0142",
+        "results": 8,
+        "accuracy": 0.875
+      }
+    ]
+  },
+  "agreement": [
+    {
+      "statistic": "percent",
+      "label": null,
+      "value": 0.7222,
+      "band": null,
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "fleiss_kappa",
+      "label": null,
+      "value": 0.6477,
+      "band": "substantial",
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "percent",
+      "label": "order_status",
+      "value": 0.7778,
+      "band": null,
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "fleiss_kappa",
+      "label": "order_status",
+      "value": 0.4462,
+      "band": "moderate",
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "percent",
+      "label": "payment",
+      "value": 0.9444,
+      "band": null,
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "fleiss_kappa",
+      "label": "payment",
+      "value": 0.8393,
+      "band": "strong",
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "percent",
+      "label": "returns",
+      "value": 0.8889,
+      "band": null,
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "fleiss_kappa",
+      "label": "returns",
+      "value": 0.5355,
+      "band": "moderate",
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "percent",
+      "label": "account",
+      "value": 1,
+      "band": null,
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "fleiss_kappa",
+      "label": "account",
+      "value": 1,
+      "band": "strong",
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "percent",
+      "label": "other",
+      "value": 0.8333,
+      "band": null,
+      "items": 12,
+      "raters": 3
+    },
+    {
+      "statistic": "fleiss_kappa",
+      "label": "other",
+      "value": 0.468,
+      "band": "moderate",
+      "items": 12,
+      "raters": 3
+    }
+  ],
+  "review": {
+    "completed": 13,
+    "routed": 3,
+    "review_rate": 0.2308,
+    "reasons": {
+      "flagged": 1,
+      "no_majority": 2
+    }
+  },
+  "contributors": {
+    "count": 5,
+    "ids": [
+      "C-0104",
+      "C-0117",
+      "C-0123",
+      "C-0131",
+      "C-0142"
+    ]
+  },
+  "files": [
+    {
+      "name": "customer-message-intent-sample-v1.jsonl",
+      "format": "jsonl",
+      "records": 12,
+      "bytes": 3853,
+      "sha256": "b39caad0f2802bc99c2309dae704bc524127af5ca005e9a5105a6f440e9d9787"
+    },
+    {
+      "name": "customer-message-intent-sample-v1.csv",
+      "format": "csv",
+      "records": 12,
+      "bytes": 2031,
+      "sha256": "896baafbb2614c61fe3520d8f67e89c2b2496f184de6920788c61cfd0838f115"
+    }
+  ],
+  "notes": [
+    "Only final items are delivered. Gold (test) items and items rejected at review are never included.",
+    "agreement on an item is the share of its answers that agree with the final answer; it is empty with fewer than two answers.",
+    "decided_by is consensus (automatic), review (a reviewer decided) or correction (a later revision).",
+    "Contributors are named by public code only.",
+    "CSV: lists are joined with |; a cell beginning with = + - @ tab or carriage return is prefixed with ' so spreadsheets do not run it as a formula. The JSONL file is exact."
+  ]
+}
