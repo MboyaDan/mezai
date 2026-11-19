@@ -15,6 +15,7 @@ export const publicRoutes = [
   "/industries",
   "/contributors",
   "/about",
+  "/trust",
   "/contact",
   ...legalDocs.map((d) => `/legal/${d.slug}` as const),
 ] as const;

@@ -6,6 +6,7 @@ import { CtaBand } from "@/components/public/cta-band";
 import { PageMotion } from "@/components/public/page-motion";
 import { serviceDemo } from "@/components/home/service-demos";
 import { TextLink } from "@/components/ui/text-link";
+import { pilotPackages } from "@/content/packages";
 import { languages, servicesPage, type Service } from "@/content/services";
 import { cn } from "@/lib/cn";
 
@@ -200,6 +201,33 @@ export default function ServicesPage() {
           </div>
         </Container>
       </section>
+
+      {pilotPackages.length > 0 && (
+        <section aria-labelledby="packages-title" className="border-t border-border bg-bg">
+          <Container className="py-14 md:py-20">
+            <h2 id="packages-title" className="font-display text-[1.75rem] font-medium md:text-[2rem]">
+              Pilot packages
+            </h2>
+            <ul className="mt-8 grid gap-6 md:grid-cols-3">
+              {pilotPackages.map((p) => (
+                <li key={p.name} className="grid content-start gap-3 rounded-card border border-border p-6">
+                  <h3 className="font-display text-xl font-medium">{p.name}</h3>
+                  <p className="font-mono text-sm">{p.from}</p>
+                  <p className="text-fg-muted">{p.summary}</p>
+                  <ul className="grid gap-2 text-sm">
+                    {p.includes.map((i) => (
+                      <li key={i} className="flex gap-2">
+                        <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                        {i}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </Container>
+        </section>
+      )}
 
       <CtaBand
         title="Start with a small pilot."

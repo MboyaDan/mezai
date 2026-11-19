@@ -29,6 +29,20 @@ export const aboutPage = {
       },
     ],
   },
+  // Supplied and approved by Dan, with permission for the photo
+  // (docs/content/founder.md, 2026-11-19). Use as written.
+  founder: {
+    title: "Who runs it",
+    name: "Dan Roylex",
+    role: `Founder, ${brand.name}`,
+    org: `${brand.descriptor.charAt(0).toUpperCase()}${brand.descriptor.slice(1)}`,
+    linkedin: { label: "Dan Roylex on LinkedIn", href: "https://www.linkedin.com/in/danroylex" },
+    photoAlt: "Dan Roylex, smiling, in a dark T-shirt against a light curtain.",
+    bio: [
+      `I’m a backend engineer based in Nairobi. Since 2018 I’ve run ${brand.legalEntity}, building production systems in Go and Python for clients in fintech, e-commerce, SaaS and restaurant tech. Much of that work has been payment infrastructure: M-Pesa integrations, webhook verification, and making sure a transaction is recorded exactly once even when the network isn’t cooperating. It’s taught me how East African customers actually write and talk to the systems they use: in Kiswahili, in English, in Sheng, often all three in one message.`,
+      `I started ${brand.name} because the AI tools now reaching Kenyan users are mostly tested by people who don’t speak the way those users do. A model can pass every English benchmark and still misread “pesa haijaingia.” ${brand.name} gives AI teams human evaluation and labelled data from qualified native speakers, with the quality measured and reported on every batch rather than just promised. I run the process myself, from rubric to delivery, and I work directly with every client.`,
+    ],
+  },
   pilot: {
     title: "Where we are",
     text: "We are in our pilot: running first projects with a small group of contributors, on a platform we built for this work. If you join now, you work with the people who built it, and you help shape what comes next.",

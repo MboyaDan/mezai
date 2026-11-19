@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { publicRoutes } from "../../lib/site";
 import { legalDocs } from "../../content/legal";
 
@@ -22,9 +24,16 @@ for (const path of routes) {
       await expect(demo).toContainText(/Demonstration|Worked example/);
     }
     await expect(page.locator("blockquote, q")).toHaveCount(0);
+    for (const img of await page.locator("main img[data-photo-permission]").all()) {
+      expect(
+        existsSync(join(__dirname, "../../..", (await img.getAttribute("data-photo-permission"))!)),
+      ).toBe(true);
+    }
 
-    // Photos of people are only ever illustrative and credited (rule 4, DESIGN.md 8).
-    for (const img of await page.locator("main img").all()) {
+    // Photos of people are illustrative and credited (rule 4, DESIGN.md 8),
+    // except a named person's own photo published with written permission
+    // recorded in docs/content/ (D-161).
+    for (const img of await page.locator("main img:not([data-photo-permission])").all()) {
       const figure = img.locator("xpath=ancestor::figure[1]");
       await expect(figure, `photo without an illustrative caption on ${path}`).toContainText("Illustrative");
     }

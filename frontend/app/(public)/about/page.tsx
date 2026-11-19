@@ -6,7 +6,9 @@ import { IllustrativePhoto } from "@/components/public/photo";
 import { TextLink } from "@/components/ui/text-link";
 import { aboutPage } from "@/content/about";
 import { brand } from "@/lib/brand";
+import Image from "next/image";
 import table from "@/content/images/about-table.jpg";
+import founderPhoto from "@/content/images/founder.jpg";
 
 export const metadata: Metadata = {
   title: "About",
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export default function AboutPage() {
-  const { story, beliefs, pilot, entity, photo, cta } = aboutPage;
+  const { story, founder, beliefs, pilot, entity, photo, cta } = aboutPage;
   return (
     <>
       <PageHeader eyebrow={aboutPage.eyebrow} title={aboutPage.title} intro={aboutPage.intro} />
@@ -34,6 +36,41 @@ export default function AboutPage() {
             {story.map((p) => (
               <p key={p.slice(0, 24)}>{p}</p>
             ))}
+          </div>
+        </Container>
+      </section>
+
+      <section aria-labelledby="founder-title" className="border-t border-border bg-surface">
+        <Container className="grid gap-10 py-16 md:grid-cols-12 md:py-24">
+          <div className="md:col-span-4">
+            <Image
+              src={founderPhoto}
+              alt={founder.photoAlt}
+              // A real photo of the person named beside it, published with
+              // written permission (rule 4, D-161); not an illustration.
+              data-photo-permission="docs/content/founder.md"
+              sizes="(min-width: 768px) 30vw, 100vw"
+              className="aspect-square w-full max-w-sm rounded-card object-cover"
+            />
+          </div>
+          <div className="grid content-start gap-5 md:col-span-7 md:col-start-6">
+            <h2 id="founder-title" className="font-mono text-xs tracking-wide text-fg-muted uppercase">
+              {founder.title}
+            </h2>
+            <div>
+              <p className="font-display text-[1.75rem] leading-tight font-medium">
+                {founder.name} — {founder.role}
+              </p>
+              <p className="mt-1 text-fg-muted">{founder.org}</p>
+            </div>
+            {founder.bio.map((p) => (
+              <p key={p.slice(0, 24)} className="text-lg">
+                {p}
+              </p>
+            ))}
+            <TextLink href={founder.linkedin.href} className="justify-self-start">
+              {founder.linkedin.label}
+            </TextLink>
           </div>
         </Container>
       </section>
