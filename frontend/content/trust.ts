@@ -37,6 +37,7 @@ export const trustPage = {
         text: "Each delivery comes as JSONL and CSV with a manifest of counts, gold accuracy, agreement and checksums. Download links last five minutes and every download is recorded.",
       },
     ] satisfies TrustPoint[],
+    link: { label: "See a sample delivery and its manifest", href: "/proof" },
   },
 
   access: {

@@ -7,6 +7,7 @@ import { PageMotion } from "@/components/public/page-motion";
 import { SignalLattice } from "@/components/brand/signal-lattice";
 import { RoutingCalculator } from "@/components/home/calculator";
 import { GoldMix, KappaExplorer, OverlapDiagram } from "@/components/quality/diagrams";
+import { TextLink } from "@/components/ui/text-link";
 import { qualityPage } from "@/content/quality";
 import { cn } from "@/lib/cn";
 
@@ -179,6 +180,7 @@ export default function QualityPage() {
                         </ul>
                       </div>
                       {visual.deliver}
+                      <TextLink href={manifest.link.href}>{manifest.link.label}</TextLink>
                     </div>
                   ) : (
                     (visual[s.id] ?? <QualifyVisual />)

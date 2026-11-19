@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -154,51 +153,13 @@ func (s *Service) Export(ctx context.Context, p *auth.Principal, projectID uuid.
 		if err != nil {
 			return err
 		}
-		jsonl, csvData, err := buildFiles(pr.TaskType, cfg, rows)
+		pk, err := assemble(exportInput{Project: pr, Config: cfg, Counts: counts, Rows: rows, Answers: answers,
+			Gold: gold, Reasons: reasons, Version: version, Now: s.now()})
 		if err != nil {
 			return err
 		}
-		agreement, err := agreementStats(pr.TaskType, cfg, int(pr.OverlapK), answers)
-		if err != nil {
-			return err
-		}
-		people := map[string]bool{}
-		for _, r := range rows {
-			for _, c := range r.Contributors {
-				people[c] = true
-			}
-		}
-		ids := make([]string, 0, len(people))
-		for c := range people {
-			ids = append(ids, c)
-		}
-		slices.Sort(ids)
-		man := Manifest{
-			Schema: "mezai.delivery-manifest", SchemaVersion: quality.ExportSchemaVersion,
-			Project: ManifestProject{ID: pr.ID, Name: pr.Name, TaskType: pr.TaskType, Organisation: pr.OrgName, OverlapK: pr.OverlapK},
-			Version: version, ExportedAt: s.now().UTC().Truncate(time.Second),
-			Items: ManifestItems{Total: counts.Total, Delivered: counts.Final, Consensus: counts.Consensus, Adjudicated: counts.Adjudicated,
-				Rejected: counts.Rejected, NotFinal: counts.Total - counts.Final - counts.Rejected,
-				Complete: counts.Final+counts.Rejected == counts.Total},
-			GoldAccuracy: goldSummary(gold),
-			Agreement:    agreement,
-			Review: ManifestReview{Completed: counts.Completed, Routed: counts.Routed, ReviewRate: ratio(counts.Routed, counts.Completed),
-				Reasons: map[string]int32{}},
-			Contributors: ManifestPeople{Count: len(ids), IDs: ids},
-			Notes:        manifestNotes,
-		}
-		for _, r := range reasons {
-			man.Review.Reasons[r.Reason] = r.N
-		}
-		data := map[string][]byte{"jsonl": jsonl, "csv": csvData}
-		for _, f := range []string{"jsonl", "csv"} {
-			man.Files = append(man.Files, ManifestFile{Name: FileName(pr.Name, version, f), Format: f, Records: len(rows),
-				Bytes: len(data[f]), SHA256: checksum(data[f])})
-		}
-		manJSON, err := json.MarshalIndent(man, "", "  ")
-		if err != nil {
-			return err
-		}
+		man, manJSON := pk.Manifest, pk.ManifestJSON
+		data := map[string][]byte{"jsonl": pk.JSONL, "csv": pk.CSV}
 		prefix := fmt.Sprintf("deliverables/%s/%s/v%d/", pr.OrgID, pr.ID, version)
 		manKey := prefix + FileName(pr.Name, version, "manifest")
 		put := func(key, contentType string, b []byte) error {
