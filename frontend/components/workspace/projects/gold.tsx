@@ -11,7 +11,7 @@ import { Table } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { domainOptions, labelFor, languageOptions } from "@/content/profile";
 import { ApiError, api, type GoldItem, type QualificationTest, type TaskTemplate } from "@/lib/api/client";
-import { errorMessage, type TaskType } from "@/lib/onboarding";
+import { criterionLabel, errorMessage, type TaskType } from "@/lib/onboarding";
 import { taskTypeLabel, taskTypes } from "@/lib/projects";
 import { useLoad } from "@/lib/use-load";
 import { pct, shortDate } from "../contributors";
@@ -24,6 +24,10 @@ const preferenceLabel: Record<string, string> = { a: "Response A", b: "Response 
 export function expectedText(type: string, e: Record<string, unknown>): string {
   if (type === "classification") return ((e.labels as string[]) ?? []).join(", ");
   if (type === "pairwise") return preferenceLabel[String(e.preference)] ?? String(e.preference);
+  if (type === "rating")
+    return Object.entries((e.scores as Record<string, number>) ?? {})
+      .map(([c, v]) => `${criterionLabel(c)} ${v}`)
+      .join(", ");
   const base = `Adequacy ${e.adequacy}, fluency ${e.fluency}`;
   return e.corrected ? `${base}, with correction` : base;
 }
@@ -49,6 +53,7 @@ function AddGold({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
   const [adequacy, setAdequacy] = useState("");
   const [fluency, setFluency] = useState("");
   const [corrected, setCorrected] = useState("");
+  const [scores, setScores] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const toast = useToast();
@@ -56,6 +61,15 @@ function AddGold({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
   function expected() {
     if (type === "classification") return { labels };
     if (type === "pairwise") return { preference };
+    if (type === "rating")
+      // Only the criteria Ops scored are graded (D-164).
+      return {
+        scores: Object.fromEntries(
+          Object.entries(scores)
+            .filter(([, v]) => v !== "")
+            .map(([c, v]) => [c, Number(v)]),
+        ),
+      };
     return {
       adequacy: Number(adequacy),
       fluency: Number(fluency),
@@ -80,6 +94,7 @@ function AddGold({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
       setAdequacy("");
       setFluency("");
       setCorrected("");
+      setScores({});
       onAdded();
       onClose();
     } catch (e) {
@@ -171,6 +186,26 @@ function AddGold({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
               />
             ))}
           </ChoiceGroup>
+        )}
+        {type === "rating" && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(project.config.criteria ?? []).map((c) => (
+              <Field key={c} label={`${criterionLabel(c)} (1 to 5)`} hint="Leave empty to not grade it.">
+                <Select
+                  value={scores[c] ?? ""}
+                  onChange={(e) => setScores({ ...scores, [c]: e.target.value })}
+                >
+                  <option value="">Not graded</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n}>{n}</option>
+                  ))}
+                </Select>
+              </Field>
+            ))}
+            {fieldError("expected.scores") && (
+              <p className="text-sm text-danger-fg sm:col-span-2">{fieldError("expected.scores")}</p>
+            )}
+          </div>
         )}
         {type === "translation_review" && (
           <>

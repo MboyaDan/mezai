@@ -16,6 +16,9 @@ const (
 	Classification    = "classification"
 	Pairwise          = "pairwise"
 	TranslationReview = "translation_review"
+	// Rating is one response scored 1 to 5 on each project criterion with a
+	// written rationale (Stage 22b, D-164).
+	Rating = "rating"
 	// Writing is a short free-text sample (the core check, D-100). A person
 	// rates it; it is never auto-scored.
 	Writing = "writing"
@@ -31,14 +34,15 @@ const (
 var ErrInvalidAnswer = errors.New("quality: invalid answer")
 
 // Config is the part of a project's (or test's) settings an answer depends on:
-// labels for classification, rubric criteria for pairwise (scored 1 to 5).
+// labels for classification, rubric criteria for pairwise and rating (scored
+// 1 to 5).
 type Config struct {
 	Labels     []string `json:"labels,omitempty"`
 	MultiLabel bool     `json:"multi_label,omitempty"`
 	Criteria   []string `json:"criteria,omitempty"`
 }
 
-// Answer is the union of the three task types' answers, in the shape of the
+// Answer is the union of the task types' answers, in the shape of the
 // task templates' submission schemas (migration 00004). Unused fields stay empty.
 type Answer struct {
 	Labels     []string       `json:"labels,omitempty"`     // classification
@@ -47,7 +51,8 @@ type Answer struct {
 	ScoresA    map[string]int `json:"scores_a,omitempty"`   // pairwise, each criterion 1 to 5
 	ScoresB    map[string]int `json:"scores_b,omitempty"`   // pairwise
 	Preference string         `json:"preference,omitempty"` // pairwise: a, b or tie
-	Rationale  string         `json:"rationale,omitempty"`  // pairwise
+	Rationale  string         `json:"rationale,omitempty"`  // pairwise and rating
+	Scores     map[string]int `json:"scores,omitempty"`     // rating, each criterion 1 to 5
 	Adequacy   int            `json:"adequacy,omitempty"`   // translation review, 1 to 5
 	Fluency    int            `json:"fluency,omitempty"`    // translation review, 1 to 5
 	Corrected  string         `json:"corrected,omitempty"`  // translation review
@@ -109,6 +114,20 @@ func Parse(taskType string, cfg Config, raw json.RawMessage) (Answer, error) {
 		if t := strings.TrimSpace(a.Rationale); t == "" || len(t) > maxText {
 			return Answer{}, invalid("write a rationale")
 		}
+	case Rating:
+		for _, c := range cfg.Criteria {
+			if v, ok := a.Scores[c]; !ok || v < 1 || v > 5 {
+				return Answer{}, invalid("score %s from 1 to 5", c)
+			}
+		}
+		for k := range a.Scores {
+			if !slices.Contains(cfg.Criteria, k) {
+				return Answer{}, invalid("unknown rubric criterion")
+			}
+		}
+		if t := strings.TrimSpace(a.Rationale); t == "" || len(t) > maxText {
+			return Answer{}, invalid("write a rationale")
+		}
 	case TranslationReview:
 		if a.Adequacy < 1 || a.Adequacy > 5 || a.Fluency < 1 || a.Fluency > 5 {
 			return Answer{}, invalid("score adequacy and fluency from 1 to 5")
@@ -142,7 +161,8 @@ type Tolerance struct {
 
 // Matches reports whether a valid answer agrees with the expected answer:
 // the same label set (classification), the same preference (pairwise; rubric
-// scores and rationale are not graded), or adequacy and fluency each within
+// scores and rationale are not graded), each expected score within 1 point
+// (rating), or adequacy and fluency each within
 // tolerance (translation review).
 func Matches(taskType string, expected, tolerance json.RawMessage, a Answer) (bool, error) {
 	var want Answer
@@ -175,6 +195,18 @@ func Matches(taskType string, expected, tolerance json.RawMessage, a Answer) (bo
 				if g, ok := got[c]; !ok || math.Abs(float64(g-v)) > 1 {
 					return false, nil
 				}
+			}
+		}
+		return true, nil
+	case Rating:
+		// Each expected criterion score within 1 point, as pairwise scores
+		// (D-164). The rationale is not graded.
+		if len(want.Scores) == 0 {
+			return false, nil
+		}
+		for c, v := range want.Scores {
+			if g, ok := a.Scores[c]; !ok || math.Abs(float64(g-v)) > 1 {
+				return false, nil
 			}
 		}
 		return true, nil

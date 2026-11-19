@@ -210,6 +210,42 @@ func TestConsensusRouting(t *testing.T) {
 	}
 }
 
+// TestConsensusRating: the mean per criterion, rounded, with its spread; a
+// wide spread goes to review (D-164).
+func TestConsensusRating(t *testing.T) {
+	pool, _ := setup(t)
+	people := crowd(t, pool, 2)
+	svc := tasks.NewService(pool)
+	rubric := map[string]any{"criteria": []string{"helpful", "accurate"}, "scale": []int{1, 5}}
+	result := func(project uuid.UUID) (string, string) {
+		var res, reason string
+		if err := pool.InScope(context.Background(), db.Staff(), func(tx pgx.Tx) error {
+			return tx.QueryRow(context.Background(), `SELECT result::text, coalesce(route_reason, 'none') FROM consensus_results WHERE project_id = $1`, project).Scan(&res, &reason)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return res, reason
+	}
+	item := []map[string]string{{"prompt": "Sample question?", "response": "Sample answer."}}
+
+	close := qProject(t, pool, quality.Rating, rubric, 2, 0, item, nil)
+	work(t, svc, people[0], close, `{"scores":{"helpful":4,"accurate":3},"rationale":"Mostly right."}`)
+	work(t, svc, people[1], close, `{"scores":{"helpful":5,"accurate":3},"rationale":"Good answer."}`)
+	if res, reason := result(close); reason != "none" || res != `{"scores": {"helpful": 4.5, "accurate": 3}}` {
+		t.Fatalf("close scores: %s %s", res, reason)
+	}
+	if n := staffQuery[int](t, pool, `SELECT count(*) FROM submissions WHERE project_id = $1 AND agrees_with_final`, close); n != 2 {
+		t.Fatalf("both within a point of the mean: %d agree", n)
+	}
+
+	wide := qProject(t, pool, quality.Rating, rubric, 2, 0, item, nil)
+	work(t, svc, people[0], wide, `{"scores":{"helpful":5,"accurate":3},"rationale":"Very helpful."}`)
+	work(t, svc, people[1], wide, `{"scores":{"helpful":1,"accurate":3},"rationale":"Not helpful."}`)
+	if _, reason := result(wide); reason != "spread" {
+		t.Fatalf("spread 4 > 2: %s", reason)
+	}
+}
+
 // TestGoldTrustAndAutoPause: gold is scored, the result is never in the
 // submit answer, the score builds until the minimum, and a contributor
 // below the floor is paused automatically with Ops notified (AC-08).

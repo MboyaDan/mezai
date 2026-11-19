@@ -58,7 +58,8 @@ func categorical(label string, ratings [][]string, k int) []Stat {
 // each have exactly k answers (gold items excluded by the caller):
 // classification gets percent and kappa for the project and per label (the
 // label chosen or not); pairwise gets them on the preference plus the mean
-// rubric criterion figures (scored, below); translation review gets them
+// rubric criterion figures (scored, below); rating gets the criterion
+// figures only; translation review gets them
 // for adequacy and fluency.
 func ProjectAgreement(taskType string, cfg Config, items [][]Answer, k int) []Stat {
 	if k < 2 || len(items) == 0 {
@@ -135,6 +136,10 @@ func ProjectAgreement(taskType string, cfg Config, items [][]Answer, k int) []St
 		for _, c := range cfg.Criteria {
 			scored(c, func(a Answer) float64 { return float64(a.ScoresA[c]) },
 				func(a Answer) float64 { return float64(a.ScoresB[c]) })
+		}
+	case Rating:
+		for _, c := range cfg.Criteria {
+			scored(c, func(a Answer) float64 { return float64(a.Scores[c]) })
 		}
 	case TranslationReview:
 		scored("adequacy", func(a Answer) float64 { return float64(a.Adequacy) })

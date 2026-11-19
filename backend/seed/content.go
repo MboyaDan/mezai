@@ -51,6 +51,29 @@ var pairwiseItems = []sampleItem{
 	}, map[string]any{"preference": "b"}, false},
 }
 
+// Rating (Stage 22b): one response scored per criterion. Answers are
+// fictional and harmless; the gold answer gives the expected scores.
+var ratingRubric = []string{"helpfulness", "accuracy", "clarity"}
+
+var ratingItems = []sampleItem{
+	{"sample-rt-001", map[string]any{
+		"prompt":   "How long should I boil an egg for a firm yolk?",
+		"response": "Boil it for about ten minutes, then cool it in cold water so it is easy to peel.",
+	}, map[string]any{"scores": map[string]int{"helpfulness": 5, "accuracy": 5, "clarity": 5}}, true},
+	{"sample-rt-002", map[string]any{
+		"prompt":   "What is a good way to start saving money?",
+		"response": "Money is good.",
+	}, map[string]any{"scores": map[string]int{"helpfulness": 1, "accuracy": 2, "clarity": 2}}, true},
+	{"sample-rt-003", map[string]any{
+		"prompt":   "Eleza kwa ufupi jinsi ya kupanda maharagwe.",                                              // Briefly explain how to plant beans.
+		"response": "Panda mbegu kwa kina kidogo kwenye udongo wenye unyevu, kisha mwagilia kila siku chache.", // Plant the seeds a little deep in moist soil, then water every few days.
+	}, map[string]any{"scores": map[string]int{"helpfulness": 4, "accuracy": 4, "clarity": 4}}, false},
+	{"sample-rt-004", map[string]any{
+		"prompt":   "Name two ways to keep a phone battery healthy.",
+		"response": "Avoid leaving it in a hot car, and try not to let it run all the way to zero too often.",
+	}, map[string]any{"scores": map[string]int{"helpfulness": 5, "accuracy": 4, "clarity": 5}}, false},
+}
+
 var translationItems = []sampleItem{
 	{"sample-tr-001", map[string]any{
 		"source": "The market opens at eight in the morning.", "translation": "Soko linafunguliwa saa mbili asubuhi.",

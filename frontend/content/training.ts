@@ -28,6 +28,17 @@ export type WorkedExample =
     }
   | {
       id: string;
+      taskType: "rating";
+      title: string;
+      instruction: string;
+      prompt: string;
+      response: string;
+      scores: { criterion: string; score: number }[];
+      rationale: string;
+      why: string;
+    }
+  | {
+      id: string;
       taskType: "translation";
       title: string;
       instruction: string;
@@ -62,6 +73,23 @@ export const workedExamples: WorkedExample[] = [
     rationale:
       "A gives a clear, safe instruction. B is wrong: warm water is not safe, and clear-looking water can still carry germs.",
     why: "A good rationale names what makes the chosen response better and what is wrong with the other one, in your own words.",
+  },
+  {
+    id: "rating",
+    taskType: "rating",
+    title: "Response rating",
+    instruction: "Score the response from 1 to 5 on each criterion, then explain your scores.",
+    prompt: "How can I keep cut flowers fresh for longer?",
+    response:
+      "Trim the stems at an angle and change the water every two days. Keep the vase in direct sunlight so the flowers open faster.",
+    scores: [
+      { criterion: "Helpfulness", score: 3 },
+      { criterion: "Accuracy", score: 2 },
+      { criterion: "Clarity", score: 5 },
+    ],
+    rationale:
+      "The first two tips are right and easy to follow. Direct sunlight makes cut flowers wilt sooner, so the last tip works against the goal and costs accuracy.",
+    why: "Score each criterion on its own. A response can read clearly and still give advice that works against the goal. Your rationale should say which part cost points.",
   },
   {
     id: "translation",

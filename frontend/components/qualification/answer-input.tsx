@@ -230,6 +230,39 @@ export function AnswerInput({
         </div>
       );
     }
+    case "rating": {
+      const criteria = config.criteria ?? [];
+      return (
+        <div className="grid gap-8">
+          <div className="grid gap-5">
+            {criteria.map((c) => (
+              <Scale
+                key={c}
+                legend={criterionLabel(c)}
+                value={a.scores?.[c]}
+                onChange={(n) => onChange({ ...a, scores: { ...(a.scores ?? {}), [c]: n } })}
+                low="Poor"
+                high="Excellent"
+              />
+            ))}
+          </div>
+          <Field
+            label="Why these scores?"
+            hint={rationaleHint ?? "One or two sentences on what decided your scores."}
+            error={fieldErrors?.rationale}
+            required
+          >
+            <Textarea
+              value={a.rationale ?? ""}
+              onPaste={paste}
+              onChange={(e) => onChange({ ...a, rationale: e.target.value })}
+              rows={3}
+              maxLength={4000}
+            />
+          </Field>
+        </div>
+      );
+    }
     case "writing": {
       const n = writingWords(a.text);
       return (

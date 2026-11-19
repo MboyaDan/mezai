@@ -21,6 +21,7 @@ const JobProjectAvailable = "project_available"
 var taskTypeNames = map[string]string{
 	"classification":     "Text classification",
 	"pairwise":           "Response comparison",
+	"rating":             "Response rating",
 	"translation_review": "Translation review",
 }
 

@@ -71,6 +71,13 @@ describe("isComplete (mirrors quality.Parse)", () => {
     expect(isComplete("pairwise", pw, { ...ok, scores_b: { accuracy: 3 } })).toBe(false);
     expect(isComplete("pairwise", pw, { ...ok, preference: undefined })).toBe(false);
   });
+  it("rating needs every criterion scored and a rationale", () => {
+    const ok = { scores: full, rationale: "Accurate but terse." };
+    expect(isComplete("rating", pw, ok)).toBe(true);
+    expect(isComplete("rating", pw, { ...ok, scores: { accuracy: 3 } })).toBe(false);
+    expect(isComplete("rating", pw, { ...ok, scores: { accuracy: 3, safety: 6 } })).toBe(false);
+    expect(isComplete("rating", pw, { ...ok, rationale: " " })).toBe(false);
+  });
   it("translation review needs adequacy and fluency from 1 to 5", () => {
     expect(isComplete("translation_review", {}, { adequacy: 4, fluency: 5 })).toBe(true);
     expect(isComplete("translation_review", {}, { adequacy: 0, fluency: 5 })).toBe(false);

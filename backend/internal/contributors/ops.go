@@ -461,7 +461,7 @@ func (s *Service) CreateTest(ctx context.Context, p *auth.Principal, in TestInpu
 		return Test{}, fieldErr("skill_kind", "use language, domain or task_type")
 	case in.SkillKind == "language" && !languageRe.MatchString(in.SkillValue),
 		in.SkillKind == "domain" && !slices.Contains(Domains, in.SkillValue),
-		in.SkillKind == "task_type" && !slices.Contains([]string{quality.Classification, quality.Pairwise, quality.TranslationReview}, in.SkillValue),
+		in.SkillKind == "task_type" && !slices.Contains(quality.TaskTypes, in.SkillValue),
 		!skillValueRe.MatchString(in.SkillValue):
 		return Test{}, fieldErr("skill_value", "not a valid value for this skill kind")
 	case in.PassThreshold <= 0 || in.PassThreshold > 1:

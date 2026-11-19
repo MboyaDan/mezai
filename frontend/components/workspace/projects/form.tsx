@@ -17,7 +17,14 @@ import {
   type ProjectSkill,
 } from "@/lib/api/client";
 import { errorMessage, type TaskType } from "@/lib/onboarding";
-import { taskTypeLabel, taskTypes, toInput, type FormErrors, type ProjectForm } from "@/lib/projects";
+import {
+  hasRationale,
+  taskTypeLabel,
+  taskTypes,
+  toInput,
+  type FormErrors,
+  type ProjectForm,
+} from "@/lib/projects";
 
 function Section({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
   return (
@@ -239,7 +246,7 @@ export function ProjectFormView({
                   onChange={() =>
                     up({
                       task_type: t,
-                      min_rationale_chars: t === "pairwise" ? "40" : "0",
+                      min_rationale_chars: hasRationale(t) ? "40" : "0",
                       qa: {
                         ...f.qa,
                         block_unchanged_translation: t === "translation_review",
@@ -270,7 +277,7 @@ export function ProjectFormView({
         </Section>
 
         <Section
-          title={type === "classification" ? "Labels" : type === "pairwise" ? "Rubric" : "Error tags"}
+          title={type === "classification" ? "Labels" : hasRationale(type) ? "Rubric" : "Error tags"}
           hint={
             locked
               ? "Fixed now that the project has gold or has been live, so scores stay comparable."
@@ -295,11 +302,15 @@ export function ProjectFormView({
                 />
               </>
             )}
-            {type === "pairwise" && (
+            {hasRationale(type) && (
               <Field
                 label="Rubric criteria"
                 required
-                hint="One per line, 1 to 8. Each response is scored 1 to 5 on each."
+                hint={
+                  type === "rating"
+                    ? "One per line, 1 to 8. The response is scored 1 to 5 on each."
+                    : "One per line, 1 to 8. Each response is scored 1 to 5 on each."
+                }
                 error={err("config.criteria") ?? err("config")}
               >
                 <Textarea rows={5} value={f.criteria} onChange={(e) => up({ criteria: e.target.value })} />
@@ -373,7 +384,7 @@ export function ProjectFormView({
             <Field label="Deadline" error={err("deadline")}>
               <Input type="date" value={f.deadline} onChange={(e) => up({ deadline: e.target.value })} />
             </Field>
-            {type === "pairwise" && (
+            {hasRationale(type) && (
               <Field label="Minimum rationale (characters)" required error={err("min_rationale_chars")}>
                 <Input
                   inputMode="numeric"

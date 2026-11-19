@@ -220,6 +220,44 @@ func combine(taskType string, cfg quality.Config, threshold float64, rows []stor
 		if worst > threshold {
 			out.reason = "spread"
 		}
+	case quality.Rating:
+		// Mean score per criterion with its spread (D-164). An answer agrees
+		// when every score is within a point of the mean.
+		out.method = "mean"
+		means := map[string]float64{}
+		worst := 0.0
+		for _, c := range cfg.Criteria {
+			vals := make([]float64, len(answers))
+			for i, a := range answers {
+				vals[i] = float64(a.Scores[c])
+			}
+			m, sp := quality.MeanSpread(vals)
+			means[c] = m
+			worst = math.Max(worst, sp)
+		}
+		out.spread = &worst
+		rounded := make(map[string]float64, len(means))
+		for c, m := range means {
+			rounded[c] = math.Round(m*100) / 100
+		}
+		out.result = map[string]any{"scores": rounded}
+		n := 0
+		for i, a := range answers {
+			agree := true
+			for c, m := range means {
+				if math.Abs(float64(a.Scores[c])-m) > 1 {
+					agree = false
+				}
+			}
+			out.agrees[rows[i].ID] = agree
+			if agree {
+				n++
+			}
+		}
+		share(n)
+		if worst > threshold {
+			out.reason = "spread"
+		}
 	case quality.TranslationReview:
 		out.method = "mean"
 		ad, fl := make([]float64, len(answers)), make([]float64, len(answers))

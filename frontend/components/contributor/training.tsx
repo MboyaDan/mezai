@@ -246,6 +246,24 @@ function Example({ ex }: { ex: WorkedExample }) {
           </p>
         </>
       )}
+      {ex.taskType === "rating" && (
+        <>
+          <p className="font-medium">“{ex.prompt}”</p>
+          <p className="rounded-card border border-border p-4 text-sm">{ex.response}</p>
+          <dl className="grid grid-cols-3 gap-3 text-sm">
+            {ex.scores.map((s) => (
+              <div key={s.criterion}>
+                <dt className="text-fg-muted">{s.criterion}</dt>
+                <dd className="font-mono">{s.score}/5</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="text-sm">
+            <span className="font-semibold">Rationale: </span>
+            {ex.rationale}
+          </p>
+        </>
+      )}
       {ex.taskType === "translation" && (
         <dl className="grid gap-3 text-sm sm:grid-cols-[9rem_1fr]">
           <dt className="text-fg-muted">English</dt>

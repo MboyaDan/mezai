@@ -12,6 +12,7 @@ import { useProfile } from "./portal";
 const taskLabel = {
   classification: "Text classification",
   pairwise: "Response comparison",
+  rating: "Response rating",
   translation_review: "Translation review",
 };
 const tone = {

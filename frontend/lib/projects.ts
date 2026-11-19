@@ -5,11 +5,12 @@
 import type { Project, ProjectInput, ProjectSkill, ProjectStatus, QAChecks } from "@/lib/api/client";
 import type { TaskType } from "@/lib/onboarding";
 
-export const taskTypes: TaskType[] = ["classification", "pairwise", "translation_review"];
+export const taskTypes: TaskType[] = ["classification", "pairwise", "rating", "translation_review"];
 
 export const taskTypeLabel: Record<TaskType | "other", string> = {
   classification: "Text classification",
   pairwise: "Pairwise comparison",
+  rating: "Response rating",
   translation_review: "Translation review",
   other: "Something else",
 };
@@ -117,6 +118,9 @@ export function toKey(label: string): string {
     .slice(0, 40);
 }
 
+/** Pairwise and rating take rubric criteria and a written rationale. */
+export const hasRationale = (t: TaskType) => t === "pairwise" || t === "rating";
+
 export function defaultQAChecks(type: TaskType): QAChecks {
   return {
     block_unchanged_translation: type === "translation_review",
@@ -162,7 +166,7 @@ export function emptyForm(type: TaskType = "classification", orgId = ""): Projec
     pay_kes: "",
     target_count: "",
     deadline: "",
-    min_rationale_chars: type === "pairwise" ? "40" : "0",
+    min_rationale_chars: hasRationale(type) ? "40" : "0",
     skills: [],
   };
 }
@@ -176,7 +180,7 @@ export function formFromProject(p: Project): ProjectForm {
     instructions_md: p.instructions_md,
     labels: (p.config.labels ?? []).join("\n"),
     multi_label: Boolean(p.config.multi_label),
-    criteria: t === "pairwise" ? (p.config.criteria ?? []).join("\n") : "",
+    criteria: hasRationale(t) ? (p.config.criteria ?? []).join("\n") : "",
     error_tags: (p.config.error_tags ?? []).join("\n"),
     qa: p.staff?.qa_checks ?? defaultQAChecks(t),
     overlap_k: String(p.overlap_k),
@@ -205,7 +209,7 @@ export function toInput(f: ProjectForm, creating: boolean): { input?: ProjectInp
     if (labels.length > 50) errors["config.labels"] = "Use at most 50 labels.";
     config.labels = labels;
     config.multi_label = f.multi_label;
-  } else if (f.task_type === "pairwise") {
+  } else if (hasRationale(f.task_type)) {
     const criteria = listFromText(f.criteria).map(toKey).filter(Boolean);
     if (criteria.length < 1) errors["config.criteria"] = "List at least one rubric criterion.";
     if (criteria.length > 8) errors["config.criteria"] = "Use at most 8 criteria.";
@@ -228,7 +232,7 @@ export function toInput(f: ProjectForm, creating: boolean): { input?: ProjectInp
     if (!Number.isInteger(target) || target < 1)
       errors.target_count = "Use a whole number of items, or leave it empty.";
   }
-  const minChars = f.task_type === "pairwise" ? Number(f.min_rationale_chars || 0) : 0;
+  const minChars = hasRationale(f.task_type) ? Number(f.min_rationale_chars || 0) : 0;
   if (!Number.isInteger(minChars) || minChars < 0 || minChars > 2000)
     errors.min_rationale_chars = "Use 0 to 2000 characters.";
   const fast = f.qa.warn_fast_seconds;

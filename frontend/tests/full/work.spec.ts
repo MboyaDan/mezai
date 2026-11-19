@@ -14,6 +14,7 @@ const shots = "../docs/screenshots/stage-09b";
 const run = Date.now().toString(36);
 const routing = `Message routing ${run} (Sample)`;
 const comparing = `Answer comparison ${run} (Sample)`;
+const rating = `Answer rating ${run} (Sample)`;
 
 async function axe(page: Page, label: string) {
   const r = await new AxeBuilder({ page })
@@ -23,14 +24,14 @@ async function axe(page: Page, label: string) {
   expect(blocking, `${label}: ${blocking.map((v) => `${v.id} (${v.nodes.length})`).join(", ")}`).toEqual([]);
 }
 
-async function shot(page: Page, file: string) {
-  mkdirSync(shots, { recursive: true });
+async function shot(page: Page, file: string, dir = shots) {
+  mkdirSync(dir, { recursive: true });
   // Hide the dev badge and toasts for the picture only; the page keeps running.
   const style = await page.addStyleTag({
     content: "nextjs-portal, div[aria-live].fixed > * { display: none !important; }",
   });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `${shots}/${file}-1440.png`, fullPage: true });
+  await page.screenshot({ path: `${dir}/${file}-1440.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   expect(
@@ -38,7 +39,7 @@ async function shot(page: Page, file: string) {
     `${file} overflows at 390`,
   ).toBeLessThanOrEqual(390);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `${shots}/${file}-390.png`, fullPage: true });
+  await page.screenshot({ path: `${dir}/${file}-390.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await style.evaluate((n) => (n as Element).remove());
 }
@@ -147,6 +148,31 @@ test("9b: work a project one task at a time; Ops resolves a report", async ({ pa
       }),
     },
   );
+  // Stage 22b: single-response rating, same skill as comparison.
+  const ratingId = await liveProject(
+    api,
+    csrf,
+    {
+      task_type: "rating",
+      name: rating,
+      instructions_md: "Score the answer on each criterion, then explain your scores.",
+      config: { criteria: ["helpfulness", "accuracy"] },
+      overlap_k: 1,
+      gold_rate: 0,
+      pay_per_task_cents: 3000,
+      min_rationale_chars: 30,
+      skills: [{ kind: "task_type", value: "pairwise" }],
+    },
+    {
+      name: "rate.jsonl",
+      mimeType: "application/x-ndjson",
+      body: JSON.stringify({
+        external_id: `${run}-r1`,
+        prompt: "How can I keep cut flowers fresh for longer?",
+        response: "Trim the stems and change the water every two days. Keep the vase in direct sunlight.",
+      }),
+    },
+  );
   await api.dispose();
 
   // 1. The contributor finds the project.
@@ -229,6 +255,21 @@ test("9b: work a project one task at a time; Ops resolves a report", async ({ pa
   await page.getByRole("button", { name: "Instructions" }).click();
   await expect(page.getByRole("dialog", { name: "Instructions" })).toContainText("Checked before you submit");
   await page.keyboard.press("Escape");
+
+  // 6b. Rating (Stage 22b): one response, a scale per criterion, a rationale.
+  await page.goto(`/c/work/${ratingId}`);
+  await expect(page.getByRole("heading", { name: rating })).toBeVisible();
+  await expect(page.getByText("Response", { exact: true })).toBeVisible();
+  await expect(page.getByText(/At least 30 characters \(30 to go\)/)).toBeVisible();
+  await page.getByRole("group", { name: "Helpfulness" }).getByRole("radio", { name: "3" }).check();
+  await page.getByRole("group", { name: "Accuracy" }).getByRole("radio", { name: /^2/ }).check();
+  await page
+    .getByLabel("Why these scores?")
+    .fill("Two good tips, but direct sunlight makes cut flowers wilt sooner.");
+  await axe(page, "rating task");
+  await shot(page, "task-rating", "../docs/screenshots/stage-22b");
+  await page.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(page.getByText("No more tasks for you here right now")).toBeVisible();
   await signOut(page);
 
   // 7. Ops resolves the report.

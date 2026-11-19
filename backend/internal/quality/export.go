@@ -15,13 +15,14 @@ import (
 const ExportSchemaVersion = 1
 
 // finalAnswer reads both kinds of final answer: a consensus result (pairwise
-// and translation scores are means, so decimals) and a reviewer's answer.
+// rating and translation scores are means, so decimals) and a reviewer's answer.
 type finalAnswer struct {
 	Labels     []string           `json:"labels"`
 	Preference string             `json:"preference"`
 	ScoresA    map[string]float64 `json:"scores_a"`
 	ScoresB    map[string]float64 `json:"scores_b"`
 	Rationale  string             `json:"rationale"`
+	Scores     map[string]float64 `json:"scores"`
 	Adequacy   float64            `json:"adequacy"`
 	Fluency    float64            `json:"fluency"`
 	Corrected  string             `json:"corrected"`
@@ -40,6 +41,12 @@ func ExportColumns(taskType string, cfg ProjectConfig) []string {
 		}
 		for _, c := range cfg.Criteria {
 			cols = append(cols, "score_b:"+c)
+		}
+		return append(cols, "rationale")
+	case Rating:
+		cols := []string{}
+		for _, c := range cfg.Criteria {
+			cols = append(cols, "score:"+c)
 		}
 		return append(cols, "rationale")
 	case TranslationReview:
@@ -71,6 +78,12 @@ func ExportValues(taskType string, cfg ProjectConfig, raw json.RawMessage) ([]st
 		}
 		for _, c := range cfg.Criteria {
 			vals = append(vals, num(a.ScoresB, c))
+		}
+		return append(vals, a.Rationale), nil
+	case Rating:
+		vals := []string{}
+		for _, c := range cfg.Criteria {
+			vals = append(vals, num(a.Scores, c))
 		}
 		return append(vals, a.Rationale), nil
 	case TranslationReview:

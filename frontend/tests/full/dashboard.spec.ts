@@ -199,7 +199,7 @@ test("12b: dashboard, earnings and training match the ledger", async ({ page }) 
   await page.getByRole("link", { name: "Training" }).first().click();
   await expect(page.getByRole("heading", { name: "Training", level: 1 })).toBeVisible();
   await expect(page.getByText(`Earnings ${run} (Sample)`).first()).toBeVisible();
-  await expect(page.locator("[data-demo]")).toHaveCount(3);
+  await expect(page.locator("[data-demo]")).toHaveCount(4); // one worked example per task type
   for (const demo of await page.locator("[data-demo]").all())
     await expect(demo.getByText("Worked example")).toBeVisible();
   await expect(page.getByText(/^trust = 0\.5 × gold accuracy/)).toBeVisible();

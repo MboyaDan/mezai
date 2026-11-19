@@ -126,6 +126,7 @@ func (s *seeder) run() error {
 	labels := map[string]any{"labels": classificationLabels, "multi_label": false}
 	rubric := map[string]any{"criteria": pairwiseRubric, "scale": []int{1, 5}}
 	trRubric := map[string]any{"criteria": []string{"adequacy", "fluency"}, "scale": []int{1, 5}}
+	rtRubric := map[string]any{"criteria": ratingRubric, "scale": []int{1, 5}}
 	projects := []struct {
 		org                 uuid.UUID
 		name, taskType      string
@@ -138,6 +139,8 @@ func (s *seeder) run() error {
 	}{
 		{sample, "Customer message routing (Sample)", "classification", "live", labels, classificationItems, 3, 1000, "language", "sw"},
 		{sample, "Helpful answers comparison (Sample)", "pairwise", "live", rubric, pairwiseItems, 2, 4000, "task_type", "pairwise"},
+		// Rating reuses the response-comparison skill so sample contributors can try it.
+		{sample, "Answer quality rating (Sample)", "rating", "live", rtRubric, ratingItems, 2, 3000, "task_type", "pairwise"},
 		{sample, "English to Swahili review (Sample)", "translation_review", "draft", trRubric, translationItems, 2, 3000, "language", "sw"},
 		{other, "Other org message routing (Sample)", "classification", "live", labels, classificationItems, 2, 1000, "language", "sw"},
 	}
