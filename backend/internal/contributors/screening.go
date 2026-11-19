@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
 
@@ -310,9 +312,16 @@ func (s *Service) DecideScreening(ctx context.Context, p *auth.Principal, id uui
 				return err
 			}
 		}
-		return auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: "contributor.screening_" + status, EntityType: "contributor",
+		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: "contributor.screening_" + status, EntityType: "contributor",
 			EntityID: &id, Reason: note, Before: map[string]string{"screening_status": cp.ScreeningStatus},
-			After: map[string]string{"screening_status": status}})
+			After: map[string]string{"screening_status": status}}); err != nil {
+			return err
+		}
+		if status == cp.ScreeningStatus {
+			return nil // nothing new to tell the applicant
+		}
+		return notify(ctx, q, id, mail.TemplateScreeningDecision, uuid.NewString(),
+			map[string]string{"Decision": status, "Note": note})
 	})
 	if err != nil {
 		return Detail{}, err
@@ -432,6 +441,12 @@ func (s *Service) RecordInterview(ctx context.Context, p *auth.Principal, id uui
 		}
 		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &p.UserID, Action: "contributor.interview_" + outcome, EntityType: "contributor",
 			EntityID: &id, After: map[string]any{"interview_id": iv.ID}}); err != nil {
+			return err
+		}
+		// The interviewer's notes stay internal; only the outcome is sent (D-158).
+		if err := notify(ctx, q, id, mail.TemplateInterviewResult, iv.ID.String(), map[string]string{
+			"Outcome": outcome, "RetryDays": strconv.Itoa(int(InterviewRetry / (24 * time.Hour))),
+		}); err != nil {
 			return err
 		}
 		if outcome == "passed" && cp.Status == StatusQualifying {

@@ -21,6 +21,11 @@ const (
 	TemplateProjectAvailable    = "project_available"    // optional
 	TemplateFeedbackReceived    = "feedback_received"    // optional, at most once a day
 	TemplatePayoutSent          = "payout_sent"          // always sent
+	// Screening steps (Stage 19d, D-158); always sent.
+	TemplateScreeningDecision = "screening_decision"
+	TemplateInterviewResult   = "interview_result"
+	TemplateIdentityDecision  = "identity_decision"
+	TemplateActivated         = "contributor_activated"
 )
 
 // Notice is one notification about one person.
