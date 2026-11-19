@@ -25,6 +25,7 @@ import {
 } from "@/lib/earnings";
 import { errorMessage } from "@/lib/onboarding";
 import { formatKes, taskTypeLabel } from "@/lib/projects";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { useProfile } from "./portal";
 import { StatusBadge } from "./status";
@@ -55,15 +56,27 @@ const sectionTitle = "font-display text-lg font-semibold";
  */
 export function WorkingDashboard({ paused }: { paused: boolean }) {
   const { profile } = useProfile();
-  const projects = useLoad(() =>
-    paused
-      ? Promise.resolve([] as WorkProject[])
-      : api<{ projects: WorkProject[] }>("GET", "/v1/me/projects").then((r) => r.projects),
+  // Server copies (D-165) when the page read them; otherwise fetched here.
+  const pre = {
+    projects: usePreloaded<{ projects: WorkProject[] }>("/v1/me/projects")?.projects,
+    quality: usePreloaded<MyQuality>("/v1/me/quality"),
+    earnings: usePreloaded<EarningsSummary>("/v1/me/earnings"),
+    feedback: usePreloaded<{ feedback: Feedback[] }>("/v1/me/feedback")?.feedback,
+  };
+  const projects = useLoad(
+    () =>
+      paused
+        ? Promise.resolve([] as WorkProject[])
+        : api<{ projects: WorkProject[] }>("GET", "/v1/me/projects").then((r) => r.projects),
+    "",
+    paused ? [] : pre.projects,
   );
-  const quality = useLoad(() => api<MyQuality>("GET", "/v1/me/quality"));
-  const earnings = useLoad(() => api<EarningsSummary>("GET", "/v1/me/earnings"));
-  const feedback = useLoad(() =>
-    api<{ feedback: Feedback[] }>("GET", "/v1/me/feedback").then((r) => r.feedback),
+  const quality = useLoad(() => api<MyQuality>("GET", "/v1/me/quality"), "", pre.quality);
+  const earnings = useLoad(() => api<EarningsSummary>("GET", "/v1/me/earnings"), "", pre.earnings);
+  const feedback = useLoad(
+    () => api<{ feedback: Feedback[] }>("GET", "/v1/me/feedback").then((r) => r.feedback),
+    "",
+    pre.feedback,
   );
   const first = profile.display_name.split(/\s+/)[0];
   const count = projects.status === "ready" ? projectsWithWork(projects.data).open : null;

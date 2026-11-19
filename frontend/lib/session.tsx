@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api, setCsrfToken, type Me } from "@/lib/api/client";
 import { homeFor } from "@/lib/onboarding";
@@ -18,9 +27,16 @@ type SessionValue = {
 
 const SessionContext = createContext<SessionValue | null>(null);
 
-/** Loads /v1/auth/me once and shares the signed-in user. The API checks every call regardless. */
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>({ status: "loading" });
+/**
+ * Loads /v1/auth/me once and shares the signed-in user. The API checks every
+ * call regardless. With `initial` (read on the server, D-165) it starts
+ * signed in and does not fetch again.
+ */
+export function SessionProvider({ children, initial }: { children: ReactNode; initial?: Me | null }) {
+  const [state, setState] = useState<State>(() =>
+    initial ? { status: "signed-in", user: initial.user } : { status: "loading" },
+  );
+  const preloaded = useRef(Boolean(initial));
 
   const refresh = useCallback(async () => {
     try {
@@ -36,10 +52,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Loading the session is the effect's purpose; the state update is its result.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // The CSRF token is browser module state, so it is set here and never
+    // during server rendering, where it would outlive the request.
+    if (preloaded.current && initial) {
+      setCsrfToken(initial.csrf_token);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, initial]);
 
   const signedIn = useCallback((me: Me) => {
     setCsrfToken(me.csrf_token);

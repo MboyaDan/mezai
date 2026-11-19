@@ -8,6 +8,7 @@ import { api, type MyTest } from "@/lib/api/client";
 import { currentStep, errorMessage, fieldLabels, type Step } from "@/lib/onboarding";
 import { labelFor } from "@/content/profile";
 import { cn } from "@/lib/cn";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { useProfile } from "./portal";
 import { StatusBadge } from "./status";
@@ -28,8 +29,10 @@ const order: Step[] = [
 
 export function Dashboard() {
   const { profile } = useProfile();
-  const tests = useLoad(() =>
-    api<{ tests: MyTest[] }>("GET", "/v1/me/qualification/tests").then((r) => r.tests),
+  const tests = useLoad(
+    () => api<{ tests: MyTest[] }>("GET", "/v1/me/qualification/tests").then((r) => r.tests),
+    "",
+    usePreloaded<{ tests: MyTest[] }>("/v1/me/qualification/tests")?.tests,
   );
   const first = profile.display_name.split(/\s+/)[0];
 
