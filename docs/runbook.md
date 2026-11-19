@@ -76,12 +76,14 @@ scripts/staging.sh demo -g "[234]\. "             # some steps only
 scripts/staging.sh demo --headed                  # watch it
 ```
 
-It needs Docker (for psql) and `SEED_PASSWORD` in `backend/.env.staging`. Each run makes a new organisation, project and contributor, all marked "(Sample)", and leaves them on staging so you can open them afterwards. Screenshots go to `docs/screenshots/stage-19e/`.
+It needs Docker (for psql) and `SEED_PASSWORD` in `backend/.env.staging`. The seven steps: visitor and enquiry; Ops set-up; a new contributor to active; contributors working (one paused automatically); review and feedback; the client's sign-in, quality view and delivery download; a payout batch approved by a second person. Each run makes a new organisation, project and contributor, all marked "(Sample)", and leaves them on staging so you can open them afterwards. Screenshots go to `docs/screenshots/stage-19e/`.
 
 - The contact form takes **5 enquiries an hour** from one connection, and each staff account **10 sign-ins in 15 minutes**. One run uses 1 enquiry and 5 Ops sign-ins; the runner waits if a limit is reached.
 - Mail to `.invalid` sample addresses is not sent (D-159), so the runner confirms its new contributor's email with a one-time token it writes to the database. In a live sales demo, sign up with a real inbox instead.
 - The runner sets `trust.min_gold_results` to 5 on staging (audited) so the automatic pause shows with a 10-item gold set. Production keeps 20.
 - `contributor004` is the careless one and ends **paused**. The next run reinstates them first.
+- Payouts cover whole days up to **yesterday** (Nairobi), so step 7 pays what was approved before today. If nothing is due, or the last batch already covers yesterday, the step is skipped and says why. Each run marks every line paid with a made-up `DEMO…` receipt.
+- Its new client user is invited through the Organisations screen and accepted with a token the runner writes, since `.invalid` mail is not sent.
 
 ## Something is wrong
 

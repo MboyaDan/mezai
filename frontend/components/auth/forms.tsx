@@ -488,3 +488,85 @@ export function ResetPasswordForm() {
     </>
   );
 }
+
+/**
+ * Accepting a staff or client invitation (brief 4): the invitation email
+ * links here. The account is created with the invited email (already
+ * verified by the link) and the person signs in next.
+ */
+export function AcceptInvitationForm() {
+  const token = useSearchParams().get("token") ?? "";
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ name?: string; password?: string }>({});
+  const [done, setDone] = useState(false);
+  const { busy, error, run } = useSubmit();
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const next: typeof errors = {};
+    if (!name.trim()) next.name = "Enter your name as colleagues should see it.";
+    if (password.length < MIN_PASSWORD) next.password = `Use at least ${MIN_PASSWORD} characters.`;
+    setErrors(next);
+    if (next.name || next.password) return;
+    void run(async () => {
+      try {
+        await api("POST", "/v1/invitations/accept", { token, display_name: name.trim(), password });
+        setDone(true);
+      } catch (e) {
+        if (e instanceof ApiError && e.code === "weak_password")
+          return setErrors({ password: errorMessage(e) });
+        throw e;
+      }
+    });
+  }
+
+  if (!token)
+    return (
+      <AuthHeading title="Invitation link incomplete">
+        Open the link from your invitation email again, or ask the person who invited you to send a new one.
+      </AuthHeading>
+    );
+  if (done)
+    return (
+      <AuthHeading title="Your account is ready">
+        <TextLink href="/login">Sign in</TextLink> with your email address and the password you just chose.
+      </AuthHeading>
+    );
+  return (
+    <>
+      <AuthHeading title="Accept your invitation">
+        Choose the name colleagues will see and a password for your account.
+      </AuthHeading>
+      <form onSubmit={submit} noValidate className="grid gap-5">
+        <FormError error={error} />
+        <Field label="Your name" error={errors.name} required>
+          <Input
+            autoComplete="name"
+            maxLength={120}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </Field>
+        <Field
+          label="Password"
+          hint={`At least ${MIN_PASSWORD} characters.`}
+          error={errors.password}
+          required
+        >
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </Field>
+        <Button type="submit" loading={busy} fullWidth>
+          Create account
+        </Button>
+      </form>
+    </>
+  );
+}
