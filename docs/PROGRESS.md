@@ -4,7 +4,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 
 ## Current state
 
-- **Last stage:** 19d (account and screening emails, D-158). Branch `stage-19d-account-emails`. 19a to 19c merged (#60 to #64).
+- **Last stage:** 19d (account and screening emails, D-158). Branch `stage-19d-account-emails`, PR #65. 19a to 19c merged (#60 to #64).
 - **Staging is live (2026-11-18):** site https://mezai.vercel.app, API https://mezai-api-staging.onrender.com, Supabase Frankfurt (PostgreSQL 17.12, 28 migrations, seeded, Super Admin from `staging.sh setup`). Smoke test: pages, sign-in, enquiry email (after Brevo's Authorised IPs), CSV import to storage, backup and restore-test all passed; visitor IP failed (every audit entry `::1`), fixed in 19b (D-156). Two non-test files uploaded during the smoke test were removed (records deleted with an `import.removed` audit entry; Dan deletes the two stored objects in Supabase Storage).
 - **Next:** run the brief's demo script (section 18) end to end on staging (19e). Then Google sign-in for contributors only (proposed, own PR; needs a Google Cloud OAuth client from Dan). Also proposed: server-render the contributor pages' session and first data (`docs/screenshots/stage-18a/performance.md`).
 - **M-Pesa sandbox (A-078):** Dan added Daraja sandbox consumer key, secret and shortcode to `backend/.env` (2026-11-17); a token request to the sandbox succeeded. Still needed to run B2C in sandbox: `MPESA_ENV=sandbox`, `MPESA_INITIATOR_NAME`, `MPESA_SECURITY_CREDENTIAL`, a public HTTPS `MPESA_CALLBACK_BASE_URL` (a tunnel locally) and `MPESA_CALLBACK_TOKEN` (32+ characters). DG-02 is **not** cleared. A-086 (email provider), A-087 (SMS, DG-06), A-088 to A-090 wait for Dan.
@@ -134,7 +134,7 @@ Read this first after `/clear`. Then read only what the next stage needs.
 | 19a | Merged | #60, #61, #62 | Migration 00028 (revoke Supabase API roles). `render.yaml`, `backend/scripts/staging.sh`, `docs/deployment.md`, `docs/runbook.md`. Staging live on Vercel, Render and Supabase (D-152 to D-154). |
 | 19b | Merged | #63 | No migration. Branded HTML emails (D-155); visitor address from the site with `PROXY_SHARED_SECRET` (D-156). |
 | 19c | Merged | #64 | No migration. Vercel deployment addresses redirect to `SITE_URL` (D-157). |
-| 19d | PR open | – | No migration. Account and screening emails (D-158): "you already have an account" to the owner on a repeated sign-up (once a day); screening decision, interview result (outcome only), identity decision and "you can start tasks" on activation. Template tests for every branch; API tests for each email. Previews in `docs/screenshots/stage-19d/`. |
+| 19d | PR open | #65 | No migration. Account and screening emails (D-158): "you already have an account" to the owner on a repeated sign-up (once a day); screening decision, interview result (outcome only), identity decision and "you can start tasks" on activation. Template tests for every branch; API tests for each email. Previews in `docs/screenshots/stage-19d/`. |
 
 ## Notes for the next session
 
