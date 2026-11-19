@@ -196,8 +196,14 @@ func MeanSpread(scores []float64) (mean, spread float64) {
 	return sum / float64(len(scores)), hi - lo
 }
 
-// Band is the interpretation shown next to a kappa (brief 8.2). The number
-// is always shown too.
+// ChanceCorrected reports whether a statistic corrects for chance agreement
+// (kappa or alpha); those carry a band.
+func ChanceCorrected(statistic string) bool {
+	return statistic == "cohen_kappa" || statistic == "fleiss_kappa" || statistic == "krippendorff_alpha"
+}
+
+// Band is the interpretation shown next to a kappa or alpha (brief 8.2). The
+// number is always shown too.
 func Band(kappa float64) string {
 	switch {
 	case kappa > 0.80:

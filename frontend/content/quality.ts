@@ -40,7 +40,7 @@ export const qualityPage = {
       name: "Agreement",
       line: "How far people agree beyond chance, per project and per label.",
       body: [
-        "We report percent agreement alongside a chance-corrected statistic: Cohen's kappa for two raters, Fleiss' kappa for three or more. For rubric scores we report the mean absolute difference between raters.",
+        "We report percent agreement alongside a chance-corrected statistic: Cohen's kappa for two raters, Fleiss' kappa for three or more. For rubric scores we report, for each criterion, Krippendorff's alpha (ordinal), the share of scores within one point of each other and the mean difference between raters.",
         "Every figure comes with a plain-language band. The band is a guide; the number is always shown.",
       ],
     },

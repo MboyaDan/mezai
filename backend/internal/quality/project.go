@@ -2,6 +2,7 @@ package quality
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -9,7 +10,7 @@ import (
 // agreement_snapshots. Label is "" for the whole project.
 type Stat struct {
 	Label     string
-	Statistic string // percent, cohen_kappa, fleiss_kappa, mean_abs_diff
+	Statistic string // percent, cohen_kappa, fleiss_kappa, krippendorff_alpha, within_one, mean_abs_diff
 	Value     float64
 	Items     int
 	Raters    int
@@ -57,23 +58,47 @@ func categorical(label string, ratings [][]string, k int) []Stat {
 // each have exactly k answers (gold items excluded by the caller):
 // classification gets percent and kappa for the project and per label (the
 // label chosen or not); pairwise gets them on the preference plus the mean
-// absolute difference of rubric scores per criterion; translation review
-// gets the mean absolute difference of adequacy and fluency.
+// rubric criterion figures (scored, below); translation review gets them
+// for adequacy and fluency.
 func ProjectAgreement(taskType string, cfg Config, items [][]Answer, k int) []Stat {
 	if k < 2 || len(items) == 0 {
 		return nil
 	}
 	out := []Stat{}
-	mad := func(label string, get func(Answer) float64) {
-		scores := make([][]float64, len(items))
-		for i, it := range items {
-			for _, a := range it {
-				scores[i] = append(scores[i], get(a))
+	// scored adds the figures for one rubric criterion (D-163): exact
+	// agreement, agreement within one point, ordinal Krippendorff's alpha
+	// and the mean absolute difference. Each side of a pairwise item is its
+	// own unit, so A and B scores are compared side by side, not averaged.
+	scored := func(label string, gets ...func(Answer) float64) {
+		units := [][]float64{}
+		for _, it := range items {
+			for _, get := range gets {
+				u := make([]float64, 0, len(it))
+				for _, a := range it {
+					u = append(u, get(a))
+				}
+				units = append(units, u)
 			}
 		}
-		if v, ok := MeanAbsDiff(scores); ok {
-			out = append(out, Stat{Label: label, Statistic: "mean_abs_diff", Value: v, Items: len(items), Raters: k})
+		stat := func(name string, v float64, ok bool) {
+			if ok {
+				out = append(out, Stat{Label: label, Statistic: name, Value: v, Items: len(items), Raters: k})
+			}
 		}
+		exact := make([][]string, len(units))
+		for i, u := range units {
+			for _, v := range u {
+				exact[i] = append(exact[i], strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		}
+		v, ok := PercentAgreement(exact)
+		stat("percent", v, ok)
+		v, ok = WithinOne(units)
+		stat("within_one", v, ok)
+		v, ok = KrippendorffAlpha(units, Ordinal)
+		stat("krippendorff_alpha", v, ok)
+		v, ok = MeanAbsDiff(units)
+		stat("mean_abs_diff", v, ok)
 	}
 	switch taskType {
 	case Classification:
@@ -108,11 +133,12 @@ func ProjectAgreement(taskType string, cfg Config, items [][]Answer, k int) []St
 		}
 		out = append(out, categorical("", prefs, k)...)
 		for _, c := range cfg.Criteria {
-			mad(c, func(a Answer) float64 { return float64(a.ScoresA[c]+a.ScoresB[c]) / 2 })
+			scored(c, func(a Answer) float64 { return float64(a.ScoresA[c]) },
+				func(a Answer) float64 { return float64(a.ScoresB[c]) })
 		}
 	case TranslationReview:
-		mad("adequacy", func(a Answer) float64 { return float64(a.Adequacy) })
-		mad("fluency", func(a Answer) float64 { return float64(a.Fluency) })
+		scored("adequacy", func(a Answer) float64 { return float64(a.Adequacy) })
+		scored("fluency", func(a Answer) float64 { return float64(a.Fluency) })
 	}
 	return out
 }

@@ -76,12 +76,16 @@ export function paceText(p: ProjectProgress): string {
 export const statisticName: Record<ProjectQuality["agreement"][number]["statistic"], string> = {
   cohen_kappa: "Cohen's κ",
   fleiss_kappa: "Fleiss' κ",
+  krippendorff_alpha: "Krippendorff's α",
+  within_one: "Within one point",
   percent: "Percent agreement",
   mean_abs_diff: "Mean difference",
 };
 
 type Figure = ProjectQuality["agreement"][number];
 const isKappa = (f: Figure) => f.statistic === "cohen_kappa" || f.statistic === "fleiss_kappa";
+/** Kappa or alpha: corrected for chance, so it carries a band (D-163). */
+const isCorrected = (f: Figure) => isKappa(f) || f.statistic === "krippendorff_alpha";
 
 /** The project-wide kappa and percent agreement (either may be missing). */
 export function projectAgreement(q: ProjectQuality): { kappa?: Figure; percent?: Figure; spread?: Figure } {
@@ -93,13 +97,16 @@ export function projectAgreement(q: ProjectQuality): { kappa?: Figure; percent?:
   };
 }
 
-/** One figure per label, kappa when there is one, otherwise percent. */
+/**
+ * One figure per label or rubric criterion: kappa (labels) or Krippendorff's
+ * alpha (scores) when there is one, otherwise percent agreement.
+ */
 export function labelAgreement(q: ProjectQuality): Figure[] {
   const byLabel = new Map<string, Figure>();
   for (const f of q.agreement) {
-    if (f.label == null || !(isKappa(f) || f.statistic === "percent")) continue;
+    if (f.label == null || !(isCorrected(f) || f.statistic === "percent")) continue;
     const cur = byLabel.get(f.label);
-    if (!cur || (isKappa(f) && !isKappa(cur))) byLabel.set(f.label, f);
+    if (!cur || (isCorrected(f) && !isCorrected(cur))) byLabel.set(f.label, f);
   }
   return [...byLabel.values()].sort((a, b) => b.value - a.value || a.label!.localeCompare(b.label!));
 }

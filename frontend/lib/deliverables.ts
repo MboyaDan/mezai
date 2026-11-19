@@ -17,6 +17,8 @@ export const statisticLabel: Record<string, string> = {
   percent: "Percent agreement",
   cohen_kappa: "Cohen's kappa",
   fleiss_kappa: "Fleiss' kappa",
+  krippendorff_alpha: "Krippendorff's alpha",
+  within_one: "Within one point",
   mean_abs_diff: "Mean score difference",
 };
 
@@ -28,6 +30,33 @@ export function headlineAgreement(stats: Stat[]): Stat[] {
   return stats
     .filter((s) => s.label == null)
     .sort((a, b) => order.indexOf(a.statistic) - order.indexOf(b.statistic));
+}
+
+export type CriterionAgreement = {
+  criterion: string;
+  alpha?: Stat;
+  percent?: Stat;
+  withinOne?: Stat;
+  meanDiff?: Stat;
+};
+
+/**
+ * Agreement for each rubric criterion (pairwise scores, translation adequacy
+ * and fluency; D-163). Only labels with score figures are included, so
+ * classification labels stay out.
+ */
+export function criterionAgreement(stats: Stat[]): CriterionAgreement[] {
+  const rows = new Map<string, CriterionAgreement>();
+  for (const s of stats) {
+    if (s.label == null) continue;
+    const row = rows.get(s.label) ?? { criterion: s.label };
+    if (s.statistic === "krippendorff_alpha") row.alpha = s;
+    else if (s.statistic === "percent") row.percent = s;
+    else if (s.statistic === "within_one") row.withinOne = s;
+    else if (s.statistic === "mean_abs_diff") row.meanDiff = s;
+    rows.set(s.label, row);
+  }
+  return [...rows.values()].filter((r) => r.withinOne || r.meanDiff);
 }
 
 /** What the client receives, in one sentence. */

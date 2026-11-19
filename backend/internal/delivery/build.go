@@ -299,7 +299,7 @@ func agreementStats(taskType string, cfg quality.ProjectConfig, k int, rows []st
 			l := st.Label
 			m.Label = &l
 		}
-		if st.Statistic == "cohen_kappa" || st.Statistic == "fleiss_kappa" {
+		if quality.ChanceCorrected(st.Statistic) {
 			b := quality.Band(st.Value)
 			m.Band = &b
 		}

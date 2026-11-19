@@ -17,6 +17,8 @@ import {
 import {
   fileLabel,
   formatBytes,
+  criterionAgreement,
+  type CriterionAgreement,
   headlineAgreement,
   itemsSentence,
   orderedFiles,
@@ -164,6 +166,7 @@ function VersionCard({
 }) {
   const m = v.manifest;
   const agreement = headlineAgreement(m.agreement);
+  const criteria = criterionAgreement(m.agreement);
   return (
     <Card>
       <CardHeader
@@ -224,11 +227,12 @@ function VersionCard({
               </div>
             ))}
           </dl>
-        ) : (
+        ) : criteria.length === 0 ? (
           <p className="text-sm text-fg-muted">
             Agreement needs at least two answers on each item, so none is shown for this version.
           </p>
-        )}
+        ) : null}
+        {criteria.length > 0 && <CriteriaTable rows={criteria} />}
         {v.purged_at && (
           <p className="text-sm text-fg-muted">
             The files were deleted on {shortDate(v.purged_at)} under the project&rsquo;s retention rule. The
@@ -250,6 +254,61 @@ function VersionCard({
         )}
       </div>
     </Card>
+  );
+}
+
+/** Score agreement for each rubric criterion (D-163). */
+function CriteriaTable({ rows }: { rows: CriterionAgreement[] }) {
+  const cell = "py-1.5 pr-4 text-right font-mono tabular";
+  return (
+    <div className="overflow-x-auto" role="region" aria-label="Agreement by criterion" tabIndex={0}>
+      <table className="w-full min-w-[30rem] text-left text-sm">
+        <caption className="pb-2 text-left text-fg-muted">
+          Agreement by criterion, 1 to 5 scores. Krippendorff&rsquo;s alpha corrects for chance; within one
+          point counts pairs of scores no more than a point apart.
+        </caption>
+        <thead>
+          <tr className="border-b border-border-strong text-fg-muted">
+            <th scope="col" className="py-1.5 pr-4 font-normal">
+              Criterion
+            </th>
+            <th scope="col" className="py-1.5 pr-4 font-normal">
+              Alpha
+            </th>
+            <th scope="col" className="py-1.5 pr-4 text-right font-normal">
+              Exact
+            </th>
+            <th scope="col" className="py-1.5 pr-4 text-right font-normal">
+              Within one
+            </th>
+            <th scope="col" className="py-1.5 text-right font-normal">
+              Mean difference
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.criterion} className="border-b border-border">
+              <th scope="row" className="py-1.5 pr-4 font-normal">
+                {r.criterion}
+              </th>
+              <td className="py-1.5 pr-4">
+                {r.alpha ? (
+                  <Agreement value={r.alpha.value} statistic="α" />
+                ) : (
+                  <span className="text-fg-muted">–</span>
+                )}
+              </td>
+              <td className={cell}>{r.percent ? pct(r.percent.value) : "–"}</td>
+              <td className={cell}>{r.withinOne ? pct(r.withinOne.value) : "–"}</td>
+              <td className="py-1.5 text-right font-mono tabular">
+                {r.meanDiff ? r.meanDiff.value.toFixed(2) : "–"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

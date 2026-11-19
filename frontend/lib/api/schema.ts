@@ -2935,7 +2935,8 @@ export interface components {
         /** @description Null for the whole project */
         label: string | null;
         /** @enum {string} */
-        statistic: "percent" | "cohen_kappa" | "fleiss_kappa" | "mean_abs_diff";
+        statistic:
+          "percent" | "cohen_kappa" | "fleiss_kappa" | "krippendorff_alpha" | "within_one" | "mean_abs_diff";
         value: number;
         /** @enum {string|null} */
         band: "weak" | "moderate" | "substantial" | "strong" | null;
@@ -3134,7 +3135,8 @@ export interface components {
       };
       agreement: {
         /** @enum {string} */
-        statistic: "percent" | "cohen_kappa" | "fleiss_kappa" | "mean_abs_diff";
+        statistic:
+          "percent" | "cohen_kappa" | "fleiss_kappa" | "krippendorff_alpha" | "within_one" | "mean_abs_diff";
         label: string | null;
         value: number;
         /** @enum {string|null} */

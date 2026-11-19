@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DeliverableFile } from "@/lib/api/client";
-import { formatBytes, headlineAgreement, itemsSentence, orderedFiles } from "./deliverables";
+import {
+  criterionAgreement,
+  formatBytes,
+  headlineAgreement,
+  itemsSentence,
+  orderedFiles,
+} from "./deliverables";
 
 describe("deliverables", () => {
   it("formats sizes", () => {
@@ -37,6 +43,34 @@ describe("deliverables", () => {
     expect(
       headlineAgreement([s("percent"), s("cohen_kappa", "Yes"), s("cohen_kappa")]).map((x) => x.statistic),
     ).toEqual(["cohen_kappa", "percent"]);
+  });
+
+  it("groups score figures by criterion and leaves classification labels out (D-163)", () => {
+    const s = (statistic: string, label: string | null, value = 0.5) => ({
+      statistic: statistic as "percent",
+      label,
+      value,
+      band: null,
+      items: 4,
+      raters: 3,
+    });
+    const rows = criterionAgreement([
+      s("percent", "Yes"),
+      s("fleiss_kappa", "Yes"),
+      s("percent", "fluency", 0.6),
+      s("within_one", "fluency", 0.9),
+      s("krippendorff_alpha", "fluency", 0.7),
+      s("mean_abs_diff", "fluency", 0.45),
+      s("percent", null),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].criterion).toBe("fluency");
+    expect([
+      rows[0].alpha?.value,
+      rows[0].percent?.value,
+      rows[0].withinOne?.value,
+      rows[0].meanDiff?.value,
+    ]).toEqual([0.7, 0.6, 0.9, 0.45]);
   });
 
   it("orders files", () => {

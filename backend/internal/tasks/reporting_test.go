@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -225,4 +227,67 @@ func staffPrincipal(t *testing.T, pool *db.Pool) *auth.Principal {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// TestScoreAgreementSnapshot (D-163): rubric scores are stored with ordinal
+// Krippendorff's alpha, exact agreement and agreement within one point for
+// each criterion, next to the mean difference.
+func TestScoreAgreementSnapshot(t *testing.T) {
+	pool, ctx := setup(t)
+	items := []map[string]string{}
+	for _, s := range []string{"Sample one", "Sample two", "Sample three"} {
+		items = append(items, map[string]string{"source": s, "translation": "Mfano", "source_lang": "en", "target_lang": "sw"})
+	}
+	project := qProject(t, pool, quality.TranslationReview, map[string]any{"criteria": []string{"adequacy", "fluency"}, "scale": []int{1, 5}}, 2, 0, items, nil)
+	people := crowd(t, pool, 2)
+	svc := tasks.NewService(pool)
+	// Adequacy by item: rater 1 gives 5, 3, 1; rater 2 gives 4, 3, 1.
+	plan := map[string][2]int{"Sample one": {5, 4}, "Sample two": {3, 3}, "Sample three": {1, 1}}
+	for r, p := range people {
+		for range 3 {
+			task, err := svc.Next(ctx, p, project)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var content map[string]string
+			_ = json.Unmarshal(task.Content, &content)
+			a := plan[content["source"]][r]
+			answer := `{"adequacy":` + strconv.Itoa(a) + `,"fluency":4,"corrected":"Mfano mzuri"}`
+			if _, err := svc.Submit(ctx, p, task.ID, "s-"+task.ID.String(), tasks.SubmitInput{Answer: json.RawMessage(answer),
+				Signals: quality.Signals{TimeOnTaskMs: 60_000}}, auth.Meta{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	now := time.Now()
+	if _, err := svc.SnapshotAgreement(ctx, now.Add(-time.Hour), now.Add(time.Minute), nil); err != nil {
+		t.Fatal(err)
+	}
+	get := func(label, stat string) float64 {
+		return staffQuery[float64](t, pool, `SELECT value FROM agreement_snapshots WHERE project_id = $1 AND label = $2 AND statistic = $3`,
+			project, label, stat)
+	}
+	wantAlpha, _ := quality.KrippendorffAlpha([][]float64{{5, 4}, {3, 3}, {1, 1}}, quality.Ordinal)
+	if v := get("adequacy", "krippendorff_alpha"); math.Abs(v-wantAlpha) > 0.0001 {
+		t.Errorf("adequacy alpha %v, want %v", v, wantAlpha)
+	}
+	if v := get("adequacy", "within_one"); v != 1 {
+		t.Errorf("adequacy within one %v", v)
+	}
+	if v := get("adequacy", "percent"); math.Abs(v-0.6667) > 0.0001 {
+		t.Errorf("adequacy exact %v", v)
+	}
+	// Every fluency score is 4: exact agreement, but alpha is undefined and not stored.
+	if c := staffQuery[int](t, pool, `SELECT count(*) FROM agreement_snapshots WHERE project_id = $1 AND label = 'fluency' AND statistic = 'krippendorff_alpha'`, project); c != 0 {
+		t.Errorf("fluency alpha stored with no variation: %d", c)
+	}
+	rep, err := svc.GetProjectQuality(ctx, staffPrincipal(t, pool), project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range rep.Agreement {
+		if f.Statistic == "krippendorff_alpha" && f.Band == nil {
+			t.Error("alpha should carry a band")
+		}
+	}
 }
