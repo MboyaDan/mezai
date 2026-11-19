@@ -24,7 +24,7 @@ type Signals struct {
 }
 
 // CheckRules are a project's QA settings: the D-077 checks plus the minimum
-// pairwise rationale length.
+// pairwise and rating rationale length.
 type CheckRules struct {
 	QA              QAChecks
 	MinRationaleLen int
@@ -55,6 +55,12 @@ func Check(taskType string, rules CheckRules, content map[string]string, a Answe
 				warnings = append(warnings, Issue{Code: "rationale_mismatch", Field: "rationale",
 					Message: "The rationale seems to favour the response that was not chosen."})
 			}
+		}
+	case Rating:
+		free = a.Rationale
+		if n := utf8.RuneCountInString(strings.TrimSpace(a.Rationale)); n < rules.MinRationaleLen {
+			blocks = append(blocks, Issue{Code: "rationale_too_short", Field: "rationale",
+				Message: "Explain your scores in a little more detail before submitting."})
 		}
 	case TranslationReview:
 		free = a.Corrected

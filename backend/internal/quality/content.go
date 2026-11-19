@@ -31,7 +31,7 @@ func bad(field, format string, a ...any) error {
 }
 
 // TaskTypes are the pilot task types, in display order.
-var TaskTypes = []string{Classification, Pairwise, TranslationReview}
+var TaskTypes = []string{Classification, Pairwise, Rating, TranslationReview}
 
 // MaxFieldChars bounds one text field of an item (characters, not bytes).
 const MaxFieldChars = 20000
@@ -96,7 +96,7 @@ func uniqueTrimmed(field string, in []string, min, max, maxLen int, re *regexp.R
 // ValidateConfig checks a project's task settings and returns them cleaned.
 //
 //	classification      labels (2 to 50), multi_label
-//	pairwise            criteria (1 to 8 rubric keys), scale [1, 5]
+//	pairwise, rating    criteria (1 to 8 rubric keys), scale [1, 5]
 //	translation_review  error_tags (optional, up to 30); criteria and scale may
 //	                    be given but are fixed to adequacy and fluency, 1 to 5
 func ValidateConfig(taskType string, raw json.RawMessage) (ProjectConfig, error) {
@@ -116,9 +116,9 @@ func ValidateConfig(taskType string, raw json.RawMessage) (ProjectConfig, error)
 		if c.Labels, err = uniqueTrimmed("config.labels", c.Labels, 2, 50, 80, nil); err != nil {
 			return c, err
 		}
-	case Pairwise:
+	case Pairwise, Rating:
 		if len(c.Labels) > 0 || c.MultiLabel || len(c.ErrorTags) > 0 {
-			return c, bad("config", "pairwise takes criteria and scale only")
+			return c, bad("config", "this task type takes criteria and scale only")
 		}
 		if c.Criteria, err = uniqueTrimmed("config.criteria", c.Criteria, 1, 8, 40, criterionRe); err != nil {
 			return c, err
@@ -138,7 +138,7 @@ func ValidateConfig(taskType string, raw json.RawMessage) (ProjectConfig, error)
 		}
 		c.Criteria, c.Scale = []string{"adequacy", "fluency"}, []int{1, 5}
 	default:
-		return c, bad("task_type", "use classification, pairwise or translation_review")
+		return c, bad("task_type", "use classification, pairwise, rating or translation_review")
 	}
 	return c, nil
 }
@@ -151,6 +151,8 @@ func ContentFields(taskType string) []string {
 		return []string{"text"}
 	case Pairwise:
 		return []string{"prompt", "response_a", "response_b"}
+	case Rating:
+		return []string{"prompt", "response"}
 	case TranslationReview:
 		return []string{"source", "translation", "source_lang", "target_lang"}
 	case Writing:
@@ -201,7 +203,7 @@ func ValidateContent(taskType string, fields map[string]string) (json.RawMessage
 
 // ValidateExpected checks a gold item's expected answer. Only the graded
 // parts are required: the label set (classification), the preference
-// (pairwise), adequacy and fluency (translation review; a reference
+// (pairwise), a score for at least one criterion (rating), adequacy and fluency (translation review; a reference
 // correction is optional).
 func ValidateExpected(taskType string, cfg ProjectConfig, raw json.RawMessage) (json.RawMessage, error) {
 	var a Answer
@@ -230,6 +232,19 @@ func ValidateExpected(taskType string, cfg ProjectConfig, raw json.RawMessage) (
 			return nil, bad("expected.preference", "use a, b or tie")
 		}
 		out = map[string]any{"preference": a.Preference}
+	case Rating:
+		if len(a.Scores) == 0 {
+			return nil, bad("expected.scores", "give the expected score for at least one criterion")
+		}
+		for k, v := range a.Scores {
+			if !slices.Contains(cfg.Criteria, k) {
+				return nil, bad("expected.scores", "%q is not one of the project's criteria", k)
+			}
+			if v < 1 || v > 5 {
+				return nil, bad("expected.scores", "score %s from 1 to 5", k)
+			}
+		}
+		out = map[string]any{"scores": a.Scores}
 	case TranslationReview:
 		if a.Adequacy < 1 || a.Adequacy > 5 || a.Fluency < 1 || a.Fluency > 5 {
 			return nil, bad("expected", "give adequacy and fluency from 1 to 5")
@@ -279,6 +294,7 @@ type QAChecks struct {
 	// Warn when a task is submitted faster than this many seconds (0 = off).
 	WarnFastSeconds int `json:"warn_fast_seconds"`
 	// Warn when the pairwise rationale prefers the other response by name.
+	// Rating has no preference, so the check does not apply to it.
 	WarnRationaleMismatch bool `json:"warn_rationale_mismatch"`
 	// Warn when most of a free-text answer was pasted rather than typed.
 	WarnPasted bool `json:"warn_pasted"`

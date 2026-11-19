@@ -104,6 +104,8 @@ func Columns(kind, taskType string) []string {
 		return append(cols, "expected_labels")
 	case quality.Pairwise:
 		return append(cols, "expected_preference")
+	case quality.Rating:
+		return append(cols, "expected_scores")
 	case quality.TranslationReview:
 		return append(cols, "expected_adequacy", "expected_fluency", "expected_corrected", "tolerance_adequacy", "tolerance_fluency")
 	}
@@ -318,6 +320,21 @@ func goldFromCells(taskType string, cell func(string) string) (json.RawMessage, 
 		exp["labels"] = labels
 	case quality.Pairwise:
 		exp["preference"] = strings.ToLower(strings.TrimSpace(cell("expected_preference")))
+	case quality.Rating:
+		// "criterion=score" pairs joined with "|", e.g. "helpful=4|accurate=5".
+		scores := map[string]int{}
+		for _, part := range strings.Split(cell("expected_scores"), "|") {
+			if part = strings.TrimSpace(part); part == "" {
+				continue
+			}
+			k, v, ok := strings.Cut(part, "=")
+			n, err := strconv.Atoi(strings.TrimSpace(v))
+			if !ok || err != nil {
+				return nil, nil, &quality.Invalid{Field: "expected_scores", Message: "write criterion=score pairs separated by |, for example helpful=4|accurate=5"}
+			}
+			scores[strings.TrimSpace(k)] = n
+		}
+		exp["scores"] = scores
 	case quality.TranslationReview:
 		for col, key := range map[string]string{"expected_adequacy": "adequacy", "expected_fluency": "fluency"} {
 			n, err := num(col)

@@ -12,7 +12,7 @@ var labels = quality.ProjectConfig{Labels: []string{"Billing", "Network", "Other
 
 func spec(kind, format, taskType string) Spec {
 	cfg := labels
-	if taskType == quality.Pairwise {
+	if taskType == quality.Pairwise || taskType == quality.Rating {
 		cfg = quality.ProjectConfig{Criteria: []string{"accuracy"}}
 	}
 	return Spec{Kind: kind, Format: format, TaskType: taskType, Config: cfg, Taken: map[string]bool{"taken-1": true}}
@@ -116,6 +116,18 @@ func TestPairwiseGoldCSV(t *testing.T) {
 	data := "prompt,response_a,response_b,expected_preference\nQ,A,B,A\nQ,A,B,maybe\n"
 	r := Validate(spec(KindGold, CSV, quality.Pairwise), []byte(data))
 	if r.TotalRows != 2 || r.ErrorRows != 1 || string(r.Rows[0].Expected) != `{"preference":"a"}` {
+		t.Fatalf("report = %+v", r)
+	}
+}
+
+// Rating gold in a CSV: criterion=score pairs (D-164).
+func TestRatingGoldCSV(t *testing.T) {
+	if cols := Columns(KindGold, quality.Rating); strings.Join(cols, ",") != "external_id,prompt,response,expected_scores" {
+		t.Fatalf("columns: %q", cols)
+	}
+	data := "prompt,response,expected_scores\nQ,R,accuracy=4\nQ,R,accuracy=four\nQ,R,style=3\nQ,R,\n"
+	r := Validate(spec(KindGold, CSV, quality.Rating), []byte(data))
+	if r.TotalRows != 4 || r.ErrorRows != 3 || string(r.Rows[0].Expected) != `{"scores":{"accuracy":4}}` {
 		t.Fatalf("report = %+v", r)
 	}
 }

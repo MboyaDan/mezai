@@ -18,9 +18,9 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
 
-// RequestTaskTypes: the three pilot task types, or "other" for work that
+// RequestTaskTypes: the pilot task types, or "other" for work that
 // does not fit them yet (Ops decides).
-var RequestTaskTypes = []string{"classification", "pairwise", "translation_review", "other"}
+var RequestTaskTypes = []string{"classification", "pairwise", "rating", "translation_review", "other"}
 
 // SampleExtensions are the sample file types a client may attach.
 var SampleExtensions = []string{".csv", ".tsv", ".jsonl", ".json", ".txt"}

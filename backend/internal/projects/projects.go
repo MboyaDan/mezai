@@ -223,8 +223,8 @@ func (s *Service) validate(in ProjectInput, taskType string) (cleaned, error) {
 		return c, fieldErr("target_count", "use 1 to 10,000,000 items")
 	case in.MinRationaleChars < 0 || in.MinRationaleChars > 2000:
 		return c, fieldErr("min_rationale_chars", "use 0 to 2000 characters")
-	case in.MinRationaleChars > 0 && taskType != quality.Pairwise:
-		return c, fieldErr("min_rationale_chars", "applies to pairwise comparison only")
+	case in.MinRationaleChars > 0 && taskType != quality.Pairwise && taskType != quality.Rating:
+		return c, fieldErr("min_rationale_chars", "applies to pairwise comparison and rating only")
 	}
 	if in.Deadline != nil && *in.Deadline != "" {
 		d, err := time.Parse(dateLayout, *in.Deadline)
@@ -283,7 +283,7 @@ func (s *Service) CreateProject(ctx context.Context, p *auth.Principal, in Proje
 
 func (s *Service) createProject(ctx context.Context, q *store.Queries, p *auth.Principal, in ProjectInput, m auth.Meta) (Project, error) {
 	if !slices.Contains(quality.TaskTypes, in.TaskType) {
-		return Project{}, fieldErr("task_type", "use classification, pairwise or translation_review")
+		return Project{}, fieldErr("task_type", "use classification, pairwise, rating or translation_review")
 	}
 	c, err := s.validate(in, in.TaskType)
 	if err != nil {

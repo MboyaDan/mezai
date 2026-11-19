@@ -3342,7 +3342,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        task_type: { type: string, enum: [classification, pairwise, rating, translation_review] }
         instructions_md: { type: string }
         config: { $ref: "#/components/schemas/TaskConfig" }
         pay_per_task_cents: { type: integer, format: int64 }
@@ -3376,7 +3376,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         project_id: { type: string, format: uuid }
-        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        task_type: { type: string, enum: [classification, pairwise, rating, translation_review] }
         status: { type: string, enum: [reserved, submitted, skipped, expired, reported] }
         expires_at: { type: string, format: date-time }
         content:
@@ -3698,7 +3698,7 @@ components:
         created_at: { type: string, format: date-time }
     TaskConfig:
       type: object
-      description: Labels for classification, rubric criteria (scored 1 to 5) for pairwise.
+      description: Labels for classification, rubric criteria (scored 1 to 5) for pairwise and rating.
       properties:
         labels: { type: array, items: { type: string } }
         multi_label: { type: boolean }
@@ -3708,7 +3708,8 @@ components:
       description: >-
         Shape of the task template's submission schema. Classification: `labels` (optional
         `confidence` 1 to 5, `note`). Pairwise: `preference` (a, b, tie), `scores_a` and
-        `scores_b` per criterion 1 to 5, `rationale`. Translation review: `adequacy` and
+        `scores_b` per criterion 1 to 5, `rationale`. Rating: `scores` per criterion 1 to 5,
+        `rationale`. Translation review: `adequacy` and
         `fluency` 1 to 5, `corrected`, optional `error_tags`. Writing sample (core check): `text`,
         60 to 250 words.
       additionalProperties: true
@@ -3728,7 +3729,7 @@ components:
         title: { type: string }
         skill_kind: { type: string, enum: [language, domain, task_type, core] }
         skill_value: { type: string }
-        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        task_type: { type: string, enum: [classification, pairwise, rating, translation_review] }
         pass_threshold: { type: number }
         instructions_md: { type: string }
         question_count: { type: integer }
@@ -3752,7 +3753,7 @@ components:
         status: { type: string, enum: [in_progress, scored, approved, rejected] }
         test_id: { type: string, format: uuid }
         title: { type: string }
-        task_type: { type: string, enum: [classification, pairwise, translation_review] }
+        task_type: { type: string, enum: [classification, pairwise, rating, translation_review] }
         config: { $ref: "#/components/schemas/TaskConfig" }
         instructions_md: { type: string }
         pass_threshold: { type: number }
@@ -3765,7 +3766,7 @@ components:
               id: { type: string, format: uuid }
               position: { type: integer }
               content: { type: object, description: Item content in the task template's import shape }
-              task_type: { type: string, enum: [classification, pairwise, translation_review, writing], description: "The question's own type (the core check mixes them)" }
+              task_type: { type: string, enum: [classification, pairwise, rating, translation_review, writing], description: "The question's own type (the core check mixes them)" }
               config: { $ref: "#/components/schemas/TaskConfig" }
         answers: { type: object, additionalProperties: { $ref: "#/components/schemas/Answer" } }
         score: { type: [number, "null"], description: "Share correct, after submission" }
@@ -3860,7 +3861,7 @@ components:
         created_at: { type: string, format: date-time }
     TaskType:
       type: string
-      enum: [classification, pairwise, translation_review]
+      enum: [classification, pairwise, rating, translation_review]
     TaskTemplate:
       type: object
       required: [task_type, name, version, content_fields, item_columns, gold_columns]
@@ -3876,7 +3877,7 @@ components:
       enum: [draft, ready, live, paused, closed]
     ProjectConfig:
       type: object
-      description: "classification: labels (2 to 50), multi_label. pairwise: criteria (1 to 8 keys), scale [1, 5]. translation_review: error_tags (optional)."
+      description: "classification: labels (2 to 50), multi_label. pairwise and rating: criteria (1 to 8 keys), scale [1, 5]. translation_review: error_tags (optional)."
       properties:
         labels: { type: array, items: { type: string } }
         multi_label: { type: boolean }
@@ -3914,7 +3915,7 @@ components:
         pay_per_task_cents: { type: integer, format: int64, minimum: 0, description: KES cents per approved task }
         target_count: { type: [integer, "null"], minimum: 1 }
         deadline: { type: [string, "null"], format: date }
-        min_rationale_chars: { type: integer, minimum: 0, maximum: 2000, description: Pairwise only }
+        min_rationale_chars: { type: integer, minimum: 0, maximum: 2000, description: Pairwise and rating only }
         skills: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ProjectSkill" } }
     ProjectStaff:
       type: object
@@ -4005,7 +4006,7 @@ components:
       required: [title, task_type, brief_md, contact_name, contact_email]
       properties:
         title: { type: string, maxLength: 200 }
-        task_type: { type: string, enum: [classification, pairwise, translation_review, other] }
+        task_type: { type: string, enum: [classification, pairwise, rating, translation_review, other] }
         brief_md: { type: string, maxLength: 20000 }
         languages: { type: array, maxItems: 20, items: { type: string } }
         volume_estimate: { type: [integer, "null"], minimum: 1 }
@@ -4020,7 +4021,7 @@ components:
         org_id: { type: string, format: uuid }
         org_name: { type: string }
         title: { type: string }
-        task_type: { type: string, enum: [classification, pairwise, translation_review, other] }
+        task_type: { type: string, enum: [classification, pairwise, rating, translation_review, other] }
         brief_md: { type: string }
         languages: { type: array, items: { type: string } }
         volume_estimate: { type: [integer, "null"] }

@@ -218,12 +218,14 @@ func (s *Service) GetReviewItem(ctx context.Context, p *auth.Principal, itemID u
 }
 
 // consensusComplete reports whether a consensus result is a usable final
-// answer (no majority leaves the label, preference or corrected text empty).
+// answer (no majority leaves the label, preference or corrected text empty;
+// a rating result is complete once it has scores).
 func consensusComplete(taskType string, result []byte) bool {
 	var r struct {
-		Labels     []string `json:"labels"`
-		Preference string   `json:"preference"`
-		Corrected  string   `json:"corrected"`
+		Labels     []string           `json:"labels"`
+		Preference string             `json:"preference"`
+		Corrected  string             `json:"corrected"`
+		Scores     map[string]float64 `json:"scores"`
 	}
 	if json.Unmarshal(result, &r) != nil {
 		return false
@@ -233,6 +235,8 @@ func consensusComplete(taskType string, result []byte) bool {
 		return len(r.Labels) > 0
 	case quality.Pairwise:
 		return r.Preference != ""
+	case quality.Rating:
+		return len(r.Scores) > 0
 	case quality.TranslationReview:
 		return strings.TrimSpace(r.Corrected) != ""
 	}
