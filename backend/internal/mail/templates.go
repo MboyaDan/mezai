@@ -97,7 +97,7 @@ Message:
 {{.Message}}
 
 Reference: {{.ID}}
-It is saved in the enquiries inbox with status "new".
+Reply to the enquirer from this inbox. {{.Brand}} keeps the enquiry with status "new".
 `,
 	},
 	// To the ops inbox when a contributor is paused automatically (brief 8.4).

@@ -66,6 +66,23 @@ After changing a Render variable choose **Save, rebuild and deploy**. Sessions s
 
 Staging holds the seed's sample data for the pilot demo. Reset it by restoring a backup taken right after seeding, or (Stage 20) remove it before real users join.
 
+## Running the pilot demo
+
+The brief's demo script (section 18) runs in a browser against the live site:
+
+```sh
+cd backend && scripts/staging.sh demo            # all steps on https://mezai.vercel.app
+scripts/staging.sh demo -g "[234]\. "             # some steps only
+scripts/staging.sh demo --headed                  # watch it
+```
+
+It needs Docker (for psql) and `SEED_PASSWORD` in `backend/.env.staging`. Each run makes a new organisation, project and contributor, all marked "(Sample)", and leaves them on staging so you can open them afterwards. Screenshots go to `docs/screenshots/stage-19e/`.
+
+- The contact form takes **5 enquiries an hour** from one connection, and each staff account **10 sign-ins in 15 minutes**. One run uses 1 enquiry and 5 Ops sign-ins; the runner waits if a limit is reached.
+- Mail to `.invalid` sample addresses is not sent (D-159), so the runner confirms its new contributor's email with a one-time token it writes to the database. In a live sales demo, sign up with a real inbox instead.
+- The runner sets `trust.min_gold_results` to 5 on staging (audited) so the automatic pause shows with a 10-item gold set. Production keeps 20.
+- `contributor004` is the careless one and ends **paused**. The next run reinstates them first.
+
 ## Something is wrong
 
 1. `/healthz` fails: the API is down. Render → **Logs**, look for `config` errors or panics; roll back if a deploy caused it.

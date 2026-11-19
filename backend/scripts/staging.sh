@@ -10,6 +10,10 @@
 #   scripts/staging.sh backup         pg_dump the public schema to $BACKUP_DIR
 #   scripts/staging.sh restore-test   restore the newest backup into a throwaway
 #                                     PostgreSQL and compare row counts
+#   scripts/staging.sh demo [args]    run the pilot demo script (brief 18) in a
+#                                     browser against DEMO_BASE_URL (default
+#                                     https://mezai.vercel.app); args go to
+#                                     Playwright, e.g. -g "[234]\. " or --headed
 #
 # Never point this file at production: production migrations are run by hand
 # with the command in the PR notes (CLAUDE.md section 2).
@@ -118,5 +122,14 @@ case ${1:-} in
       exit 1
     fi
     ;;
-  *) sed -n '2,14p' "$0"; exit 1 ;;
+  demo)
+    shift
+    [[ ${#SEED_PASSWORD} -ge 16 ]] || { echo "set SEED_PASSWORD (the staging seed's) in $ENV_FILE"; exit 1; }
+    # The runner signs in as the seeded staff and contributors and uses psql
+    # (in Docker) for its few database steps (frontend/tests/demo/db.ts).
+    cd ../frontend
+    DEMO_BASE_URL=${DEMO_BASE_URL:-https://mezai.vercel.app} DEMO_DB_URL=$DOCKER_DB_URL PG_IMAGE=$PG_IMAGE \
+      SEED_PASSWORD=$SEED_PASSWORD npx playwright test -c playwright.demo.config.ts "$@"
+    ;;
+  *) sed -n '2,18p' "$0"; exit 1 ;;
 esac
