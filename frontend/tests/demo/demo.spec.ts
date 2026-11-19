@@ -1,11 +1,20 @@
 import { expect, request as pwRequest, test, type APIRequestContext, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { demoGold, demoItems, goldJsonl, jsonl, type Pair } from "./content";
-import { contributorId, contributorState, enquiry, useDemoTrustSetting, verificationPath } from "./db";
+import {
+  batchReconciliation,
+  contributorId,
+  contributorState,
+  enquiry,
+  invitationPath,
+  reviewCounts,
+  useDemoTrustSetting,
+  verificationPath,
+} from "./db";
 
 // The pilot demo script (brief section 18), run against a deployed site:
 //   cd backend && scripts/staging.sh demo
-// Steps 1 to 4 (Stage 19e). Everything it creates is marked (Sample) and stays
+// Steps 1 to 4 (Stage 19e), 5 to 7 (Stage 19f). Everything it creates is marked (Sample) and stays
 // on staging, so a presenter can open it afterwards. Each run uses fresh names.
 
 const base = process.env.DEMO_BASE_URL ?? "http://localhost:3000";
@@ -32,6 +41,8 @@ const careful = [
   "contributor005@sample.invalid",
 ];
 const careless = "contributor004@sample.invalid";
+const clientAdmin = { email: `demo.client.${run}@sample.invalid`, password: "a demo client passphrase" };
+const careless_rationale = "did not read the other one closely";
 
 let projectId = "";
 
@@ -427,7 +438,7 @@ test("4. Contributors work the project; a careless one is paused automatically",
       rationale:
         pick === p.better
           ? "The chosen answer is practical, correct and safe; the other is unhelpful or risky."
-          : "The chosen answer is shorter and I did not read the other one closely enough.",
+          : `The chosen answer is shorter and I ${careless_rationale} enough.`,
     };
   };
 
@@ -473,4 +484,198 @@ test("4. Contributors work the project; a careless one is paused automatically",
   await expect(page.getByText(/below the floor/).first()).toBeVisible();
   await shot(page, "4-ops-paused");
   await signOut(page);
+});
+
+// ---------------------------------------------------------------- step 5
+
+test("5. Disagreements reach review; a reviewer decides one and sends feedback", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(600_000);
+  expect(projectId, "step 2 made the project").not.toBe("");
+  // Ops gives the project a reviewer.
+  await signIn(page, "ops@sample.invalid");
+  await expect(page).toHaveURL(/\/w$/, { timeout: 60_000 });
+  await page.goto(`/w/projects/${projectId}`);
+  await page.getByLabel("Add a reviewer").selectOption({ label: "Sample Reviewer" });
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remove Sample Reviewer" })).toBeVisible();
+  await signOut(page);
+
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const rv = await ctx.newPage();
+  await signIn(rv, "reviewer@sample.invalid");
+  await expect(rv).toHaveURL(/\/w$/, { timeout: 60_000 });
+  await rv.goto(`/w/review?project=${projectId}`);
+  const open = rv.getByRole("link", { name: /^Review item/ });
+  await expect(open.first()).toBeVisible({ timeout: 60_000 });
+  console.log(`demo: ${await open.count()} items waiting for review`);
+  await shot(rv, "5-review-queue");
+
+  await open.first().click();
+  await expect(rv.getByRole("heading", { name: /^Answers \(\d\)$/ })).toBeVisible();
+  const cards = rv.getByRole("listitem").filter({ has: rv.getByText(/^Answer \d/) });
+  const weak = cards.filter({ hasText: careless_rationale });
+  const sound = cards.filter({ hasNotText: careless_rationale });
+  const nWeak = await weak.count();
+  expect(nWeak, "the item has a careless answer").toBeGreaterThan(0);
+  await sound.first().getByLabel("Use as the final answer").check();
+  for (let i = 0; i < nWeak; i++) {
+    const c = weak.nth(i);
+    await c.getByLabel("Do not accept this answer").check();
+    await c
+      .getByLabel("Reason for the contributor")
+      .fill("You chose the weaker answer: it is unsafe or unhelpful. Read both answers in full.");
+    await c
+      .getByLabel("Feedback")
+      .fill("Compare both answers against the rubric before choosing; the guidelines show examples.");
+  }
+  await shot(rv, "5-review-item");
+  const before = rv.url();
+  await rv.getByRole("button", { name: "Record decision" }).click();
+  await expect(rv).not.toHaveURL(before, { timeout: 30_000 });
+  await ctx.close();
+
+  const counts = reviewCounts(projectId);
+  expect(counts.reviews).toBeGreaterThan(0);
+  expect(counts.feedback).toBeGreaterThan(0);
+});
+
+// ---------------------------------------------------------------- step 6
+
+test("6. The client signs in, sees progress and quality, and downloads the delivery", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(600_000);
+  expect(projectId, "step 2 made the project").not.toBe("");
+  // Ops invites the client, refreshes agreement, exports and publishes.
+  await signIn(page, "ops@sample.invalid");
+  await expect(page).toHaveURL(/\/w$/, { timeout: 60_000 });
+  await page.goto("/w/organisations");
+  const invite = page.getByRole("region", { name: "Invite a client user" });
+  await invite.getByLabel("Work email").fill(clientAdmin.email);
+  await invite.getByLabel("Organisation").selectOption({ label: orgName });
+  await invite.getByLabel("Role").selectOption("client_admin");
+  await invite.getByRole("button", { name: "Send invitation" }).click();
+  await expect(invite.getByRole("row").filter({ hasText: clientAdmin.email })).toBeVisible();
+
+  await page.goto(`/w/projects/${projectId}`);
+  await page.getByRole("button", { name: "Recalculate agreement" }).click();
+  await page.waitForTimeout(2000);
+  await page.getByRole("navigation", { name: "Project" }).getByRole("link", { name: "Deliverables" }).click();
+  await page.getByRole("button", { name: "Export final items" }).click();
+  await expect(page.getByRole("heading", { name: /^Version \d+$/ }).first()).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Publish to client" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByText("Published", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  await signOut(page);
+
+  // The client accepts the invitation and signs in.
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const cl = await ctx.newPage();
+  await cl.goto(invitationPath(clientAdmin.email));
+  await cl.getByLabel("Your name").filter({ visible: true }).fill("Sample Client Buyer");
+  await cl.getByLabel("Password").filter({ visible: true }).fill(clientAdmin.password);
+  await cl.getByRole("button", { name: "Create account" }).click();
+  await expect(cl.getByRole("heading", { name: "Your account is ready" })).toBeVisible({ timeout: 30_000 });
+  await signIn(cl, clientAdmin.email, clientAdmin.password);
+  await expect(cl).toHaveURL(/\/w$/, { timeout: 60_000 });
+  await shot(cl, "6-client-home");
+
+  await cl.goto(`/w/projects/${projectId}`);
+  await expect(cl.getByRole("heading", { name: "Progress and quality" })).toBeVisible();
+  await expect(cl.getByText("Gold accuracy").first()).toBeVisible();
+  await expect(cl.getByText("Agreement").first()).toBeVisible();
+  await shot(cl, "6-client-project");
+
+  await cl.goto(`/w/projects/${projectId}/deliverables`);
+  const manifestFile = cl.waitForEvent("download");
+  await cl.getByRole("button", { name: "Download Manifest (JSON)" }).first().click();
+  const manifest = JSON.parse(readFileSync(await (await manifestFile).path(), "utf8"));
+  expect(manifest.schema).toBe("mezai.delivery-manifest");
+  expect(manifest.items.delivered).toBeGreaterThan(0);
+  const answers = cl.waitForEvent("download");
+  await cl
+    .getByRole("button", { name: /^Download Answers \(JSONL\)$/ })
+    .first()
+    .click();
+  const lines = readFileSync(await (await answers).path(), "utf8")
+    .trim()
+    .split("\n");
+  expect(lines.length).toBe(manifest.items.delivered);
+  console.log(
+    `demo: delivered ${manifest.items.delivered} items; manifest keys ${Object.keys(manifest).join(", ")}`,
+  );
+  await shot(cl, "6-client-deliverables");
+  await ctx.close();
+});
+
+// ---------------------------------------------------------------- step 7
+
+test("7. Ops pays what is due; a second person approves; balances update", async ({ page, browser }) => {
+  test.setTimeout(600_000);
+  await signIn(page, "ops@sample.invalid");
+  await expect(page).toHaveURL(/\/w$/, { timeout: 60_000 });
+  await page.goto("/w/payouts");
+  // A batch covers whole days up to yesterday (Nairobi): today's approvals
+  // are paid in the next batch.
+  const yesterday = new Date(Date.now() + 3 * 3_600_000 - 86_400_000).toISOString().slice(0, 10);
+  await page.getByLabel("Period ends on").fill(yesterday);
+  await page.getByRole("button", { name: "Preview" }).click();
+  const toPay = page.getByRole("table", { name: "Contributors in this batch" });
+  const nothing = page.getByText("Nobody is due a payout for this period");
+  const refused = page.getByText(/already covers this day|must end before today/).first();
+  await expect(toPay.or(nothing).or(refused).first()).toBeVisible({ timeout: 60_000 });
+  if (!(await toPay.isVisible())) {
+    await shot(page, "7-payouts-nothing-due");
+    test.skip(
+      true,
+      `nothing to pay up to ${yesterday}: ${await page.locator("main").innerText()}`.slice(0, 300),
+    );
+  }
+  await shot(page, "7-payout-preview");
+  await page.getByRole("button", { name: "Create draft batch" }).click();
+  await expect(page).toHaveURL(/\/w\/payouts\/[0-9a-f-]{36}$/);
+  const batchId = page.url().split("/").pop()!;
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  await expect(page.getByText("You prepared this batch, so another person")).toBeVisible();
+
+  // The two-person rule: the approver is someone else.
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const ap = await ctx.newPage();
+  await signIn(ap, "approver@sample.invalid");
+  await expect(ap).toHaveURL(/\/w$/, { timeout: 60_000 });
+  await ap.goto(`/w/payouts/${batchId}`);
+  await expect(ap.getByRole("heading", { name: "Your approval is needed" })).toBeVisible();
+  await shot(ap, "7-payout-approval");
+  await ap.getByRole("button", { name: "Approve batch" }).click();
+  await expect(ap.getByRole("heading", { name: "Approved" })).toBeVisible();
+  await ctx.close();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Export payment file" }).click();
+  await expect(page.getByRole("heading", { name: "Pay in M-Pesa, then record each result" })).toBeVisible();
+  const batch = await (await page.request.get(`/api/v1/payouts/batches/${batchId}`)).json();
+  const file = await page.request.get(`/api/v1/payouts/batches/${batchId}/file`);
+  const rows = (await file.text()).trim().split("\r\n");
+  expect(rows).toHaveLength(batch.line_count + 1);
+
+  // Sample receipts: every line recorded paid.
+  const lines = page.getByRole("table", { name: "Lines in this batch" });
+  for (const [i, l] of (batch.lines as Array<{ public_code: string }>).entries()) {
+    await lines.getByRole("button", { name: `Record result for ${l.public_code}` }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("M-Pesa receipt").fill(`DEMO${run.toUpperCase().slice(-5)}${i}`.slice(0, 12));
+    await dialog.getByRole("button", { name: "Record paid" }).click();
+    await expect(lines.getByRole("row", { name: new RegExp(l.public_code) })).toContainText("DEMO");
+  }
+  await expect(page.getByText(/^Settled on /)).toBeVisible();
+  await shot(page, "7-payout-settled");
+
+  const r = batchReconciliation(batchId);
+  expect(r.pending).toBe(0);
+  expect(r.paid).toBe(batch.total_cents);
+  expect(r.ledger, "the ledger holds a payout entry for every paid line").toBe(-r.paid);
 });

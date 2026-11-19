@@ -108,3 +108,49 @@ export function contributorState(email: string) {
   const [status, score, gold] = (row ?? "").split("\t");
   return { status, score: score === "" ? null : Number(score), gold: Number(gold ?? 0) };
 }
+
+/**
+ * Like verificationPath, for an invitation Ops just sent to a .invalid
+ * address: the pending invitation gets a fresh token, and the link path is
+ * returned.
+ */
+export function invitationPath(email: string): string {
+  const token = randomBytes(32).toString("base64url");
+  const hash = createHash("sha256").update(token).digest("hex");
+  const rows = sql(
+    `UPDATE invitations SET token_hash = decode(:'hash', 'hex')
+     WHERE email = :'email' AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+     RETURNING id;`,
+    { hash, email },
+  );
+  if (rows.length !== 1) throw new Error(`no pending invitation for ${email}`);
+  return `/accept-invitation?token=${token}`;
+}
+
+/** Review decisions and reviewer feedback on a project. */
+export function reviewCounts(projectId: string) {
+  const [row] = sql(
+    `SELECT (SELECT count(*) FROM reviews WHERE project_id = :'p'),
+            (SELECT count(*) FROM feedback WHERE project_id = :'p' AND author_user_id IS NOT NULL)`,
+    { p: projectId },
+  );
+  const [reviews, feedback] = row.split("\t").map(Number);
+  return { reviews, feedback };
+}
+
+/**
+ * Reconciliation for a settled batch: what the paid lines total, and what
+ * the ledger's payout entries for them total (negative).
+ */
+export function batchReconciliation(batchId: string) {
+  const [row] = sql(
+    `SELECT coalesce(sum(l.amount_cents) FILTER (WHERE l.status = 'paid'), 0),
+            coalesce((SELECT sum(e.amount_cents) FROM earnings_ledger e JOIN payout_lines pl ON pl.id = e.payout_line_id
+                      WHERE pl.batch_id = :'b' AND e.entry_type = 'payout'), 0),
+            count(*) FILTER (WHERE l.status = 'pending')
+     FROM payout_lines l WHERE l.batch_id = :'b';`,
+    { b: batchId },
+  );
+  const [paid, ledger, pending] = row.split("\t").map(Number);
+  return { paid, ledger, pending };
+}
