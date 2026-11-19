@@ -162,3 +162,34 @@ func TestMoneyAndChoices(t *testing.T) {
 		t.Error("payout and qualification emails cannot be switched off")
 	}
 }
+
+// D-159: with SkipTestDomains, mail to reserved test domains never reaches
+// the sender; it is marked failed at once, with its data cleared.
+func TestWorkerSkipsTestDomains(t *testing.T) {
+	pool, _ := dbtest.New(t)
+	enqueue(t, pool, "a@sample.invalid")
+	enqueue(t, pool, "real@sample-client.co.ke")
+	f := &fakeSender{}
+	w := &mail.Worker{Pool: pool, Sender: f, Log: slog.New(slog.DiscardHandler), SkipTestDomains: true}
+	ctx := context.Background()
+	if n, err := w.SendDue(ctx); err != nil || n != 1 || len(f.sent) != 1 || !strings.HasPrefix(f.sent[0], "real@") {
+		t.Fatalf("sent %d (%v): %v", n, err, f.sent)
+	}
+	var status, lastErr, data string
+	_ = pool.QueryRow(ctx, `SELECT status, last_error, data::text FROM email_outbox WHERE to_address = 'a@sample.invalid'`).Scan(&status, &lastErr, &data)
+	if status != "failed" || lastErr != mail.SkippedTestDomain || data != "{}" {
+		t.Fatalf("test address: %s %q %s", status, lastErr, data)
+	}
+}
+
+func TestTestAddress(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"ops@sample.invalid": true, "a@x.test": true, "a@example.com": true, "a@mail.example.org": true,
+		"a@localhost": true, "A@SAMPLE.INVALID.": true, "a@invalid": true,
+		"a@gmail.com": false, "a@example.co.ke": false, "a@notexample.com": false, "a@testing.io": false, "no-at-sign": false,
+	} {
+		if got := mail.TestAddress(addr); got != want {
+			t.Errorf("%s: %v", addr, got)
+		}
+	}
+}

@@ -225,6 +225,7 @@ Send me: which of 1 to 6 passed, the two IPs from 5, and any error text from Ren
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | Brevo SMTP login and key | **yes** | |
 | `MAIL_FROM` | `MezAI Staging <verified sender>` | no | |
 | `ENQUIRY_NOTIFY_TO` | ops inbox | no | |
+| `MAIL_SKIP_TEST_DOMAINS` | `true` | no | `render.yaml`; mail to `.invalid`, `.test`, `.example` and `example.com` is marked failed, not sent (D-159). `false` in production once sample data is gone |
 | `TURNSTILE_SECRET_KEY` | unset | yes | DG-07 |
 | `MPESA_ENV` | `off` | no | DG-02 not cleared; never `fake` outside development |
 
