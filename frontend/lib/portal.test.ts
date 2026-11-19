@@ -100,6 +100,19 @@ describe("agreement figures", () => {
       ["Other", "percent"],
     ]);
   });
+  it("prefers Krippendorff's alpha for rubric criteria (D-163)", () => {
+    const scored = {
+      agreement: [
+        fig("fluency", "percent", 0.6),
+        fig("fluency", "within_one", 0.95),
+        fig("fluency", "krippendorff_alpha", 0.72),
+        fig("fluency", "mean_abs_diff", 0.4),
+      ],
+    } as ProjectQuality;
+    expect(labelAgreement(scored).map((f) => [f.label, f.statistic])).toEqual([
+      ["fluency", "krippendorff_alpha"],
+    ]);
+  });
 });
 
 describe("activityText", () => {

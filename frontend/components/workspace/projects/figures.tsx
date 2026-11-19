@@ -173,7 +173,11 @@ export function ProjectFigures() {
           {labels.length > 0 && (
             <Card className="p-5">
               <BarChart
-                title="Agreement by label"
+                title={
+                  labels[0].statistic === "krippendorff_alpha"
+                    ? "Agreement by criterion"
+                    : "Agreement by label"
+                }
                 note={`${statisticName[labels[0].statistic]} where there is one, otherwise percent agreement. Last 30 days.`}
                 data={labels.map((f) => ({ label: f.label!, value: f.value }))}
                 max={1}
