@@ -43,6 +43,9 @@ export default function TrustPage() {
             {handling.title}
           </SectionTitle>
           <Points items={handling.points} />
+          <TextLink href={handling.link.href} className="mt-8 inline-block">
+            {handling.link.label}
+          </TextLink>
         </Container>
       </section>
 

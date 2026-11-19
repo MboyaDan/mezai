@@ -103,6 +103,7 @@ export const qualityPage = {
       "Contributor count, as IDs only",
       "A checksum for every file",
     ],
+    link: { label: "Download a full sample delivery", href: "/proof" },
   },
   security: {
     id: "security",

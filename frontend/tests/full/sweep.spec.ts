@@ -21,6 +21,7 @@ const publicRoutes = [
   "/contributors",
   "/about",
   "/trust",
+  "/proof",
   "/case-studies",
   "/contact",
   "/legal/privacy",

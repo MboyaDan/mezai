@@ -26,6 +26,7 @@ const footer = [
       ...nav.slice(0, 2),
       { href: "/industries", label: "Industries" },
       { href: "/trust", label: "Trust and data" },
+      { href: "/proof", label: "Sample delivery" },
       { href: "/contact", label: "Start a pilot" },
       ...(brand.bookingUrl ? [{ href: brand.bookingUrl, label: "Book a call" }] : []),
     ],
