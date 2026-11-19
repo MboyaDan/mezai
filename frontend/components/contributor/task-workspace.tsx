@@ -25,6 +25,7 @@ import {
   submitKey,
   timeLeft,
 } from "@/lib/tasks";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { checkList } from "./work";
 
@@ -49,7 +50,11 @@ function storage(): Storage | null {
 /** /c/work/[projectId]: one task at a time, keyboard first (DESIGN.md section 11). */
 export function TaskWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
-  const project = useLoad(() => api<WorkProject>("GET", `/v1/me/projects/${projectId}`), projectId);
+  const project = useLoad(
+    () => api<WorkProject>("GET", `/v1/me/projects/${projectId}`),
+    projectId,
+    usePreloaded<WorkProject>(`/v1/me/projects/${projectId}`),
+  );
   const [phase, setPhase] = useState<Phase>({ k: "loading" });
   const [done, setDone] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);

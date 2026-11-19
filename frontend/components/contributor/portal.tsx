@@ -6,7 +6,7 @@ import { AccountMenu, initialsOf } from "@/components/shells/account-menu";
 import { ContributorShell, type ContributorNavItem } from "@/components/shells/contributor-shell";
 import { Alert, Skeleton } from "@/components/ui/display";
 import { Button } from "@/components/ui/button";
-import { api, type ContributorProfile } from "@/lib/api/client";
+import { api, type ContributorProfile, type Me } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
 import { RequireSession, SessionProvider, useUser } from "@/lib/session";
 import { useLoad } from "@/lib/use-load";
@@ -45,9 +45,13 @@ function PageSkeleton() {
   );
 }
 
-function Portal({ children }: { children: ReactNode }) {
+function Portal({ children, initial }: { children: ReactNode; initial?: ContributorProfile | null }) {
   const user = useUser();
-  const profile = useLoad(() => api<ContributorProfile>("GET", "/v1/me/contributor"));
+  const profile = useLoad(
+    () => api<ContributorProfile>("GET", "/v1/me/contributor"),
+    "",
+    initial ?? undefined,
+  );
   const initials = initialsOf(user.display_name);
   return (
     <ContributorShell
@@ -83,12 +87,27 @@ function Portal({ children }: { children: ReactNode }) {
 // Hooks that read the URL (usePathname) need a Suspense boundary under Cache Components.
 const blank = <div className="min-h-dvh bg-bg" aria-busy="true" />;
 
-export function ContributorPortal({ children }: { children: ReactNode }) {
+/**
+ * The contributor surface. `me` and `profile` are what the server already
+ * read (D-165); without them (no cookie, API slow or asleep) the browser
+ * loads them as before.
+ */
+export function ContributorPortal({
+  children,
+  me,
+  profile,
+}: {
+  children: ReactNode;
+  me?: Me | null;
+  profile?: ContributorProfile | null;
+}) {
+  // Only a contributor's own profile is used; any other kind is sent home by RequireSession.
+  const own = me?.user.kind === "contributor" ? profile : null;
   return (
-    <SessionProvider>
+    <SessionProvider initial={me}>
       <Suspense fallback={blank}>
         <RequireSession kinds={["contributor"]} fallback={blank}>
-          <Portal>{children}</Portal>
+          <Portal initial={own}>{children}</Portal>
         </RequireSession>
       </Suspense>
     </SessionProvider>
