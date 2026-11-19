@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
+	"github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
 
@@ -255,6 +256,14 @@ func (s *Service) DecideIdentity(ctx context.Context, p *auth.Principal, id uuid
 			After: map[string]string{"identity_status": status}}); err != nil {
 			return err
 		}
+		// Tell the contributor when the decision changes (D-158); each
+		// decision is its own email, so a second rejection is sent too.
+		if status != cp.IdentityStatus {
+			if err := notify(ctx, q, id, mail.TemplateIdentityDecision, uuid.NewString(),
+				map[string]string{"Decision": status, "Note": note}); err != nil {
+				return err
+			}
+		}
 		if status == IdentityVerified && cp.Status == StatusQualifying {
 			return activateIfQualified(ctx, q, m, id, &p.UserID, "Identity verified")
 		}
@@ -285,7 +294,18 @@ func activateIfQualified(ctx context.Context, q *store.Queries, m auth.Meta, id 
 	if done, err := hasApprovedCore(ctx, q, id); err != nil || !done {
 		return err
 	}
-	return transition(ctx, q, m, id, StatusQualifying, StatusActive, ViaApproval, by, reason)
+	if err := transition(ctx, q, m, id, StatusQualifying, StatusActive, ViaApproval, by, reason); err != nil {
+		return err
+	}
+	// Activation happens once, so the contributor ID is the key (D-158).
+	return notify(ctx, q, id, mail.TemplateActivated, id.String(), nil)
+}
+
+// notify emails a contributor about a screening step (D-158), inside the
+// caller's transaction. key makes it go out once.
+func notify(ctx context.Context, q *store.Queries, id uuid.UUID, template, key string, data map[string]string) error {
+	_, err := mail.Notify(ctx, q, mail.Notice{Contributor: &id, Template: template, Key: key, Data: data})
+	return err
 }
 
 // RecordMpesaNameCheck records that Ops saw the name M-Pesa shows for the

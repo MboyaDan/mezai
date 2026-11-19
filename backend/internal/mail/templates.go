@@ -17,6 +17,8 @@ const (
 	TemplateEnquiry        = "enquiry_received"
 	TemplateProjectRequest = "project_request_received"
 	TemplateTrustPause     = "trust_pause"
+	// To the owner when someone signs up with their address (D-158).
+	TemplateAccountExists = "account_exists"
 )
 
 // Plain text (D-141): readable in every client and on a basic phone. Render
@@ -45,6 +47,23 @@ Someone asked to reset the password for your {{.Brand}} account. To choose a new
 {{.Link}}
 
 The link works once and expires in 1 hour. If you did not ask for this, ignore this email; your password has not changed.
+`,
+	},
+	TemplateAccountExists: {
+		subject: "You already have a {{.Brand}} account",
+		action:  "Sign in",
+		body: `Hello {{.Name}},
+
+Someone tried to create a new {{.Brand}} account with this email address. You already have one, so nothing was created.
+
+If it was you, sign in instead:
+
+{{.Link}}
+
+Forgotten your password? Choose a new one here:
+{{.ResetLink}}
+
+If it was not you, ignore this email. Your account has not changed.
 `,
 	},
 	TemplateInvitation: {
@@ -176,6 +195,78 @@ Your earnings statement shows this payout and your balance:
 {{.Origin}}/c/earnings
 
 If the money has not arrived, reply to the operations team with the receipt above.
+`,
+	},
+	// Screening steps (Stage 19d, D-158). Notes are what Ops typed for the
+	// contributor to read; interview notes stay internal and are never sent.
+	TemplateScreeningDecision: {
+		subject: `{{if eq .Decision "shortlisted"}}Your application is shortlisted{{else if eq .Decision "waitlisted"}}Your application is on our waiting list{{else}}About your application{{end}}`,
+		action:  "Open your dashboard",
+		body: `Hello {{.Name}},
+
+{{if eq .Decision "shortlisted"}}Good news: your application to contribute to {{.Brand}} is shortlisted.
+
+The next steps are the core check on your tests page, a short phone interview on the number on your profile, and an identity check. Your dashboard shows which are still open.
+{{- else if eq .Decision "waitlisted"}}Thank you for applying to contribute to {{.Brand}}. We have more applicants than work for your skills at the moment, so your application is on our waiting list.
+
+You do not need to do anything. We will email you if this changes.
+{{- else}}Thank you for applying to contribute to {{.Brand}}. We are not taking your application further.
+{{- end}}
+{{- if .Note}}
+
+Note from the operations team:
+{{.Note}}
+{{- end}}
+{{- if eq .Decision "declined"}}
+
+If you uploaded a CV, it has been deleted.
+{{- end}}
+
+{{.Origin}}/c
+`,
+	},
+	TemplateInterviewResult: {
+		subject: `{{if eq .Outcome "passed"}}You passed your interview{{else if eq .Outcome "failed"}}Your interview result{{else}}We could not reach you by phone{{end}}`,
+		action:  "Open your dashboard",
+		body: `Hello {{.Name}},
+
+{{if eq .Outcome "passed"}}You passed your {{.Brand}} phone interview. Your dashboard shows any steps still open.
+{{- else if eq .Outcome "failed"}}Thank you for taking the time to speak with us. You did not pass the phone interview this time. You can be interviewed again after {{.RetryDays}} days.
+{{- else}}We phoned you for your {{.Brand}} interview but could not reach you. We will try again. Check that the phone number on your profile is right.
+{{- end}}
+
+{{.Origin}}/c
+`,
+	},
+	TemplateIdentityDecision: {
+		subject: `{{if eq .Decision "verified"}}Your identity is verified{{else}}We could not verify your identity{{end}}`,
+		action:  "Open your profile",
+		body: `Hello {{.Name}},
+
+{{if eq .Decision "verified"}}Your identity check for {{.Brand}} is complete. Your dashboard shows any steps still open.
+{{- else}}We could not verify your identity for {{.Brand}}.
+
+Reason from the operations team:
+{{.Note}}
+
+Correct the details on your profile and we will check them again.
+{{- end}}
+
+{{.Origin}}/c/profile
+`,
+	},
+	TemplateActivated: {
+		subject: "You can start tasks on {{.Brand}}",
+		action:  "See your tasks",
+		body: `Hello {{.Name}},
+
+Every step is complete: you are now an active {{.Brand}} contributor.
+
+Projects that match your skills appear on your tasks page. Read each project's brief before you start; your first tasks help you learn the guidelines.
+
+{{.Origin}}/c/work
+
+Your trust score and earnings appear on your dashboard as your work is reviewed.
 `,
 	},
 }

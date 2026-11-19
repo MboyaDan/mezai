@@ -182,6 +182,44 @@ func TestScreeningFunnel(t *testing.T) {
 		t.Fatalf("contributor records an interview: %d", w.Code)
 	}
 
+	// D-158: each decision is emailed; a decline carries Ops' note, the
+	// interviewer's notes never leave the API.
+	mails := func(id, tpl string) []string {
+		var out []string
+		e.staff(func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `SELECT o.data::text FROM email_outbox o JOIN contributor_profiles cp ON o.user_id = cp.user_id
+				WHERE cp.id = $1 AND o.template = $2 ORDER BY o.created_at, o.id`, id, tpl)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var s string
+				if err := rows.Scan(&s); err != nil {
+					return err
+				}
+				out = append(out, s)
+			}
+			return rows.Err()
+		})
+		return out
+	}
+	if m := mails(aID, "screening_decision"); len(m) != 2 || !strings.Contains(m[0], `"waitlisted"`) ||
+		!strings.Contains(m[1], `"declined"`) || !strings.Contains(m[1], note) {
+		t.Fatalf("applicant a decision emails: %v", m)
+	}
+	if m := mails(bID, "screening_decision"); len(m) != 1 || !strings.Contains(m[0], `"shortlisted"`) {
+		t.Fatalf("applicant b decision emails: %v", m)
+	}
+	if m := mails(bID, "interview_result"); len(m) != 2 || !strings.Contains(m[0], `"no_answer"`) ||
+		!strings.Contains(m[1], `"failed"`) || !strings.Contains(m[1], `"RetryDays": "30"`) {
+		t.Fatalf("interview emails: %v", m)
+	}
+	// The same decision again sends nothing new.
+	e.do(http.MethodPost, "/v1/contributors/"+bID+"/screening", map[string]string{"decision": "shortlist"}, ops, nil)
+	if m := mails(bID, "screening_decision"); len(m) != 1 {
+		t.Fatalf("repeated decision emailed again: %d", len(m))
+	}
+
 	// Ops can list the screening queue.
 	w = e.do(http.MethodGet, "/v1/contributors?screening=shortlisted", nil, ops, nil)
 	if !strings.Contains(w.Body.String(), bID) || strings.Contains(w.Body.String(), aID) {

@@ -143,6 +143,17 @@ func TestContributorOnboarding(t *testing.T) {
 	if existing.Code != http.StatusAccepted {
 		t.Fatalf("existing email: %d %s", existing.Code, existing.Body)
 	}
+	// The owner is told by email (D-158), once a day however often it happens.
+	e.do(http.MethodPost, "/v1/contributors/signup", map[string]any{
+		"email": "Contributor001@sample.invalid", "display_name": "X", "password": pw, "consents": currentConsents,
+	}, nil, nil)
+	if n := e.count(`SELECT count(*) FROM email_outbox WHERE template = 'account_exists' AND to_address = 'contributor001@sample.invalid'
+		AND data->>'Link' LIKE '%/login' AND data->>'ResetLink' LIKE '%/forgot-password'`); n != 1 {
+		t.Fatalf("account exists emails: %d", n)
+	}
+	if n := e.count(`SELECT count(*) FROM users WHERE email = 'contributor001@sample.invalid'`); n != 1 {
+		t.Fatal("a second sign-up created an account")
+	}
 
 	w := e.do(http.MethodPost, "/v1/contributors/signup", map[string]any{
 		"email": newEmail, "display_name": "Sample Applicant", "password": pw, "consents": currentConsents,
@@ -319,6 +330,16 @@ func TestContributorOnboarding(t *testing.T) {
 	decode(t, w, &p)
 	if p.Status != "active" {
 		t.Fatalf("after approval, verification and interview: %s", w.Body)
+	}
+	// D-158: one email for each step, and one when the contributor is active.
+	for tpl, want := range map[string]int{"identity_decision": 1, "interview_result": 1, "contributor_activated": 1} {
+		if n := e.count(`SELECT count(*) FROM email_outbox o JOIN contributor_profiles cp ON o.user_id = cp.user_id
+			WHERE cp.id = $1 AND o.template = $2`, p.ID, tpl); n != want {
+			t.Fatalf("%s emails: %d, want %d", tpl, n, want)
+		}
+	}
+	if n := e.count(`SELECT count(*) FROM email_outbox WHERE dedupe_key = 'contributor_activated:' || $1::text`, p.ID); n != 1 {
+		t.Fatal("activation email key")
 	}
 	if n := e.count(`SELECT count(*) FROM contributor_status_history WHERE contributor_id = $1`, p.ID); n != 3 {
 		t.Fatalf("status history rows (applied, qualifying, active): %d", n)

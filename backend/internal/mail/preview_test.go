@@ -18,7 +18,10 @@ func TestPreview(t *testing.T) {
 		TemplateEnquiry: {"Name": "Sample Person", "Organisation": "Sample Client Ltd (Sample)", "Email": "person@sample.invalid",
 			"ProjectType": "African language data", "Languages": "Kiswahili, Dholuo", "Volume": "1,000 to 10,000 items",
 			"Timeline": "In one to three months", "Message": "We would like to label customer messages.", "ID": "01a1f03d-sample"},
-		TemplatePayoutSent: {"Name": "Sample Contributor 014", "Amount": "KES 1,250.00", "Receipt": "SAMPLE0001", "Date": "18 Nov 2026", "PhoneEnd": "000"},
+		TemplatePayoutSent:        {"Name": "Sample Contributor 014", "Amount": "KES 1,250.00", "Receipt": "SAMPLE0001", "Date": "18 Nov 2026", "PhoneEnd": "000"},
+		TemplateActivated:         {"Name": "Sample Contributor 014"},
+		TemplateScreeningDecision: {"Name": "Sample Contributor 014", "Decision": "shortlisted", "Note": ""},
+		TemplateAccountExists:     {"Name": "Sample Contributor 014", "Link": origin + "/login", "ResetLink": origin + "/forgot-password"},
 	}
 	for name, data := range samples {
 		data["Origin"] = origin
