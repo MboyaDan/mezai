@@ -115,7 +115,7 @@ func TestRatingExport(t *testing.T) {
 	}
 	// Consensus: mean scores, no rationale. Reviewer: whole scores and a rationale.
 	for raw, want := range map[string][]string{
-		`{"scores":{"helpful":4.5,"accurate":3}}`:                      {"4.5", "3", ""},
+		`{"scores":{"helpful":4.5,"accurate":3}}`:                       {"4.5", "3", ""},
 		`{"scores":{"helpful":2},"rationale":"Reviewer's final view."}`: {"2", "", "Reviewer's final view."},
 	} {
 		got, err := ExportValues(Rating, cfg, []byte(raw))
