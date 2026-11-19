@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Container } from "@/components/public/layout";
 import { PageHeader, titleText } from "@/components/public/page-header";
 import { EnquiryForm } from "@/components/contact/enquiry-form";
+import { ButtonLink } from "@/components/ui/button";
 import { TextLink } from "@/components/ui/text-link";
 import { contactPage } from "@/content/contact";
 import { brand } from "@/lib/brand";
@@ -45,6 +46,27 @@ export default function ContactPage() {
                   </li>
                 ))}
               </ol>
+            </div>
+
+            {/* A booking link from docs/content/ (D-161); hidden while empty. */}
+            {brand.bookingUrl && (
+              <div className="border-t border-border pt-5">
+                <h2 className="font-display text-xl font-medium">Rather talk first?</h2>
+                <p className="mt-1 text-fg-muted">Book a 20-minute call at a time that suits you.</p>
+                <ButtonLink href={brand.bookingUrl} variant="secondary" className="mt-3">
+                  Book a 20-minute call
+                </ButtonLink>
+              </div>
+            )}
+
+            <div className="border-t border-border pt-5">
+              <h2 className="font-display text-xl font-medium">Your data</h2>
+              <p className="mt-1 text-fg-muted">
+                How we keep client data apart, who can see it and when it is deleted.
+              </p>
+              <TextLink href="/trust" className="mt-2 inline-block">
+                Trust and data
+              </TextLink>
             </div>
 
             {/* Contact details come from docs/content/ (Q2); hidden while empty. */}

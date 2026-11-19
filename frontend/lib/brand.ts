@@ -7,6 +7,8 @@ export const brand = {
   city: "Nairobi",
   domain: "", // Q5: default domains until DG-01
   contactEmail: "", // Q2: comes from docs/content/ when provided
+  // A 20-minute call booking page (Google Calendar or Cal.com). Empty: hidden.
+  bookingUrl: "",
 } as const;
 
 export type Brand = typeof brand;

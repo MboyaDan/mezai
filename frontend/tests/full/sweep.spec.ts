@@ -20,6 +20,7 @@ const publicRoutes = [
   "/industries",
   "/contributors",
   "/about",
+  "/trust",
   "/case-studies",
   "/contact",
   "/legal/privacy",
