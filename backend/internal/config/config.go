@@ -58,6 +58,8 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	MailFrom     string
+	// MailSkipTestDomains holds back mail to reserved test domains (D-159).
+	MailSkipTestDomains bool
 
 	// EnquiryNotifyTo receives a copy of every project enquiry from the
 	// public site. Required outside development and test.
@@ -186,6 +188,10 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 	c.S3UsePathStyle, err = strconv.ParseBool(get("S3_USE_PATH_STYLE", "true"))
 	if err != nil {
 		errs = append(errs, fmt.Errorf("S3_USE_PATH_STYLE: %w", err))
+	}
+	c.MailSkipTestDomains, err = strconv.ParseBool(get("MAIL_SKIP_TEST_DOMAINS", "false"))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("MAIL_SKIP_TEST_DOMAINS: %w", err))
 	}
 	c.CookieSecure, err = strconv.ParseBool(get("COOKIE_SECURE", "true"))
 	if err != nil {

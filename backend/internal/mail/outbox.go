@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/MboyaDan/mezai/backend/internal/pii"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -35,6 +36,34 @@ type Worker struct {
 	Log    *slog.Logger
 	// Origin is the site's address; notification links are paths under it.
 	Origin string
+	// SkipTestDomains marks mail to reserved test domains (TestAddress) as
+	// failed without sending it (MAIL_SKIP_TEST_DOMAINS, staging, D-159).
+	SkipTestDomains bool
+}
+
+// SkippedTestDomain is the error stored for mail that SkipTestDomains held back.
+const SkippedTestDomain = "not sent: test address (MAIL_SKIP_TEST_DOMAINS)"
+
+// TestAddress reports whether an address is on a domain reserved for tests
+// (RFC 2606 and 6761): .invalid, .test, .example, .localhost and the
+// example.com/net/org domains. Mail there can never be delivered.
+func TestAddress(addr string) bool {
+	at := strings.LastIndexByte(addr, '@')
+	if at < 0 {
+		return false
+	}
+	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(addr[at+1:])), ".")
+	for _, tld := range []string{"invalid", "test", "example", "localhost"} {
+		if d == tld || strings.HasSuffix(d, "."+tld) {
+			return true
+		}
+	}
+	for _, dom := range []string{"example.com", "example.net", "example.org"} {
+		if d == dom || strings.HasSuffix(d, "."+dom) {
+			return true
+		}
+	}
+	return false
 }
 
 // Run polls the outbox until ctx ends.
@@ -67,6 +96,11 @@ func (w *Worker) SendDue(ctx context.Context) (int, error) {
 			}
 			more = true
 			m := rows[0]
+			if w.SkipTestDomains && TestAddress(m.ToAddress) {
+				return q.MarkEmailFailed(ctx, store.MarkEmailFailedParams{
+					ID: m.ID, LastError: truncate(SkippedTestDomain, 500), MaxAttempts: 1,
+				})
+			}
 			var data map[string]string
 			sendErr := json.Unmarshal(m.Data, &data)
 			if data != nil {

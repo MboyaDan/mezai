@@ -47,6 +47,9 @@ services:
         value: "true"
       - key: MPESA_ENV
         value: "off"
+      # Sample accounts use .invalid addresses: never hand them to Brevo (D-159).
+      - key: MAIL_SKIP_TEST_DOMAINS
+        value: "true"
       # The Vercel site's address, e.g. https://mezai.vercel.app
       - key: APP_ORIGIN
         sync: false
