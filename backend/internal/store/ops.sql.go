@@ -204,7 +204,8 @@ SELECT
        AND NOT EXISTS (SELECT 1 FROM interviews iv WHERE iv.contributor_id = cp.id AND iv.outcome = 'passed'))::int AS interviews,
   (SELECT count(*) FROM contributor_profiles
      WHERE identity_status = 'pending' AND national_id_last3 IS NOT NULL AND status <> 'removed')::int AS identity_checks,
-  (SELECT count(*) FROM project_requests WHERE status = 'submitted')::int AS project_requests
+  (SELECT count(*) FROM project_requests WHERE status = 'submitted')::int AS project_requests,
+  (SELECT count(*) FROM enquiries WHERE status = 'new')::int AS new_enquiries
 `
 
 type OpsQueuesRow struct {
@@ -215,6 +216,7 @@ type OpsQueuesRow struct {
 	Interviews      int32
 	IdentityChecks  int32
 	ProjectRequests int32
+	NewEnquiries    int32
 }
 
 // Ops overview (Stage 13b, brief 6.3: projects, queues, contributor health
@@ -231,6 +233,7 @@ func (q *Queries) OpsQueues(ctx context.Context) (OpsQueuesRow, error) {
 		&i.Interviews,
 		&i.IdentityChecks,
 		&i.ProjectRequests,
+		&i.NewEnquiries,
 	)
 	return i, err
 }

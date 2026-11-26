@@ -43,6 +43,7 @@ type Queues struct {
 	Interviews      int32      `json:"interviews"`
 	IdentityChecks  int32      `json:"identity_checks"`
 	ProjectRequests int32      `json:"project_requests"`
+	NewEnquiries    int32      `json:"new_enquiries"`
 }
 
 // OpsProject is one open project on the overview.
@@ -121,7 +122,7 @@ func (s *Service) GetOpsOverview(ctx context.Context, p *auth.Principal) (OpsOve
 		}
 		out.Queues = Queues{Review: qs.Review, Reports: qs.Reports, Attempts: qs.Attempts,
 			Applications: qs.Applications, Interviews: qs.Interviews, IdentityChecks: qs.IdentityChecks,
-			ProjectRequests: qs.ProjectRequests}
+			ProjectRequests: qs.ProjectRequests, NewEnquiries: qs.NewEnquiries}
 		oldest, err := q.OpsOldestReview(ctx)
 		if err != nil {
 			return err
