@@ -52,8 +52,8 @@ func TestHTMLEscapesPublicInput(t *testing.T) {
 	r, err := Render(TemplateEnquiry, map[string]string{
 		"Origin": "https://site.example", "Name": `<b>Eve</b>`, "Organisation": `"Acme" & Co`,
 		"Email": "eve@example.com", "ProjectType": "x", "Languages": "x", "Volume": "x", "Timeline": "x",
-		"Message": "<script>alert(1)</script>\nPay here: https://evil.example/login\n\nhttps://evil.example/button\nhttps://site.example/w/enquiries",
-		"ID":      "id",
+		"Message": "<script>alert(1)</script>\nPay here: https://evil.example/login\n\nhttps://evil.example/button\nhttps://site.example/w/enquiries\n\nhttps://site.example/lookalike",
+		"ID":      "id", "Link": "https://site.example/w/enquiries/id",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,15 @@ func TestHTMLEscapesPublicInput(t *testing.T) {
 			t.Errorf("HTML lacks %q", want)
 		}
 	}
-	if strings.Contains(h, "background:#c8f031") {
+	// The one button is the inbox link; nothing the public typed becomes one,
+	// even a bare link to our own site in its own paragraph.
+	if n := strings.Count(h, "background:#c8f031"); n != 1 {
+		t.Errorf("want one button, got %d", n)
+	}
+	if !strings.Contains(h, `<a href="https://site.example/w/enquiries/id" style="display:inline-block;background:#c8f031`) {
+		t.Error("the button must be the inbox link")
+	}
+	if strings.Contains(h, `<a href="https://site.example/lookalike" style="display:inline-block`) {
 		t.Error("an address typed by the public must never become a button")
 	}
 }
@@ -78,7 +86,7 @@ func TestMessageIsMultipartAlternative(t *testing.T) {
 	long := strings.Repeat("word ", 400) // one 2,000-character line
 	r, err := Render(TemplateEnquiry, map[string]string{
 		"Origin": "https://site.example", "Name": "Ann", "Organisation": "Org", "Email": "a@example.com",
-		"ProjectType": "x", "Languages": "Kiswahili", "Volume": "x", "Timeline": "x", "Message": long, "ID": "id",
+		"ProjectType": "x", "Languages": "Kiswahili", "Volume": "x", "Timeline": "x", "Message": long, "ID": "id", "Link": "https://site.example/w/enquiries/id",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -129,5 +137,19 @@ func TestMessageTextOnlyWithoutHTML(t *testing.T) {
 	raw := string(message(from, to, Rendered{Subject: "s", Body: "hello\n"}))
 	if !strings.Contains(raw, "Content-Type: text/plain; charset=utf-8") || strings.Contains(raw, "multipart") {
 		t.Fatal(raw)
+	}
+}
+
+// Enquiry emails queued before the inbox existed carry no link; they still send.
+func TestEnquiryWithoutLinkStillRenders(t *testing.T) {
+	r, err := Render(TemplateEnquiry, map[string]string{
+		"Origin": "https://site.example", "Name": "Ann", "Organisation": "Org", "Email": "a@example.com",
+		"ProjectType": "x", "Languages": "x", "Volume": "x", "Timeline": "x", "Message": "x", "ID": "id",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(r.Body, "no value") || strings.Contains(r.HTML, "background:#c8f031") {
+		t.Errorf("no link, no button:\n%s", r.Body)
 	}
 }

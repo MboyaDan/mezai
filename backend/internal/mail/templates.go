@@ -83,7 +83,13 @@ The invitation expires in 7 days.
 	// To the ops inbox (ENQUIRY_NOTIFY_TO). Reply goes to the enquirer by hand.
 	TemplateEnquiry: {
 		subject: "New project enquiry: {{.Organisation}}",
-		body: `A project enquiry arrived through the {{.Brand}} website.
+		action:  "Open the enquiry",
+		// The inbox link comes before anything the public typed, so it is
+		// always the button (html.go buttons the first link paragraph).
+		// index, not .Link: emails queued before Stage 24 have no link.
+		body: `A project enquiry arrived through the {{.Brand}} website. Assign it and keep notes on the conversation in the workspace:
+
+{{index . "Link"}}
 
 Name:          {{.Name}}
 Organisation:  {{.Organisation}}
@@ -96,8 +102,7 @@ Timeline:      {{.Timeline}}
 Message:
 {{.Message}}
 
-Reference: {{.ID}}
-Reply to the enquirer from this inbox. {{.Brand}} keeps the enquiry with status "new".
+Reply to the enquirer from this inbox. Reference: {{.ID}}
 `,
 	},
 	// To the ops inbox when a contributor is paused automatically (brief 8.4).
