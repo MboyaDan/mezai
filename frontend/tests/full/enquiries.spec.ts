@@ -79,7 +79,9 @@ test("Enquiries inbox: assign, note, close and reopen", async ({ page, request }
   );
   await axe(page, "enquiry new");
 
-  await page.getByRole("combobox", { name: /^Assigned to/ }).selectOption({ label: "Sample Super Admin (you)" });
+  await page
+    .getByRole("combobox", { name: /^Assigned to/ })
+    .selectOption({ label: "Sample Super Admin (you)" });
   await expect(page.getByRole("button", { name: "Start conversation" })).toBeVisible();
   await page.getByRole("button", { name: "Start conversation" }).click();
   await expect(page.getByRole("button", { name: "Mark won" })).toBeVisible();

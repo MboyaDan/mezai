@@ -176,7 +176,9 @@ test("2. Ops sets up the organisation and a pairwise project with gold", async (
     await page.goto("/w/enquiries?status=new");
     await page.getByRole("link", { name: orgName }).click();
     await expect(page.getByRole("heading", { level: 1, name: orgName })).toBeVisible();
-    await page.getByRole("combobox", { name: /^Assigned to/ }).selectOption({ label: "Sample Ops Manager (you)" });
+    await page
+      .getByRole("combobox", { name: /^Assigned to/ })
+      .selectOption({ label: "Sample Ops Manager (you)" });
     await expect(page.getByText("Assigned", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Start conversation" }).click();
     await expect(page.getByText("In conversation", { exact: true }).first()).toBeVisible();
