@@ -64,6 +64,7 @@ const roles: Role[] = [
       "/w/review",
       "/w/reports",
       "/w/requests",
+      "/w/enquiries",
       "/w/organisations",
       "/w/payouts",
       "/w/payouts/reconciliation",
@@ -82,6 +83,7 @@ const roles: Role[] = [
         : []),
       ...(ids.contributor ? [`/w/contributors/${ids.contributor}`] : []),
       ...(ids.request ? [`/w/requests/${ids.request}`] : []),
+      ...(ids.enquiry ? [`/w/enquiries/${ids.enquiry}`] : []),
       ...(ids.review ? [`/w/review/${ids.review}`] : []),
       ...(ids.batch ? [`/w/payouts/${ids.batch}`] : []),
     ],
@@ -117,6 +119,7 @@ async function idsFor(page: Page, role: string): Promise<Ids> {
       project: ((await get("/v1/projects?status=")).projects ?? [])[0]?.id,
       contributor: ((await get("/v1/contributors")).contributors ?? [])[0]?.id,
       request: ((await get("/v1/project-requests")).requests ?? [])[0]?.id,
+      enquiry: ((await get("/v1/enquiries?status=all")).enquiries ?? [])[0]?.id,
       review: ((await get("/v1/review/items")).items ?? [])[0]?.item_id,
       batch: ((await get("/v1/payouts/batches")).batches ?? [])[0]?.id,
     };

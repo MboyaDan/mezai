@@ -481,13 +481,55 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    get?: never;
+    /**
+     * The Ops enquiries inbox, newest first, at most 200 (`enquiry.manage`, staff only).
+     * @description Without `status`, lists open enquiries (new, assigned, in conversation). `counts` always covers every enquiry by status.
+     */
+    get: operations["listEnquiries"];
     put?: never;
     /**
      * Submit a project enquiry from the public contact form.
      * @description Saved with status `new`, emailed to the ops inbox (ENQUIRY_NOTIFY_TO) and audited without personal details. A filled honeypot (`website`) gets the same 202 and stores nothing. Limits: 5 an hour per IP, 3 a day per email address. When TURNSTILE_SECRET_KEY is set (DG-07), `turnstile_token` is required and checked with Cloudflare; if the check cannot run, the request fails closed with 503. Cross-origin requests are refused.
      */
     post: operations["createEnquiry"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/enquiries/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** One enquiry with its notes, allowed moves and the people it can be assigned to (`enquiry.manage`). */
+    get: operations["getEnquiry"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Move, assign or link an enquiry (`enquiry.manage`). Send the whole state.
+     * @description States follow brief 9: new to assigned, lost or spam; assigned to new (unassigned), in conversation, lost or spam; in conversation to won, lost or spam; lost back to in conversation; spam back to new; won is final. Choosing someone for a new enquiry assigns it. Assigned and in conversation need an assignee who holds `enquiry.manage`; only a won enquiry links an active organisation. A different `expected_status` from the stored one answers 409 `enquiry_changed`. Audited with status and IDs only.
+     */
+    patch: operations["updateEnquiry"];
+    trace?: never;
+  };
+  "/v1/enquiries/{id}/notes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Add an internal note (`enquiry.manage`). Notes are never edited, emailed or shown outside the inbox. */
+    post: operations["addEnquiryNote"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2558,6 +2600,52 @@ export interface components {
       scope: "platform" | "org";
       permissions: string[];
     };
+    /** @enum {string} */
+    EnquiryStatus: "new" | "assigned" | "in_conversation" | "won" | "lost" | "spam";
+    EnquirySummary: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      organisation: string;
+      email: string;
+      /** @description Key from the contact form (frontend/content/contact.ts). */
+      project_type: string;
+      volume: string;
+      timeline: string;
+      status: components["schemas"]["EnquiryStatus"];
+      /** Format: uuid */
+      assigned_to: string | null;
+      assigned_name: string | null;
+      note_count: number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    EnquiryNote: {
+      /** Format: uuid */
+      id: string;
+      body: string;
+      /** Format: uuid */
+      author_id: string;
+      author_name: string;
+      /** Format: date-time */
+      created_at: string;
+    };
+    EnquiryDetail: components["schemas"]["EnquirySummary"] & {
+      languages: string;
+      message: string;
+      /** Format: uuid */
+      org_id: string | null;
+      org_name: string | null;
+      moves: components["schemas"]["EnquiryStatus"][];
+      notes: components["schemas"]["EnquiryNote"][];
+      assignees: {
+        /** Format: uuid */
+        id: string;
+        name: string;
+      }[];
+    };
     EnquiryRequest: {
       name: string;
       organisation: string;
@@ -3661,6 +3749,8 @@ export interface components {
         identity_checks: number;
         /** @description Client project requests not yet converted or declined. */
         project_requests: number;
+        /** @description Enquiries from the contact form nobody has assigned yet (status new). */
+        new_enquiries: number;
       };
       /** @description Every project that is not closed, at-risk first, then by deadline. */
       projects: {
@@ -4920,6 +5010,37 @@ export interface operations {
       500: components["responses"]["Error"];
     };
   };
+  listEnquiries: {
+    parameters: {
+      query?: {
+        status?: "all" | "new" | "assigned" | "in_conversation" | "won" | "lost" | "spam";
+        /** @description `me` lists only enquiries assigned to the caller. */
+        assigned?: "me";
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Enquiries */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            enquiries: components["schemas"]["EnquirySummary"][];
+            counts: {
+              [key: string]: number;
+            };
+          };
+        };
+      };
+      403: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
   createEnquiry: {
     parameters: {
       query?: never;
@@ -4965,6 +5086,104 @@ export interface operations {
       429: components["responses"]["TooMany"];
       500: components["responses"]["Error"];
       503: components["responses"]["Error"];
+    };
+  };
+  getEnquiry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Enquiry */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnquiryDetail"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+    };
+  };
+  updateEnquiry: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          expected_status: components["schemas"]["EnquiryStatus"];
+          status: components["schemas"]["EnquiryStatus"];
+          /** Format: uuid */
+          assigned_to?: string | null;
+          /** Format: uuid */
+          org_id?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description The enquiry after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnquiryDetail"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      409: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
+    };
+  };
+  addEnquiryNote: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          body: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EnquiryNote"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      422: components["responses"]["InvalidField"];
     };
   };
   contributorSignUp: {

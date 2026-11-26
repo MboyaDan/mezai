@@ -82,7 +82,8 @@ func (s *seeder) run() error {
 	if err != nil {
 		return err
 	}
-	if _, err := s.user("ops@sample.invalid", "Sample Ops Manager", "ops_manager", nil); err != nil {
+	ops, err := s.user("ops@sample.invalid", "Sample Ops Manager", "ops_manager", nil)
+	if err != nil {
 		return err
 	}
 	if _, err := s.user("approver@sample.invalid", "Sample Payout Approver", "payout_approver", nil); err != nil {
@@ -149,7 +150,40 @@ func (s *seeder) run() error {
 			return fmt.Errorf("project %q: %w", p.name, err)
 		}
 	}
+	if err := s.enquiries(ops); err != nil {
+		return err
+	}
 	return s.qualificationTests(labels, rubric, trRubric)
+}
+
+// enquiries adds sample project enquiries for the Ops inbox: two new, one in
+// conversation with Sample Ops Manager and a note.
+func (s *seeder) enquiries(ops uuid.UUID) error {
+	for i, e := range []store.CreateEnquiryParams{
+		{Name: "Sample Buyer One", OrganisationName: "Sample Model Lab (Sample)", Email: "buyer.one@sample.invalid",
+			ProjectType: "ai-evaluation", Languages: "Kiswahili, English", VolumeRange: "1k-10k", Timeline: "1-3-month",
+			Message: "We would like to compare two versions of a support assistant. (Sample)"},
+		{Name: "Sample Buyer Two", OrganisationName: "Sample Telco Research (Sample)", Email: "buyer.two@sample.invalid",
+			ProjectType: "african-language-data", Languages: "Kiswahili", VolumeRange: "not-sure", Timeline: "exploring",
+			Message: "Exploring options for a classification project. (Sample)"},
+		{Name: "Sample Buyer Three", OrganisationName: "Sample Health Study (Sample)", Email: "buyer.three@sample.invalid",
+			ProjectType: "expert-review", VolumeRange: "under-1k", Timeline: "1-month"},
+	} {
+		row, err := s.q.CreateEnquiry(s.ctx, e)
+		if err != nil {
+			return err
+		}
+		if i == 2 {
+			if err := s.q.UpdateEnquiry(s.ctx, store.UpdateEnquiryParams{ID: row.ID, Status: "in_conversation", AssignedTo: &ops}); err != nil {
+				return err
+			}
+			if _, err := s.q.AddEnquiryNote(s.ctx, store.AddEnquiryNoteParams{EnquiryID: row.ID, AuthorUserID: ops,
+				Body: "Call booked to talk through the review rubric. (Sample)"}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *seeder) user(email, name, role string, org *uuid.UUID) (uuid.UUID, error) {

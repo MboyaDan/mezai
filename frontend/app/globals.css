@@ -76,6 +76,7 @@
   --accent-fg: var(--color-lime-ink);
   --serif-accent: var(--color-laterite-ink);
   --danger-fg: var(--color-danger);
+  --warning-fg: var(--color-warning);
   --focus: var(--color-lime-ink);
   --inverse-bg: var(--color-charcoal-950);
   --inverse-fg: var(--color-ivory);
@@ -110,6 +111,8 @@
   --serif-accent: var(--color-ivory);
   /* #B3261E is 2.9:1 on charcoal; this red is 5.1:1 or better on every dark surface. */
   --danger-fg: #e5735f;
+  /* #976000 is too dark on charcoal for small text; this amber passes AA on dark surfaces. */
+  --warning-fg: #e0a548;
   --focus: var(--color-lime);
   --inverse-bg: var(--color-ivory);
   --inverse-fg: var(--color-charcoal-950);
@@ -136,6 +139,7 @@
   --color-accent-fg: var(--accent-fg);
   --color-serif-accent: var(--serif-accent);
   --color-danger-fg: var(--danger-fg);
+  --color-warning-fg: var(--warning-fg);
   --color-focus: var(--focus);
   --color-inverse-bg: var(--inverse-bg);
   --color-inverse-fg: var(--inverse-fg);

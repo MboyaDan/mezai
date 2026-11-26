@@ -15,6 +15,10 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
 )
 
+// testEnquiries counts enquiries a test sent, leaving out the seed's samples
+// (buyer.one, buyer.two and buyer.three @sample.invalid).
+const testEnquiries = `SELECT count(*) FROM enquiries WHERE email NOT LIKE 'buyer.%@sample.invalid'`
+
 func validEnquiry(email string) map[string]string {
 	return map[string]string{
 		"name": "Sample Buyer", "organisation": "Sample Lab (Sample)", "email": email,
@@ -64,7 +68,8 @@ func TestEnquirySavedEmailedAndAudited(t *testing.T) {
 	})
 	var d map[string]string
 	_ = json.Unmarshal(data, &d)
-	if d["ID"] != id || d["ProjectType"] != "AI evaluation and RLHF" || d["Volume"] != "1,000 to 10,000 items" {
+	if d["ID"] != id || d["ProjectType"] != "AI evaluation and RLHF" || d["Volume"] != "1,000 to 10,000 items" ||
+		d["Link"] != origin+"/w/enquiries/"+id {
 		t.Fatalf("ops email data: %v", d)
 	}
 
@@ -105,7 +110,7 @@ func TestEnquiryValidation(t *testing.T) {
 	if w := e.do(http.MethodPost, "/v1/enquiries", named, nil, nil); w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("display-name addresses are refused: %d", w.Code)
 	}
-	if n := e.count(`SELECT count(*) FROM enquiries`); n != 0 {
+	if n := e.count(testEnquiries); n != 0 {
 		t.Fatalf("invalid enquiries are never stored, got %d", n)
 	}
 }
@@ -115,7 +120,7 @@ func TestEnquiryHoneypotAndLimits(t *testing.T) {
 	trap := validEnquiry("bot@sample.invalid")
 	trap["website"] = "http://spam.invalid"
 	w := e.do(http.MethodPost, "/v1/enquiries", trap, nil, nil)
-	if w.Code != http.StatusAccepted || e.count(`SELECT count(*) FROM enquiries`) != 0 || e.count(`SELECT count(*) FROM email_outbox WHERE template = 'enquiry_received'`) != 0 {
+	if w.Code != http.StatusAccepted || e.count(testEnquiries) != 0 || e.count(`SELECT count(*) FROM email_outbox WHERE template = 'enquiry_received'`) != 0 {
 		t.Fatalf("honeypot must look accepted and store nothing: %d", w.Code)
 	}
 
@@ -131,7 +136,7 @@ func TestEnquiryHoneypotAndLimits(t *testing.T) {
 	if w := e.do(http.MethodPost, "/v1/enquiries", validEnquiry("other@sample.invalid"), nil, nil); w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" {
 		t.Fatalf("sixth from one IP: %d", w.Code)
 	}
-	if n := e.count(`SELECT count(*) FROM enquiries`); n != 3 {
+	if n := e.count(testEnquiries); n != 3 {
 		t.Fatalf("stored %d", n)
 	}
 }

@@ -52,7 +52,7 @@ test("Ops overview: queues, projects and contributor health", async ({ page }) =
   await expect(queues.getByRole("link", { name: /Applications to screen/ })).toContainText(
     String(o.queues.applications),
   );
-  await expect(queues.getByRole("listitem")).toHaveCount(7);
+  await expect(queues.getByRole("listitem")).toHaveCount(8);
 
   const projects = page.locator('section[aria-labelledby="ops-projects-h"]');
   if (o.projects.length > 0) {

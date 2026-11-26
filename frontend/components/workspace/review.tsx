@@ -238,7 +238,7 @@ function SubmissionHead({ s, index }: { s: ReviewSubmission; index: number }) {
 function Warnings({ s }: { s: ReviewSubmission }) {
   if (!s.warnings?.length) return null;
   return (
-    <ul className="grid gap-1 text-sm text-warning">
+    <ul className="grid gap-1 text-sm text-warning-fg">
       {s.warnings.map((w, i) => (
         <li key={i}>QA warning: {w.message}</li>
       ))}

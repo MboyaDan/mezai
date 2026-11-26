@@ -15,7 +15,8 @@ SELECT
        AND NOT EXISTS (SELECT 1 FROM interviews iv WHERE iv.contributor_id = cp.id AND iv.outcome = 'passed'))::int AS interviews,
   (SELECT count(*) FROM contributor_profiles
      WHERE identity_status = 'pending' AND national_id_last3 IS NOT NULL AND status <> 'removed')::int AS identity_checks,
-  (SELECT count(*) FROM project_requests WHERE status = 'submitted')::int AS project_requests;
+  (SELECT count(*) FROM project_requests WHERE status = 'submitted')::int AS project_requests,
+  (SELECT count(*) FROM enquiries WHERE status = 'new')::int AS new_enquiries;
 
 -- name: OpsOldestReview :many
 -- The item waiting longest for review (none or one row).

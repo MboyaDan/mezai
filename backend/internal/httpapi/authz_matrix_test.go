@@ -53,6 +53,10 @@ var expectedAccess = map[string]string{
 	"PUT /v1/roles/:key/permissions":       "role.manage",
 	"GET /v1/stats":                        "public",
 	"POST /v1/enquiries":                   "public",
+	"GET /v1/enquiries":                    "enquiry.manage",
+	"GET /v1/enquiries/:id":                "enquiry.manage",
+	"PATCH /v1/enquiries/:id":              "enquiry.manage",
+	"POST /v1/enquiries/:id/notes":         "enquiry.manage",
 
 	"POST /v1/contributors/signup":                        "public",
 	"GET /v1/me/contributor":                              "profile.manage",

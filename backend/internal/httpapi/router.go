@@ -14,6 +14,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/db"
 	"github.com/MboyaDan/mezai/backend/internal/delivery"
 	"github.com/MboyaDan/mezai/backend/internal/earnings"
+	"github.com/MboyaDan/mezai/backend/internal/enquiries"
 	"github.com/MboyaDan/mezai/backend/internal/payouts"
 	"github.com/MboyaDan/mezai/backend/internal/portal"
 	"github.com/MboyaDan/mezai/backend/internal/privacy"
@@ -143,8 +144,14 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/stats", Public(), listStats(d.Auth.Pool, d.Log))
 
 		// Public project enquiries: honeypot, per-IP and per-address limits, Turnstile when configured.
-		eh := &enquiryHandlers{pool: d.Auth.Pool, log: d.Log, deps: d.Auth.Enquiry, perEmail: newLimiter(3, 24*time.Hour)}
+		eh := &enquiryHandlers{pool: d.Auth.Pool, log: d.Log, deps: d.Auth.Enquiry, perEmail: newLimiter(3, 24*time.Hour), origin: d.Auth.AppOrigin}
 		a.handle(http.MethodPost, "/enquiries", Public(), rateLimit(newLimiter(5, time.Hour)), eh.create)
+		// The Ops inbox (Stage 24).
+		inbox := &enquiryInbox{svc: enquiries.NewService(d.Auth.Pool), log: d.Log}
+		a.handle(http.MethodGet, "/enquiries", Perm("enquiry.manage"), inbox.list)
+		a.handle(http.MethodGet, "/enquiries/:id", Perm("enquiry.manage"), inbox.get)
+		a.handle(http.MethodPatch, "/enquiries/:id", Perm("enquiry.manage"), inbox.update)
+		a.handle(http.MethodPost, "/enquiries/:id/notes", Perm("enquiry.manage"), inbox.addNote)
 
 		// Contributor onboarding (Stage 7). Sign-up is public and answers the
 		// same way for new and registered emails.

@@ -49,6 +49,7 @@ describe("queueCards", () => {
         "attempts",
         "identity_checks",
         "interviews",
+        "new_enquiries",
         "project_requests",
         "reports",
         "review",
