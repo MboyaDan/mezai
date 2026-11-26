@@ -18,6 +18,7 @@ type opsOverviewResp struct {
 		Interviews      int     `json:"interviews"`
 		IdentityChecks  int     `json:"identity_checks"`
 		ProjectRequests int     `json:"project_requests"`
+		NewEnquiries    int     `json:"new_enquiries"`
 	} `json:"queues"`
 	Projects []struct {
 		ID                 string   `json:"id"`
@@ -97,6 +98,11 @@ func TestOpsOverview(t *testing.T) {
 	e.get(ops, "/v1/project-requests?status=submitted", &requests)
 	var apps struct{ Contributors []struct{ ID string } }
 	e.get(ops, "/v1/contributors?status=qualifying&screening=pending", &apps)
+	var enquiries struct{ Enquiries []struct{ ID string } }
+	e.get(ops, "/v1/enquiries?status=new", &enquiries)
+	if o.Queues.NewEnquiries != len(enquiries.Enquiries) || o.Queues.NewEnquiries < 2 {
+		t.Errorf("new enquiries %d, list %d (the seed has two)", o.Queues.NewEnquiries, len(enquiries.Enquiries))
+	}
 	if o.Queues.Review != len(review.Items) || o.Queues.Review < 4 || o.Queues.OldestReviewAt == nil {
 		t.Errorf("review queue %d (oldest %v), list %d", o.Queues.Review, o.Queues.OldestReviewAt, len(review.Items))
 	}

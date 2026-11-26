@@ -577,6 +577,114 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "500": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+    get:
+      operationId: listEnquiries
+      summary: The Ops enquiries inbox, newest first, at most 200 (`enquiry.manage`, staff only).
+      description: >-
+        Without `status`, lists open enquiries (new, assigned, in conversation). `counts`
+        always covers every enquiry by status.
+      tags: [enquiries]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [all, new, assigned, in_conversation, won, lost, spam] }
+        - name: assigned
+          in: query
+          description: "`me` lists only enquiries assigned to the caller."
+          schema: { type: string, enum: [me] }
+      responses:
+        "200":
+          description: Enquiries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enquiries, counts]
+                properties:
+                  enquiries: { type: array, items: { $ref: "#/components/schemas/EnquirySummary" } }
+                  counts:
+                    type: object
+                    additionalProperties: { type: integer }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/enquiries/{id}:
+    get:
+      operationId: getEnquiry
+      summary: One enquiry with its notes, allowed moves and the people it can be assigned to (`enquiry.manage`).
+      tags: [enquiries]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Enquiry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnquiryDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateEnquiry
+      summary: Move, assign or link an enquiry (`enquiry.manage`). Send the whole state.
+      description: >-
+        States follow brief 9: new to assigned, lost or spam; assigned to new (unassigned),
+        in conversation, lost or spam; in conversation to won, lost or spam; lost back to in
+        conversation; spam back to new; won is final. Choosing someone for a new enquiry
+        assigns it. Assigned and in conversation need an assignee who holds
+        `enquiry.manage`; only a won enquiry links an active organisation. A different
+        `expected_status` from the stored one answers 409 `enquiry_changed`. Audited with
+        status and IDs only.
+      tags: [enquiries]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_status, status]
+              properties:
+                expected_status: { $ref: "#/components/schemas/EnquiryStatus" }
+                status: { $ref: "#/components/schemas/EnquiryStatus" }
+                assigned_to: { type: [string, "null"], format: uuid }
+                org_id: { type: [string, "null"], format: uuid }
+      responses:
+        "200":
+          description: The enquiry after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnquiryDetail" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
+  /v1/enquiries/{id}/notes:
+    post:
+      operationId: addEnquiryNote
+      summary: Add an internal note (`enquiry.manage`). Notes are never edited, emailed or shown outside the inbox.
+      tags: [enquiries]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 5000 }
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnquiryNote" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InvalidField" }
   /v1/contributors/signup:
     post:
       operationId: contributorSignUp
@@ -3040,6 +3148,55 @@ components:
         description: { type: string }
         scope: { type: string, enum: [platform, org] }
         permissions: { type: array, items: { type: string } }
+    EnquiryStatus:
+      type: string
+      enum: [new, assigned, in_conversation, won, lost, spam]
+    EnquirySummary:
+      type: object
+      required: [id, name, organisation, email, project_type, volume, timeline, status, assigned_to, assigned_name, note_count, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        organisation: { type: string }
+        email: { type: string }
+        project_type: { type: string, description: Key from the contact form (frontend/content/contact.ts). }
+        volume: { type: string }
+        timeline: { type: string }
+        status: { $ref: "#/components/schemas/EnquiryStatus" }
+        assigned_to: { type: [string, "null"], format: uuid }
+        assigned_name: { type: [string, "null"] }
+        note_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EnquiryNote:
+      type: object
+      required: [id, body, author_id, author_name, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string }
+        author_id: { type: string, format: uuid }
+        author_name: { type: string }
+        created_at: { type: string, format: date-time }
+    EnquiryDetail:
+      allOf:
+        - $ref: "#/components/schemas/EnquirySummary"
+        - type: object
+          required: [languages, message, org_id, org_name, moves, notes, assignees]
+          properties:
+            languages: { type: string }
+            message: { type: string }
+            org_id: { type: [string, "null"], format: uuid }
+            org_name: { type: [string, "null"] }
+            moves: { type: array, items: { $ref: "#/components/schemas/EnquiryStatus" } }
+            notes: { type: array, items: { $ref: "#/components/schemas/EnquiryNote" } }
+            assignees:
+              type: array
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
     EnquiryRequest:
       type: object
       required: [name, organisation, email, project_type]
@@ -4075,7 +4232,7 @@ components:
         queues:
           type: object
           description: Counts waiting for ELS staff; each matches the list it links to.
-          required: [review, oldest_review_at, reports, attempts, applications, interviews, identity_checks, project_requests]
+          required: [review, oldest_review_at, reports, attempts, applications, interviews, identity_checks, project_requests, new_enquiries]
           properties:
             review: { type: integer, description: Items in review across every project. }
             oldest_review_at: { type: [string, "null"], format: date-time }
@@ -4085,6 +4242,7 @@ components:
             interviews: { type: integer, description: Shortlisted, qualified contributors without a passed interview. }
             identity_checks: { type: integer, description: National ID numbers given and not yet checked. }
             project_requests: { type: integer, description: Client project requests not yet converted or declined. }
+            new_enquiries: { type: integer, description: Enquiries from the contact form nobody has assigned yet (status new). }
         projects:
           type: array
           description: Every project that is not closed, at-risk first, then by deadline.

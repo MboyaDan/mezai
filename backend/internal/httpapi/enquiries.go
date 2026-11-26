@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/enquiries"
 	mailer "github.com/MboyaDan/mezai/backend/internal/mail"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
@@ -123,6 +125,7 @@ type enquiryHandlers struct {
 	log      *slog.Logger
 	deps     EnquiryDeps
 	perEmail *limiter
+	origin   string // the site, for the inbox link in the ops email
 }
 
 // create saves an enquiry, queues the ops email and audits it, in one transaction.
@@ -177,7 +180,7 @@ func (h *enquiryHandlers) create(c *gin.Context) {
 			return s
 		}
 		if err := mailer.Enqueue(ctx, q, h.deps.NotifyTo, mailer.TemplateEnquiry, map[string]string{
-			"ID": row.ID.String(), "Name": req.Name, "Organisation": req.Organisation, "Email": req.Email,
+			"ID": row.ID.String(), "Link": h.origin + "/w/enquiries/" + row.ID.String(), "Name": req.Name, "Organisation": req.Organisation, "Email": req.Email,
 			"ProjectType": enquiryProjectTypes[req.ProjectType], "Languages": orNone(req.Languages),
 			"Volume": enquiryVolumes[req.Volume], "Timeline": enquiryTimelines[req.Timeline], "Message": orNone(req.Message),
 		}); err != nil {
@@ -252,4 +255,80 @@ type turnstileError struct{ status int }
 
 func (e *turnstileError) Error() string {
 	return "turnstile: siteverify returned " + http.StatusText(e.status)
+}
+
+// enquiryInbox is the Ops side: list, read, move, assign, link and note
+// (brief 6.3). Every route needs enquiry.manage; the service also refuses
+// anyone who is not staff.
+type enquiryInbox struct {
+	svc *enquiries.Service
+	log *slog.Logger
+}
+
+func (h *enquiryInbox) fail(c *gin.Context, err error) {
+	var fe *enquiries.FieldError
+	switch {
+	case errors.As(err, &fe):
+		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid_input", "field": fe.Field, "message": fe.Message})
+	case errors.Is(err, enquiries.ErrNotFound):
+		abort(c, http.StatusNotFound, "not_found")
+	case errors.Is(err, enquiries.ErrChanged):
+		abort(c, http.StatusConflict, "enquiry_changed")
+	case errors.Is(err, enquiries.ErrNotStaff):
+		abort(c, http.StatusForbidden, "forbidden")
+	default:
+		h.log.Error("enquiries", slog.String("request_id", RequestIDFrom(c)), slog.Any("error", err))
+		abort(c, http.StatusInternalServerError, "internal_error")
+	}
+}
+
+func (h *enquiryInbox) list(c *gin.Context) {
+	out, err := h.svc.List(c.Request.Context(), PrincipalFrom(c), c.Query("status"), c.Query("assigned") == "me")
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *enquiryInbox) get(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	out, err := h.svc.Get(c.Request.Context(), PrincipalFrom(c), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *enquiryInbox) update(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req enquiries.Change
+	if !ok || !bind(c, &req) {
+		return
+	}
+	if err := h.svc.Update(c.Request.Context(), PrincipalFrom(c), id, req, meta(c)); err != nil {
+		h.fail(c, err)
+		return
+	}
+	h.get(c)
+}
+
+func (h *enquiryInbox) addNote(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	var req struct {
+		Body string `json:"body"`
+	}
+	if !ok || !bind(c, &req) {
+		return
+	}
+	note, err := h.svc.AddNote(c.Request.Context(), PrincipalFrom(c), id, req.Body, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, note)
 }
