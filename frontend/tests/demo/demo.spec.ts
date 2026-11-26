@@ -169,12 +169,41 @@ test("2. Ops sets up the organisation and a pairwise project with gold", async (
   await signIn(page, "ops@sample.invalid");
   await expect(page).toHaveURL(/\/w$/, { timeout: 60_000 });
 
-  // There is no enquiry inbox screen yet; Ops reads the notification email.
+  // Ops sees the enquiry in the inbox (Stage 24), takes it on and talks to
+  // the buyer. Skipped when step 2 runs without step 1 (no enquiry this run).
+  const sent = enquiry(enquirer);
+  if (sent) {
+    await page.goto("/w/enquiries?status=new");
+    await page.getByRole("link", { name: orgName }).click();
+    await expect(page.getByRole("heading", { level: 1, name: orgName })).toBeVisible();
+    await page.getByRole("combobox", { name: /^Assigned to/ }).selectOption({ label: "Sample Ops Manager (you)" });
+    await expect(page.getByText("Assigned", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Start conversation" }).click();
+    await expect(page.getByText("In conversation", { exact: true }).first()).toBeVisible();
+    await page
+      .getByLabel("Add a note")
+      .fill("Pilot agreed: pairwise comparison, three people per item, 10 percent gold.");
+    await page.getByRole("button", { name: "Add note" }).click();
+    await expect(page.getByText("Pilot agreed:")).toBeVisible();
+    await shot(page, "2-enquiry");
+  }
+
   await page.goto("/w/organisations");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill(orgName);
   await page.getByRole("button", { name: "Add organisation" }).click();
   await expect(page.getByText(orgName).first()).toBeVisible();
   await shot(page, "2-organisations");
+
+  if (sent) {
+    // Won, linked to the organisation just created.
+    await page.goto(`/w/enquiries/${sent.id}`);
+    await page.getByRole("button", { name: "Mark won" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Organisation").selectOption({ label: orgName });
+    await dialog.getByRole("button", { name: "Mark won" }).click();
+    await expect(page.getByText(`Won, linked to ${orgName}`)).toBeVisible();
+    expect(enquiry(enquirer)!.status).toBe("won");
+  }
 
   await page.goto("/w/projects/new");
   await page.getByLabel("Client organisation").selectOption({ label: orgName });
