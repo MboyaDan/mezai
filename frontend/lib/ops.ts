@@ -21,6 +21,12 @@ export const queueCards: QueueCard[] = [
     perms: ["project.manage"],
   },
   {
+    key: "new_enquiries",
+    label: "New enquiries to assign",
+    href: "/w/enquiries?status=new",
+    perms: ["enquiry.manage"],
+  },
+  {
     key: "attempts",
     label: "Qualification attempts to decide",
     href: "/w/contributors",
