@@ -2288,6 +2288,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{id}/client-visibility": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Choose which panels the project's client users see (`project.manage`, staff only, D-167). Progress, datasets, deliverables and retention are always shared. Audited when it changes. */
+    put: operations["setClientVisibility"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{id}/imports": {
     parameters: {
       query?: never;
@@ -3564,6 +3581,13 @@ export interface components {
       missing: ("instructions" | "items" | "gold")[];
       config_locked: boolean;
     };
+    /** @description What the project's client users see. Both are true unless Ops turned them off. */
+    ClientVisibility: {
+      /** @description Gold accuracy, agreement and review rate */
+      quality: boolean;
+      /** @description Contributor counts, skills and per-client codes */
+      workforce: boolean;
+    };
     Project: {
       /** Format: uuid */
       id: string;
@@ -3591,6 +3615,7 @@ export interface components {
       created_at: string;
       /** Format: date-time */
       updated_at: string;
+      client_visibility: components["schemas"]["ClientVisibility"];
       staff?: components["schemas"]["ProjectStaff"];
     };
     NotReady: {
@@ -6395,6 +6420,15 @@ export interface operations {
           "application/json": components["schemas"]["ProjectQuality"];
         };
       };
+      /** @description `not_shared`: Ops holds this panel back from the client on this project (D-167) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       404: components["responses"]["Error"];
     };
   };
@@ -6743,6 +6777,15 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Workforce"];
+        };
+      };
+      /** @description `not_shared`: Ops holds this panel back from the client on this project (D-167) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
         };
       };
       404: components["responses"]["Error"];
@@ -8346,6 +8389,38 @@ export interface operations {
           "application/json": components["schemas"]["NotReady"];
         };
       };
+    };
+  };
+  setClientVisibility: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The `csrf_token` from login or `/v1/auth/me`. Required on every state-changing request while signed in. */
+        "X-CSRF-Token": components["parameters"]["CSRF"];
+      };
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ClientVisibility"];
+      };
+    };
+    responses: {
+      /** @description Saved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Project"];
+        };
+      };
+      403: components["responses"]["Error"];
+      404: components["responses"]["Error"];
+      422: components["responses"]["Error"];
     };
   };
   listImports: {

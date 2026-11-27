@@ -150,6 +150,17 @@ func (q *Queries) DeleteProjectSkills(ctx context.Context, projectID uuid.UUID) 
 	return err
 }
 
+const getClientVisibility = `-- name: GetClientVisibility :one
+SELECT client_visibility FROM projects WHERE id = $1
+`
+
+func (q *Queries) GetClientVisibility(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getClientVisibility, id)
+	var client_visibility []byte
+	err := row.Scan(&client_visibility)
+	return client_visibility, err
+}
+
 const getLatestTaskTemplate = `-- name: GetLatestTaskTemplate :one
 SELECT id, task_type, version, name, import_schema, submission_schema, export_schema, created_at, updated_at FROM task_templates WHERE task_type = $1 ORDER BY version DESC LIMIT 1
 `
@@ -557,6 +568,53 @@ SELECT id, org_id, template_id, task_type, name, status, instructions_md, config
 
 func (q *Queries) LockProject(ctx context.Context, id uuid.UUID) (Project, error) {
 	row := q.db.QueryRow(ctx, lockProject, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.TemplateID,
+		&i.TaskType,
+		&i.Name,
+		&i.Status,
+		&i.InstructionsMd,
+		&i.Config,
+		&i.OverlapK,
+		&i.GoldRate,
+		&i.PayPerTaskCents,
+		&i.Currency,
+		&i.TargetCount,
+		&i.Deadline,
+		&i.ReservationMinutes,
+		&i.ReviewSpreadThreshold,
+		&i.AuditSampleRate,
+		&i.AgreementThreshold,
+		&i.MinRationaleChars,
+		&i.RetentionDays,
+		&i.ClientVisibility,
+		&i.PublishedAt,
+		&i.ClosedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.QaChecks,
+		&i.ContentPurgedAt,
+	)
+	return i, err
+}
+
+const setClientVisibility = `-- name: SetClientVisibility :one
+UPDATE projects SET client_visibility = $1
+WHERE id = $2
+RETURNING id, org_id, template_id, task_type, name, status, instructions_md, config, overlap_k, gold_rate, pay_per_task_cents, currency, target_count, deadline, reservation_minutes, review_spread_threshold, audit_sample_rate, agreement_threshold, min_rationale_chars, retention_days, client_visibility, published_at, closed_at, created_by, created_at, updated_at, qa_checks, content_purged_at
+`
+
+type SetClientVisibilityParams struct {
+	ClientVisibility []byte
+	ID               uuid.UUID
+}
+
+func (q *Queries) SetClientVisibility(ctx context.Context, arg SetClientVisibilityParams) (Project, error) {
+	row := q.db.QueryRow(ctx, setClientVisibility, arg.ClientVisibility, arg.ID)
 	var i Project
 	err := row.Scan(
 		&i.ID,

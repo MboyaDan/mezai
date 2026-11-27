@@ -159,7 +159,10 @@ type Project struct {
 	ClosedAt       *time.Time            `json:"closed_at"`
 	CreatedAt      time.Time             `json:"created_at"`
 	UpdatedAt      time.Time             `json:"updated_at"`
-	Staff          *StaffFields          `json:"staff,omitempty"`
+	// What the client's users see (D-167); shown to clients too, so their
+	// screens can say what is held back.
+	ClientVisibility ClientVisibility `json:"client_visibility"`
+	Staff            *StaffFields     `json:"staff,omitempty"`
 }
 
 // StaffFields are visible to ELS staff only.
@@ -563,7 +566,8 @@ func toProject(p *auth.Principal, pr store.Project, orgName string, items, gold 
 	out := Project{ID: pr.ID, OrgID: pr.OrgID, OrgName: orgName, TaskType: pr.TaskType, Name: pr.Name, Status: pr.Status,
 		InstructionsMd: pr.InstructionsMd, Config: cfg, OverlapK: pr.OverlapK, GoldRate: pr.GoldRate,
 		TargetCount: pr.TargetCount, Deadline: dateString(pr.Deadline), ItemCount: items, Skills: []Skill{},
-		PublishedAt: pr.PublishedAt, ClosedAt: pr.ClosedAt, CreatedAt: pr.CreatedAt, UpdatedAt: pr.UpdatedAt}
+		PublishedAt: pr.PublishedAt, ClosedAt: pr.ClosedAt, CreatedAt: pr.CreatedAt, UpdatedAt: pr.UpdatedAt,
+		ClientVisibility: parseVisibility(pr.ClientVisibility)}
 	for _, sk := range skills {
 		out.Skills = append(out.Skills, Skill{Kind: sk.SkillKind, Value: sk.SkillValue, MinProficiency: sk.MinProficiency})
 	}

@@ -228,8 +228,13 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/me/payouts", Perm("earnings.read_own"), eah.payouts)
 		a.handle(http.MethodGet, "/me/quality", Perm("earnings.read_own"), th.myQuality)
 		a.handle(http.MethodGet, "/me/training", Perm("task.submit"), th.myTraining)
-		// Quality picture: aggregates only, so a project's client may read it too.
-		a.handle(http.MethodGet, "/projects/:id/quality", Perm("project.manage", "org.project.read"), th.projectQuality)
+		// Projects service, shared by the client panel checks below (D-167).
+		projSvc := projects.NewService(d.Auth.Pool, d.Auth.Files,
+			projects.Options{NotifyTo: d.Auth.Enquiry.NotifyTo, AppOrigin: d.Auth.AppOrigin})
+		// Quality picture: aggregates only, so a project's client may read it
+		// too, unless Ops holds it back on the project.
+		a.handle(http.MethodGet, "/projects/:id/quality", Perm("project.manage", "org.project.read"),
+			clientShares(projSvc, d.Log, projects.PanelQuality), th.projectQuality)
 		a.handle(http.MethodPost, "/projects/:id/quality/snapshot", Perm("project.manage"), th.snapshotNow)
 		a.handle(http.MethodGet, "/content-reports", Perm("project.manage"), th.listReports)
 		a.handle(http.MethodPost, "/content-reports/:id/resolve", Perm("project.manage"), th.resolveReport)
@@ -243,8 +248,7 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodDelete, "/projects/:id/reviewers/:userId", Perm("project.manage"), th.removeReviewer)
 
 		// Projects, imports, gold and client project requests (Stage 8).
-		ph := &projectHandlers{log: d.Log, svc: projects.NewService(d.Auth.Pool, d.Auth.Files,
-			projects.Options{NotifyTo: d.Auth.Enquiry.NotifyTo, AppOrigin: d.Auth.AppOrigin})}
+		ph := &projectHandlers{log: d.Log, svc: projSvc}
 		a.handle(http.MethodGet, "/organisations", Perm("org.manage", "project.manage"), ph.listOrganisations)
 		a.handle(http.MethodPost, "/organisations", Perm("org.manage"), ph.createOrganisation)
 		a.handle(http.MethodGet, "/task-templates", Perm("project.manage", "item.import", "gold.manage"), ph.taskTemplates)
@@ -254,6 +258,7 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/projects/:id", readProject, ph.getProject)
 		a.handle(http.MethodPatch, "/projects/:id", Perm("project.manage"), ph.updateProject)
 		a.handle(http.MethodPost, "/projects/:id/status", Perm("project.manage"), ph.setProjectStatus)
+		a.handle(http.MethodPut, "/projects/:id/client-visibility", Perm("project.manage"), ph.setClientVisibility)
 		// Item files need item.import and gold files gold.manage; the service checks the kind.
 		a.handle(http.MethodGet, "/projects/:id/imports", Perm("item.import", "gold.manage", "org.project.read"), ph.listImports)
 		a.handle(http.MethodPost, "/projects/:id/imports", Perm("item.import", "gold.manage"), rateLimit(newLimiter(60, time.Hour)), ph.checkImport)
@@ -284,7 +289,8 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		// only; staff name the organisation (D-122 to D-124).
 		pth := &portalHandlers{log: d.Log, svc: portal.NewService(d.Auth.Pool, d.Auth.Files, d.Auth.IdentityKey, d.Log)}
 		a.handle(http.MethodGet, "/projects/:id/progress", Perm("project.manage", "org.project.read"), pth.progress)
-		a.handle(http.MethodGet, "/projects/:id/workforce", Perm("project.manage", "org.project.read"), pth.workforce)
+		a.handle(http.MethodGet, "/projects/:id/workforce", Perm("project.manage", "org.project.read"),
+			clientShares(projSvc, d.Log, projects.PanelWorkforce), pth.workforce)
 		a.handle(http.MethodGet, "/activity", Perm("audit.read", "org.project.read"), pth.activity)
 		a.handle(http.MethodGet, "/team", Perm("user.manage", "org.user.invite"), pth.members)
 		readInvoices := Perm("invoice.manage", "org.invoice.read")

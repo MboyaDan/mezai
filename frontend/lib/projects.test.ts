@@ -90,6 +90,7 @@ const project = (over: Partial<Project> = {}): Project => ({
   closed_at: null,
   created_at: "2026-11-07T00:00:00Z",
   updated_at: "2026-11-07T00:00:00Z",
+  client_visibility: { quality: true, workforce: true },
   staff: {
     pay_per_task_cents: 1250,
     currency: "KES",

@@ -445,3 +445,52 @@ func jsonUnmarshalStrict(b []byte, v any) error {
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
 }
+
+// setClientVisibility stores which panels the client sees (Stage 25, D-167).
+func (h *projectHandlers) setClientVisibility(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	var req struct {
+		Quality   *bool `json:"quality"`
+		Workforce *bool `json:"workforce"`
+	}
+	if !h.bind(c, &req) {
+		return
+	}
+	if req.Quality == nil || req.Workforce == nil {
+		c.AbortWithStatusJSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid_input", "field": "quality",
+			"message": "send both quality and workforce"})
+		return
+	}
+	out, err := h.svc.SetClientVisibility(c.Request.Context(), PrincipalFrom(c), id,
+		projects.ClientVisibility{Quality: *req.Quality, Workforce: *req.Workforce}, meta(c))
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// clientShares stops a client user at a panel Ops has held back on the
+// project (403 not_shared). Staff pass straight through.
+func clientShares(svc *projects.Service, log *slog.Logger, panel string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		p := PrincipalFrom(c)
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.Next() // the handler answers not found
+			return
+		}
+		switch err := svc.ClientSees(c.Request.Context(), p, id, panel); {
+		case err == nil:
+			c.Next()
+		case errors.Is(err, projects.ErrNotShared):
+			abort(c, http.StatusForbidden, "not_shared")
+		default:
+			log.Error("visibility check failed", slog.String("request_id", RequestIDFrom(c)), slog.Any("error", err))
+			abort(c, http.StatusInternalServerError, "internal_error")
+		}
+	}
+}

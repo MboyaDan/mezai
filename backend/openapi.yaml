@@ -1421,6 +1421,7 @@ paths:
       responses:
         "200": { description: Quality, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectQuality" } } } }
         "404": { $ref: "#/components/responses/Error" }
+        "403": { description: "`not_shared`: Ops holds this panel back from the client on this project (D-167)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/projects/{id}/quality/snapshot:
     post:
       operationId: snapshotProjectQuality
@@ -1578,6 +1579,7 @@ paths:
       responses:
         "200": { description: Workforce, content: { application/json: { schema: { $ref: "#/components/schemas/Workforce" } } } }
         "404": { $ref: "#/components/responses/Error" }
+        "403": { description: "`not_shared`: Ops holds this panel back from the client on this project (D-167)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/activity:
     get:
       operationId: listActivity
@@ -2628,6 +2630,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/NotReady" }
+  /v1/projects/{id}/client-visibility:
+    put:
+      operationId: setClientVisibility
+      summary: Choose which panels the project's client users see (`project.manage`, staff only, D-167). Progress, datasets, deliverables and retention are always shared. Audited when it changes.
+      tags: [projects]
+      parameters:
+        - { $ref: "#/components/parameters/CSRF" }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientVisibility" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /v1/projects/{id}/imports:
     get:
       operationId: listImports
@@ -4085,9 +4109,16 @@ components:
         gold_count: { type: integer, description: Active gold items }
         missing: { type: array, items: { type: string, enum: [instructions, items, gold] }, description: What stops the next step }
         config_locked: { type: boolean }
+    ClientVisibility:
+      type: object
+      description: What the project's client users see. Both are true unless Ops turned them off.
+      required: [quality, workforce]
+      properties:
+        quality: { type: boolean, description: "Gold accuracy, agreement and review rate" }
+        workforce: { type: boolean, description: "Contributor counts, skills and per-client codes" }
     Project:
       type: object
-      required: [id, org_id, org_name, task_type, name, status, instructions_md, config, overlap_k, gold_rate, target_count, deadline, item_count, skills, published_at, closed_at, created_at, updated_at]
+      required: [id, org_id, org_name, task_type, name, status, instructions_md, config, overlap_k, gold_rate, target_count, deadline, item_count, skills, published_at, closed_at, created_at, updated_at, client_visibility]
       properties:
         id: { type: string, format: uuid }
         org_id: { type: string, format: uuid }
@@ -4107,6 +4138,7 @@ components:
         closed_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        client_visibility: { $ref: "#/components/schemas/ClientVisibility" }
         staff: { $ref: "#/components/schemas/ProjectStaff" }
     NotReady:
       type: object
