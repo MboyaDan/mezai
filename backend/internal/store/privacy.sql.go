@@ -136,6 +136,46 @@ func (q *Queries) CreateErasureRequest(ctx context.Context, arg CreateErasureReq
 	return i, err
 }
 
+const deleteExpiredEnquiries = `-- name: DeleteExpiredEnquiries :many
+DELETE FROM enquiries
+WHERE (status = 'lost' AND updated_at < now() - make_interval(days => $1::int))
+   OR (status = 'spam' AND updated_at < now() - make_interval(days => $2::int))
+RETURNING id, status
+`
+
+type DeleteExpiredEnquiriesParams struct {
+	LostDays int32
+	SpamDays int32
+}
+
+type DeleteExpiredEnquiriesRow struct {
+	ID     uuid.UUID
+	Status string
+}
+
+// Lost and spam enquiries past their retention period (Stage 28, D-170).
+// Notes go with them (ON DELETE CASCADE). Returns what was deleted, without
+// the enquirer's details, for the audit log.
+func (q *Queries) DeleteExpiredEnquiries(ctx context.Context, arg DeleteExpiredEnquiriesParams) ([]DeleteExpiredEnquiriesRow, error) {
+	rows, err := q.db.Query(ctx, deleteExpiredEnquiries, arg.LostDays, arg.SpamDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteExpiredEnquiriesRow{}
+	for rows.Next() {
+		var i DeleteExpiredEnquiriesRow
+		if err := rows.Scan(&i.ID, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteExpiredIdempotencyKeys = `-- name: DeleteExpiredIdempotencyKeys :execrows
 DELETE FROM idempotency_keys WHERE expires_at < now() - interval '1 day'
 `
