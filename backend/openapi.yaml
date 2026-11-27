@@ -3205,8 +3205,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/EnquirySummary"
         - type: object
-          required: [languages, message, org_id, org_name, moves, notes, assignees]
+          required: [languages, message, org_id, org_name, moves, notes, assignees, delete_after]
           properties:
+            delete_after:
+              type: [string, "null"]
+              format: date-time
+              description: When the retention sweep deletes this lost or spam enquiry unless it moves first (D-170). Null for other statuses.
             languages: { type: string }
             message: { type: string }
             org_id: { type: [string, "null"], format: uuid }
