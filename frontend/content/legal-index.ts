@@ -20,8 +20,8 @@ export const legalIndex: LegalMeta[] = [
     slug: "privacy",
     title: "Privacy notice",
     short: "Privacy notice",
-    version: "0.4",
-    updated: "2026-11-16",
+    version: "0.5",
+    updated: "2026-11-28",
     approved: false,
   },
   {
