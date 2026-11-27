@@ -8,7 +8,7 @@ vi.mock("next/headers", () => ({
   headers: async () => incoming,
 }));
 
-const { serverGet, serverPreload } = await import("./server");
+const { meCan, serverGet, serverPreload } = await import("./server");
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -78,5 +78,15 @@ describe("serverPreload", () => {
     );
     const data = await serverPreload(["/v1/me/earnings", "/v1/me/quality"]);
     expect(Object.keys(data)).toEqual(["/v1/me/earnings"]);
+  });
+});
+
+describe("meCan (Stage 26)", () => {
+  const me = (permissions: string[]) => ({ user: { permissions } }) as never;
+  it("reads the server session's permission keys", () => {
+    expect(meCan(null, "project.manage")).toBe(false);
+    expect(meCan(me(["review.read"]), "project.manage")).toBe(false);
+    expect(meCan(me(["review.read"]), "project.manage", "review.read")).toBe(true);
+    expect(meCan(me(["system.admin"]), "project.manage")).toBe(true);
   });
 });

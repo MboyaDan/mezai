@@ -19,3 +19,8 @@ export function PreloadProvider({ data, children }: { data: Preloaded; children:
 export function usePreloaded<T>(path: string): T | undefined {
   return useContext(Ctx)[path] as T | undefined;
 }
+
+/** Every server copy the page holds, for paths built from data (Stage 26). */
+export function usePreloadedMap(): Readonly<Preloaded> {
+  return useContext(Ctx);
+}
