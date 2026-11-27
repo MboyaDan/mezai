@@ -260,7 +260,12 @@ func TestContributorExportAndErasure(t *testing.T) {
 	e.workAll(c1, project, map[string]any{"labels": []string{"Yes"}})
 	e.workAll(c2, project, map[string]any{"labels": []string{"Yes"}})
 	e.staff(func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE contributor_profiles SET cv_file_key = 'cv/erase-check.pdf', cv_file_name = 'cv.pdf', cv_uploaded_at = now() WHERE id = $1`, id)
+		if _, err := tx.Exec(ctx, `UPDATE contributor_profiles SET cv_file_key = 'cv/erase-check.pdf', cv_file_name = 'cv.pdf', cv_uploaded_at = now() WHERE id = $1`, id); err != nil {
+			return err
+		}
+		// A linked Google account (D-171): in the export, gone after erasure.
+		_, err := tx.Exec(ctx, `INSERT INTO user_identities (user_id, provider, subject, email)
+			SELECT user_id, 'google', 'g-erase-check', 'linked.google@gmail.invalid' FROM contributor_profiles WHERE id = $1`, id)
 		return err
 	})
 	if err := e.files.Put(ctx, "cv/erase-check.pdf", "application/pdf", []byte("%PDF-1.4")); err != nil {
@@ -289,6 +294,9 @@ func TestContributorExportAndErasure(t *testing.T) {
 	if doc.Data.Account.Email != email || doc.Data.Profile.MpesaPhone == nil || len(doc.Data.Answers) != 2 ||
 		len(doc.Data.Earnings) != 2 || doc.Data.Consents == nil || len(doc.NotIncluded) == 0 {
 		t.Fatalf("export content: %s", w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"linked_sign_ins"`) || !strings.Contains(w.Body.String(), "linked.google@gmail.invalid") {
+		t.Fatalf("export lacks the linked Google account: %s", w.Body)
 	}
 	if strings.Contains(w.Body.String(), "Sample sentence.") || strings.Contains(w.Body.String(), "password_hash") {
 		t.Fatal("export holds task content or secrets")
@@ -353,6 +361,7 @@ func TestContributorExportAndErasure(t *testing.T) {
 		"account":        `SELECT count(*) FROM users u JOIN contributor_profiles cp ON cp.user_id = u.id WHERE cp.id = $1 AND (u.email NOT LIKE 'erased-%@erased.invalid' OR u.password_hash IS NOT NULL OR u.status <> 'disabled' OR u.display_name <> 'Erased contributor')`,
 		"profile":        `SELECT count(*) FROM contributor_profiles WHERE id = $1 AND (mpesa_phone IS NOT NULL OR national_id_fp IS NOT NULL OR city IS NOT NULL OR cv_file_key IS NOT NULL OR experience <> '{}' OR status <> 'removed' OR erased_at IS NULL)`,
 		"languages":      `SELECT count(*) FROM contributor_languages WHERE contributor_id = $1`,
+		"google link":    `SELECT count(*) FROM user_identities i JOIN contributor_profiles cp ON cp.user_id = i.user_id WHERE cp.id = $1`,
 		"interviews":     `SELECT count(*) FROM interviews WHERE contributor_id = $1`,
 		"sessions":       `SELECT count(*) FROM sessions s JOIN contributor_profiles cp ON cp.user_id = s.user_id WHERE cp.id = $1`,
 		"roles":          `SELECT count(*) FROM user_roles r JOIN contributor_profiles cp ON cp.user_id = r.user_id WHERE cp.id = $1`,

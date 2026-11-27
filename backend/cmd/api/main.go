@@ -18,6 +18,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/config"
 	"github.com/MboyaDan/mezai/backend/internal/contributors"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/googleauth"
 	"github.com/MboyaDan/mezai/backend/internal/httpapi"
 	"github.com/MboyaDan/mezai/backend/internal/jobs"
 	"github.com/MboyaDan/mezai/backend/internal/mail"
@@ -121,6 +122,10 @@ func run() error {
 				Files:       store,
 				IdentityKey: cfg.IdentityKey,
 				Mpesa:       mpesaDeps,
+				Google: googleauth.New(googleauth.Config{
+					ClientID: cfg.Google.ClientID, ClientSecret: cfg.Google.ClientSecret, Issuer: cfg.Google.Issuer,
+					RedirectURL: cfg.AppOrigin + "/api/v1/auth/google/callback",
+				}),
 			},
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

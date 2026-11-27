@@ -69,6 +69,10 @@ type Config struct {
 	// test, at least 32 characters; the site must hold the same value.
 	ProxySecret string
 
+	// Google is the OAuth client for contributor sign-in with Google (Stage
+	// 29, D-171). Empty ID and secret leave it off.
+	Google Google
+
 	// TurnstileSecret turns on Cloudflare Turnstile checks on public forms
 	// (DG-07). Empty leaves them off; the honeypot and rate limits still apply.
 	TurnstileSecret string
@@ -83,6 +87,18 @@ type Config struct {
 	// DG-02). Off by default; the manual bulk file path always works.
 	Mpesa Mpesa
 }
+
+// Google is the Google Cloud OAuth client (D-171). The redirect URI to
+// register with Google is APP_ORIGIN + "/api/v1/auth/google/callback".
+type Google struct {
+	ClientID     string
+	ClientSecret string
+	// Issuer overrides Google's issuer in development and test only.
+	Issuer string
+}
+
+// Enabled says whether Google sign-in is on.
+func (g Google) Enabled() bool { return g.ClientID != "" && g.ClientSecret != "" }
 
 // M-Pesa B2C modes (MPESA_ENV).
 const (
@@ -152,7 +168,12 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		MailFrom:          get("MAIL_FROM", ""),
 		EnquiryNotifyTo:   get("ENQUIRY_NOTIFY_TO", ""),
 		TurnstileSecret:   get("TURNSTILE_SECRET_KEY", ""),
-		ProxySecret:       get("PROXY_SHARED_SECRET", ""),
+		Google: Google{
+			ClientID:     strings.TrimSpace(get("GOOGLE_CLIENT_ID", "")),
+			ClientSecret: strings.TrimSpace(get("GOOGLE_CLIENT_SECRET", "")),
+			Issuer:       strings.TrimRight(get("GOOGLE_ISSUER", ""), "/"),
+		},
+		ProxySecret: get("PROXY_SHARED_SECRET", ""),
 	}
 	if c.MailFrom == "" && c.IsDevLike() {
 		c.MailFrom = "MezAI <no-reply@mezai.invalid>"
@@ -224,6 +245,12 @@ func FromLookup(lookup func(string) (string, bool)) (Config, error) {
 		c.IdentityKey = identity.DevKey
 	} else {
 		errs = append(errs, errors.New("IDENTITY_HMAC_KEY is required outside development and test (base64 of 32 random bytes: openssl rand -base64 32)"))
+	}
+	if (c.Google.ClientID == "") != (c.Google.ClientSecret == "") {
+		errs = append(errs, errors.New("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set together or not at all"))
+	}
+	if c.Google.Issuer != "" && !c.IsDevLike() {
+		errs = append(errs, errors.New("GOOGLE_ISSUER is for development and test only"))
 	}
 	c.Mpesa, err = loadMpesa(get, c.Env)
 	if err != nil {

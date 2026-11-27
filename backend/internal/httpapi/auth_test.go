@@ -37,6 +37,12 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	return newEnvWith(t, nil)
+}
+
+// newEnvWith lets a test change the API's dependencies (Google sign-in).
+func newEnvWith(t *testing.T, change func(*httpapi.AuthDeps)) *env {
+	t.Helper()
 	pool, _ := dbtest.New(t)
 	if _, err := seed.Run(context.Background(), pool, seed.Options{Password: pw}); err != nil {
 		t.Fatal(err)
@@ -49,10 +55,14 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, rules := httpapi.NewRouterWithRules(httpapi.Deps{Auth: &httpapi.AuthDeps{
+	deps := &httpapi.AuthDeps{
 		Service: svc, Pool: pool, AppOrigin: origin, CookieSecure: true,
 		Files: files, Enquiry: httpapi.EnquiryDeps{NotifyTo: "ops@mezai.invalid"}, IdentityKey: identity.DevKey,
-	}})
+	}
+	if change != nil {
+		change(deps)
+	}
+	r, rules := httpapi.NewRouterWithRules(httpapi.Deps{Auth: deps})
 	return &env{t: t, pool: pool, router: r, rules: rules, files: files}
 }
 
