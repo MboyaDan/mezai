@@ -20,6 +20,7 @@ import {
 import { initialsOf, SignOutButton } from "@/components/shells/account-menu";
 import { WorkspaceShell, type WorkspaceNavItem } from "@/components/shells/workspace-shell";
 import { brand } from "@/lib/brand";
+import type { Me } from "@/lib/api/client";
 import { RequireSession, SessionProvider, useUser } from "@/lib/session";
 
 /** Whether the user holds any of the keys. The UI hides what it cannot use; the API decides. */
@@ -88,9 +89,13 @@ function Shell({ children }: { children: ReactNode }) {
 // Hooks that read the URL (usePathname) need a Suspense boundary under Cache Components.
 const blank = <div className="min-h-dvh bg-surface" aria-busy="true" />;
 
-export function Workspace({ children }: { children: ReactNode }) {
+/**
+ * The staff and client workspace. `me` is the session the server already
+ * read (Stage 26); without it the browser loads the session as before.
+ */
+export function Workspace({ children, me }: { children: ReactNode; me?: Me | null }) {
   return (
-    <SessionProvider>
+    <SessionProvider initial={me}>
       <Suspense fallback={blank}>
         <RequireSession kinds={["staff", "client"]} fallback={blank}>
           <Shell>{children}</Shell>

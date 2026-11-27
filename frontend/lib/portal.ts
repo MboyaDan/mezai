@@ -2,7 +2,7 @@
 // activity sentences, roles and invoice states. Pure functions, so the
 // wording is tested in portal.test.ts.
 
-import type { ActivityEntry, Invoice, ProjectProgress, ProjectQuality } from "@/lib/api/client";
+import type { ActivityEntry, Invoice, Project, ProjectProgress, ProjectQuality } from "@/lib/api/client";
 import { formatDay } from "@/lib/earnings";
 
 type Tone = "neutral" | "info" | "success" | "warning" | "danger";
@@ -182,4 +182,45 @@ export function activityText(a: ActivityEntry): string {
     default:
       return a.action;
   }
+}
+
+// The client's home (Stage 13a): live and paused projects first, then
+// closed, then those not started; at most eight. Shared by the page's server
+// read (Stage 26) and its browser fallback, so both pick the same projects.
+const homeOrder: Record<string, number> = { live: 0, paused: 1, closed: 2, ready: 3, draft: 4 };
+export const CLIENT_HOME_MAX = 8;
+
+export type ClientRow = { project: Project; progress: ProjectProgress | null };
+
+export const progressPath = (id: string) => `/v1/projects/${id}/progress` as const;
+
+export function clientProjects(projects: Project[]): Project[] {
+  return [...projects]
+    .sort(
+      (a, b) =>
+        (homeOrder[a.status] ?? 9) - (homeOrder[b.status] ?? 9) || b.created_at.localeCompare(a.created_at),
+    )
+    .slice(0, CLIENT_HOME_MAX);
+}
+
+/**
+ * The home's rows from data already read. Null when any shown project that
+ * has progress lacks it, so the browser loads the whole list instead of
+ * showing a gap.
+ */
+export function clientRows(
+  projects: Project[],
+  progressOf: (p: Project) => ProjectProgress | undefined,
+): { rows: ClientRow[]; total: number } | null {
+  const rows: ClientRow[] = [];
+  for (const project of clientProjects(projects)) {
+    if (project.status === "draft") {
+      rows.push({ project, progress: null });
+      continue;
+    }
+    const progress = progressOf(project);
+    if (!progress) return null;
+    rows.push({ project, progress });
+  }
+  return { rows, total: projects.length };
 }

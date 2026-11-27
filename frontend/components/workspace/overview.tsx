@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { Card, EmptyState, Skeleton } from "@/components/ui/display";
 import { api } from "@/lib/api/client";
 import { useUser } from "@/lib/session";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { ClientHome } from "./client-home";
 import { OpsHome } from "./ops-home";
@@ -12,8 +13,10 @@ import { PageTitle, useCan } from "./workspace";
 
 /** A reviewer's home: the items waiting in their projects. */
 function ReviewerHome() {
-  const queue = useLoad(() =>
-    api<{ items: unknown[] }>("GET", "/v1/review/items").then((r) => r.items.length),
+  const queue = useLoad(
+    () => api<{ items: unknown[] }>("GET", "/v1/review/items").then((r) => r.items.length),
+    "",
+    usePreloaded<{ items: unknown[] }>("/v1/review/items")?.items.length,
   );
   return (
     <Link href="/w/review" className="group max-w-sm">

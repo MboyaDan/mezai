@@ -20,6 +20,7 @@ import {
   taskTypeLabel,
   type LifecycleAction,
 } from "@/lib/projects";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { shortDate } from "../contributors";
 import { useCan } from "../workspace";
@@ -179,7 +180,12 @@ function SubNav({ id }: { id: string }) {
 export function ProjectFrame({ children }: { children: ReactNode }) {
   const { id } = useParams<{ id: string }>();
   const can = useCan();
-  const p = useLoad(() => api<Project>("GET", `/v1/projects/${id}`), id);
+  // The server's copy (Stage 26) when the layout read it; otherwise fetched here.
+  const p = useLoad(
+    () => api<Project>("GET", `/v1/projects/${id}`),
+    id,
+    usePreloaded<Project>(`/v1/projects/${id}`),
+  );
 
   if (p.status === "loading") return <Skeleton className="h-80 w-full" />;
   if (p.status === "error") return <Alert tone="danger" title={errorMessage(p.error)} />;
