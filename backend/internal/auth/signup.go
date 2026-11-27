@@ -83,28 +83,9 @@ func (s *Service) SignUpContributor(ctx context.Context, in SignUp, m Meta) erro
 		if err != nil {
 			return err
 		}
-		role, err := q.GetRoleByKey(ctx, "contributor")
+		cp, accepted, err := newContributor(ctx, q, u.ID, m)
 		if err != nil {
 			return err
-		}
-		if err := q.AddUserRole(ctx, store.AddUserRoleParams{UserID: u.ID, RoleID: role.ID}); err != nil {
-			return err
-		}
-		cp, err := q.CreateContributorProfile(ctx, store.CreateContributorProfileParams{UserID: u.ID, Status: "applied"})
-		if err != nil {
-			return err
-		}
-		if err := q.AddContributorStatusHistory(ctx, store.AddContributorStatusHistoryParams{
-			ContributorID: cp.ID, ToStatus: "applied", ChangedBy: &u.ID, Reason: "Signed up",
-		}); err != nil {
-			return err
-		}
-		accepted := map[string]string{}
-		for _, d := range legal.ContributorRequired {
-			if err := q.InsertConsent(ctx, store.InsertConsentParams{UserID: u.ID, Document: d, Version: legal.Current[d], Ip: m.IP}); err != nil {
-				return err
-			}
-			accepted[d] = legal.Current[d]
 		}
 		if err := s.enqueueVerification(ctx, q, u.ID, u.Email, u.DisplayName); err != nil {
 			return err
@@ -112,6 +93,36 @@ func (s *Service) SignUpContributor(ctx context.Context, in SignUp, m Meta) erro
 		return Audit(ctx, q, m, Entry{Actor: &u.ID, Action: "contributor.signed_up", EntityType: "contributor", EntityID: &cp.ID,
 			After: map[string]any{"public_code": cp.PublicCode, "status": cp.Status, "consents": accepted}})
 	})
+}
+
+// newContributor gives a new user the contributor role, an "applied"
+// profile and consent to the current required documents (the caller has
+// checked them). Shared by the form sign-up and Google sign-up (D-171).
+func newContributor(ctx context.Context, q *store.Queries, userID uuid.UUID, m Meta) (store.ContributorProfile, map[string]string, error) {
+	role, err := q.GetRoleByKey(ctx, "contributor")
+	if err != nil {
+		return store.ContributorProfile{}, nil, err
+	}
+	if err := q.AddUserRole(ctx, store.AddUserRoleParams{UserID: userID, RoleID: role.ID}); err != nil {
+		return store.ContributorProfile{}, nil, err
+	}
+	cp, err := q.CreateContributorProfile(ctx, store.CreateContributorProfileParams{UserID: userID, Status: "applied"})
+	if err != nil {
+		return store.ContributorProfile{}, nil, err
+	}
+	if err := q.AddContributorStatusHistory(ctx, store.AddContributorStatusHistoryParams{
+		ContributorID: cp.ID, ToStatus: "applied", ChangedBy: &userID, Reason: "Signed up",
+	}); err != nil {
+		return store.ContributorProfile{}, nil, err
+	}
+	accepted := map[string]string{}
+	for _, d := range legal.ContributorRequired {
+		if err := q.InsertConsent(ctx, store.InsertConsentParams{UserID: userID, Document: d, Version: legal.Current[d], Ip: m.IP}); err != nil {
+			return store.ContributorProfile{}, nil, err
+		}
+		accepted[d] = legal.Current[d]
+	}
+	return cp, accepted, nil
 }
 
 // enqueueAccountExists tells the owner of an address that someone tried to

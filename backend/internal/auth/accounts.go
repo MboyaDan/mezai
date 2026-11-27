@@ -42,12 +42,15 @@ func (s *Service) link(path, token string) string {
 }
 
 // RequestPasswordReset emails a reset link when the address belongs to an
-// active account. The caller always answers the same way.
+// active account. The caller always answers the same way. An account with
+// no password gets one only if its email is verified: that is a Google-only
+// contributor adding a password (D-171); an invitation not yet accepted is
+// not verified, and the invitation stays its way in.
 func (s *Service) RequestPasswordReset(ctx context.Context, email string, m Meta) error {
 	return s.pool.InScope(ctx, db.System(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		u, err := q.GetUserForLogin(ctx, email)
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (u.Status != "active" || u.PasswordHash == nil)) {
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && (u.Status != "active" || (u.PasswordHash == nil && u.EmailVerifiedAt == nil))) {
 			return nil
 		}
 		if err != nil {

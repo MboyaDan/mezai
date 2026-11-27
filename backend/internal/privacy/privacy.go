@@ -210,7 +210,10 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 		if res.IdemKeys, err = q.DeleteExpiredIdempotencyKeys(ctx); err != nil {
 			return err
 		}
-		_, err = q.DeleteExpiredLoginChallenges(ctx) // unfinished two-step sign-ins (Stage 17d)
+		if _, err = q.DeleteExpiredLoginChallenges(ctx); err != nil { // unfinished two-step sign-ins (Stage 17d)
+			return err
+		}
+		_, err = q.DeleteExpiredOAuthStates(ctx) // Google sign-ins never finished (D-171)
 		return err
 	})
 	if err != nil {
@@ -341,8 +344,18 @@ func (s *Service) ExportContributor(ctx context.Context, actor uuid.UUID, contri
 		if err != nil {
 			return err
 		}
+		ids, err := q.ListIdentitiesByContributor(ctx, contributorID)
+		if err != nil {
+			return err
+		}
+		signIns := []map[string]any{}
+		for _, i := range ids {
+			signIns = append(signIns, map[string]any{"provider": i.Provider, "email": i.Email,
+				"linked_at": i.CreatedAt, "last_used_at": i.LastUsedAt})
+		}
 		now := time.Now().UTC()
 		doc := map[string]any{
+			"linked_sign_ins": signIns,
 			"about": "Personal data MezAI (a division of ELS Software Solutions) holds about you, " +
 				"under the Kenya Data Protection Act 2019. Ask us to correct anything that is wrong.",
 			"generated_at": now.Format(time.RFC3339),
@@ -510,6 +523,10 @@ func (s *Service) Erase(ctx context.Context, actor, contributorID uuid.UUID, con
 			return ErrConfirm
 		}
 		if err := q.EraseContributor(ctx, store.EraseContributorParams{ContributorID: contributorID, Actor: actor}); err != nil {
+			return err
+		}
+		// A linked Google account (D-171) is personal data too.
+		if _, err := q.DeleteIdentitiesByContributor(ctx, contributorID); err != nil {
 			return err
 		}
 		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &actor, Action: "contributor.erased", EntityType: "contributor",
