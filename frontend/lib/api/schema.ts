@@ -2707,6 +2707,11 @@ export interface components {
       created_at: string;
     };
     EnquiryDetail: components["schemas"]["EnquirySummary"] & {
+      /**
+       * Format: date-time
+       * @description When the retention sweep deletes this lost or spam enquiry unless it moves first (D-170). Null for other statuses.
+       */
+      delete_after: string | null;
       languages: string;
       message: string;
       /** Format: uuid */

@@ -137,3 +137,12 @@ SELECT jsonb_build_object(
                 FROM erasure_requests er WHERE er.contributor_id = cp.id), '[]')
 )::jsonb AS data
 FROM contributor_profiles cp WHERE cp.id = $1 AND cp.erased_at IS NULL;
+
+-- name: DeleteExpiredEnquiries :many
+-- Lost and spam enquiries past their retention period (Stage 28, D-170).
+-- Notes go with them (ON DELETE CASCADE). Returns what was deleted, without
+-- the enquirer's details, for the audit log.
+DELETE FROM enquiries
+WHERE (status = 'lost' AND updated_at < now() - make_interval(days => @lost_days::int))
+   OR (status = 'spam' AND updated_at < now() - make_interval(days => @spam_days::int))
+RETURNING id, status;

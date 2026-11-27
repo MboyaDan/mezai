@@ -10,6 +10,9 @@
 #   scripts/staging.sh backup         pg_dump the public schema to $BACKUP_DIR
 #   scripts/staging.sh restore-test   restore the newest backup into a throwaway
 #                                     PostgreSQL and compare row counts
+#   scripts/staging.sh reset          empty the database and start again: backup,
+#                                     drop everything, migrate, first Super Admin
+#                                     (Stage 20a; asks you to type the host name)
 #   scripts/staging.sh demo [args]    run the pilot demo script (brief 18) in a
 #                                     browser against DEMO_BASE_URL (default
 #                                     https://mezai.vercel.app); args go to
@@ -121,6 +124,26 @@ case ${1:-} in
       echo "restore-test: counts differ (writes since the backup show up here too; rerun right after a backup)"
       exit 1
     fi
+    ;;
+  reset)
+    # Removes the sample data and everything else (Stage 20a, D-172): accounts,
+    # projects, ledger, audit log. Rows cannot be picked out one by one because
+    # earnings, consents and the audit log are append-only by design, so the
+    # schema is dropped and rebuilt from the migrations, as production starts.
+    [[ ${APP_ENV:-} != production ]] || { echo "refusing: APP_ENV=production in $ENV_FILE"; exit 1; }
+    : "${SETUP_ADMIN_EMAIL:?SETUP_ADMIN_EMAIL must be set in $ENV_FILE: the reset ends by creating the first Super Admin}"
+    host=$(sed -E 's#^[a-z]+://([^@]*@)?([^:/?]+).*#\2#' <<<"$DATABASE_URL")
+    echo "reset: this deletes every row in the database at $host and starts from empty."
+    echo "reset: a backup is taken first. Files in storage are not touched: empty the bucket by hand (docs/launch/checklist.md)."
+    read -r -p "Type the host name to continue: " answer
+    [[ $answer == "$host" ]] || { echo "reset: not confirmed; nothing changed"; exit 1; }
+    "$0" backup
+    docker run --rm "$PG_IMAGE" psql "$DOCKER_DB_URL" -v ON_ERROR_STOP=1 -q \
+      -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public"
+    "$0" migrate
+    "$0" setup
+    "$0" check
+    echo "reset: done. Sample data is gone; sign in as $SETUP_ADMIN_EMAIL."
     ;;
   demo)
     shift

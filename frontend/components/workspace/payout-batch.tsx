@@ -32,6 +32,7 @@ import {
 import { formatKes } from "@/lib/projects";
 import { useUser } from "@/lib/session";
 import { cn } from "@/lib/cn";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { shortDate } from "./contributors";
 import { Figure, LinesTable } from "./payouts";
@@ -47,13 +48,21 @@ type Loaded = { batch: PayoutBatch; pay: BatchTransactions };
 /** /w/payouts/[id]: one batch, the next step for the person looking, and its lines. */
 export function PayoutBatchPage() {
   const { id } = useParams<{ id: string }>();
-  const d = useLoad(async (): Promise<Loaded> => {
-    const [batch, pay] = await Promise.all([
-      api<PayoutBatch>("GET", `/v1/payouts/batches/${id}`),
-      api<BatchTransactions>("GET", `/v1/payouts/batches/${id}/transactions`),
-    ]);
-    return { batch, pay };
-  }, id);
+  const batchPath = `/v1/payouts/batches/${id}` as const;
+  const payPath = `${batchPath}/transactions` as const;
+  const preBatch = usePreloaded<PayoutBatch>(batchPath);
+  const prePay = usePreloaded<BatchTransactions>(payPath);
+  const d = useLoad(
+    async (): Promise<Loaded> => {
+      const [batch, pay] = await Promise.all([
+        api<PayoutBatch>("GET", batchPath),
+        api<BatchTransactions>("GET", payPath),
+      ]);
+      return { batch, pay };
+    },
+    id,
+    preBatch && prePay ? { batch: preBatch, pay: prePay } : undefined,
+  );
   const paying =
     d.status === "ready" && (d.data.batch.status === "disbursing" || stillPaying(d.data.pay.transactions));
   const reload = d.reload;

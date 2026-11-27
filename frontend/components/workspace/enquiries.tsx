@@ -336,6 +336,13 @@ export function EnquiryDetail() {
           title={e.org_name ? `Won, linked to ${e.org_name}` : "Won, not linked to an organisation yet"}
         />
       )}
+      {e.delete_after && (
+        <Alert title={`This enquiry and its notes will be deleted on ${shortDate(e.delete_after)}`}>
+          {e.status === "spam"
+            ? "Spam is deleted 30 days after it is marked. Moving it back to new keeps it."
+            : "Enquiries that do not become a project are kept for 24 months after the last change, as the privacy notice says. Moving it back to a conversation keeps it."}
+        </Alert>
+      )}
       {error && <Alert tone="danger" title={error} />}
 
       <div className="grid gap-6 lg:grid-cols-3">

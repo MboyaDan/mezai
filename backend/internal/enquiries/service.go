@@ -17,6 +17,7 @@ import (
 
 	"github.com/MboyaDan/mezai/backend/internal/auth"
 	"github.com/MboyaDan/mezai/backend/internal/db"
+	"github.com/MboyaDan/mezai/backend/internal/privacy"
 	"github.com/MboyaDan/mezai/backend/internal/store"
 )
 
@@ -163,6 +164,9 @@ type Detail struct {
 	Moves     []string `json:"moves"`
 	Notes     []Note   `json:"notes"`
 	Assignees []Person `json:"assignees"`
+	// DeleteAfter is when the retention sweep deletes a lost or spam
+	// enquiry, unless it moves first (D-170). Nil for every other status.
+	DeleteAfter *time.Time `json:"delete_after"`
 }
 
 func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (*Detail, error) {
@@ -184,6 +188,18 @@ func (s *Service) Get(ctx context.Context, p *auth.Principal, id uuid.UUID) (*De
 			AssignedTo: r.AssignedTo, AssignedName: r.AssignedName, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt},
 			Languages: r.Languages, Message: r.Message, OrgID: r.OrgID, OrgName: r.OrgName,
 			Moves: Moves(r.Status), Notes: []Note{}, Assignees: []Person{}}
+		if r.Status == "lost" || r.Status == "spam" {
+			lost, spam, err := privacy.EnquiryRetentionDays(ctx, q)
+			if err != nil {
+				return err
+			}
+			days := lost
+			if r.Status == "spam" {
+				days = spam
+			}
+			at := r.UpdatedAt.AddDate(0, 0, days)
+			d.DeleteAfter = &at
+		}
 		notes, err := q.ListEnquiryNotes(ctx, id)
 		if err != nil {
 			return err
