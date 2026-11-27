@@ -132,6 +132,11 @@ export const qualityPage = {
     ],
     note: "We hold no security certifications yet, and we will not suggest otherwise.",
   },
+  onePager: {
+    title: "How MezAI assures quality",
+    note: "Numbers on this page are methods and default settings, not results.",
+    pdf: { label: "Download a one-page summary (PDF)", href: "/downloads/how-mezai-assures-quality.pdf" },
+  },
   cta: {
     title: "See these numbers on your own data.",
     primary: { label: "Start a pilot project", href: "/contact" },

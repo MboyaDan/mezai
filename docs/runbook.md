@@ -91,3 +91,8 @@ It needs Docker (for psql) and `SEED_PASSWORD` in `backend/.env.staging`. The se
 2. `/readyz` fails: database or storage unreachable. Check Supabase status (status.supabase.com) and the project's health.
 3. Site loads but every sign-in or form is refused (403): `APP_ORIGIN` on Render does not match the address in the browser exactly (scheme, host, no slash).
 4. Emails do not arrive: the API logs `mail` errors; check Brevo **Transactional → Logs** and the sender's verification.
+
+## Empty staging (Stage 20a, D-172)
+
+`backend/scripts/staging.sh reset` takes a backup, drops every table, applies the migrations, creates the first Super Admin from `SETUP_ADMIN_*` and runs `check`. It asks you to type the database host name and refuses when `APP_ENV=production`. Files in the storage bucket stay; empty the bucket in Supabase Storage by hand. Use it when staging is to become the pilot environment; otherwise keep the sample data for demos.
+
