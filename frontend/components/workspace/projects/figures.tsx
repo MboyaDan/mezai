@@ -22,6 +22,7 @@ import {
   statisticName,
 } from "@/lib/portal";
 import { useLoad } from "@/lib/use-load";
+import { hiddenFromClient, sees } from "@/lib/visibility";
 import { shortDate } from "../contributors";
 import { useCan } from "../workspace";
 import { useProject } from "./frame";
@@ -38,9 +39,10 @@ export function ProjectFigures() {
   const can = useCan();
   const progress = useLoad(() => api<ProjectProgress>("GET", `/v1/projects/${p.id}/progress`), p.id);
   const [refresh, setRefresh] = useState(0);
+  const showQuality = sees(p, "quality");
   const quality = useLoad(
-    () => api<ProjectQuality>("GET", `/v1/projects/${p.id}/quality`),
-    `${p.id}/${refresh}`,
+    () => (showQuality ? api<ProjectQuality>("GET", `/v1/projects/${p.id}/quality`) : Promise.resolve(null)),
+    `${p.id}/${refresh}/${showQuality}`,
   );
   const [busy, setBusy] = useState(false);
 
@@ -70,9 +72,9 @@ export function ProjectFigures() {
     }
   };
 
-  const agreement = projectAgreement(q);
+  const agreement: ReturnType<typeof projectAgreement> = q ? projectAgreement(q) : {};
   const weeks = weeksLive(pr.throughput, p.published_at);
-  const labels = labelAgreement(q);
+  const labels = q ? labelAgreement(q) : [];
   const stages: Array<[string, number]> = [
     ["Not started", pr.not_started],
     ["Being answered", pr.in_progress],
@@ -84,10 +86,13 @@ export function ProjectFigures() {
   return (
     <section aria-labelledby="figures-h" className="grid gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="figures-h" className="font-display text-lg font-semibold">
-          Progress and quality
-        </h2>
-        {can("project.manage") && (
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="figures-h" className="font-display text-lg font-semibold">
+            {q ? "Progress and quality" : "Progress"}
+          </h2>
+          {hiddenFromClient(p, "quality") && <Tag>Quality hidden from the client</Tag>}
+        </div>
+        {q && can("project.manage") && (
           <Button variant="ghost" size="sm" onClick={snapshot} disabled={busy}>
             <RefreshCw aria-hidden="true" className="size-4" />
             {busy ? "Recalculating…" : "Recalculate agreement"}
@@ -105,37 +110,41 @@ export function ProjectFigures() {
             className="col-span-2 sm:col-span-1"
           />
           <Stat label="Pace" value={pr.pace.per_day.toFixed(1)} unit="a day" caption="Last 14 days" />
-          <Stat
-            label="Gold accuracy"
-            value={percent(q.gold_accuracy)}
-            caption={`${n(q.gold_results)} checks, 30 days`}
-          />
-          <Stat
-            label="Agreement"
-            value={
-              agreement.kappa ? (
-                <Agreement value={agreement.kappa.value} className="text-[1.75rem] leading-tight" />
-              ) : agreement.percent ? (
-                percent(agreement.percent.value)
-              ) : (
-                "–"
-              )
-            }
-            caption={
-              agreement.kappa
-                ? `${statisticName[agreement.kappa.statistic]}${agreement.percent ? ` · ${percent(agreement.percent.value)} agree` : ""}`
-                : agreement.percent
-                  ? "Percent agreement"
-                  : p.overlap_k === 1
-                    ? "One answer per item"
-                    : "Not measured yet"
-            }
-          />
-          <Stat
-            label="Review rate"
-            value={percent(q.review_rate)}
-            caption={`${n(q.routed_to_review)} of ${n(q.completed)} completed`}
-          />
+          {q && (
+            <>
+              <Stat
+                label="Gold accuracy"
+                value={percent(q.gold_accuracy)}
+                caption={`${n(q.gold_results)} checks, 30 days`}
+              />
+              <Stat
+                label="Agreement"
+                value={
+                  agreement.kappa ? (
+                    <Agreement value={agreement.kappa.value} className="text-[1.75rem] leading-tight" />
+                  ) : agreement.percent ? (
+                    percent(agreement.percent.value)
+                  ) : (
+                    "–"
+                  )
+                }
+                caption={
+                  agreement.kappa
+                    ? `${statisticName[agreement.kappa.statistic]}${agreement.percent ? ` · ${percent(agreement.percent.value)} agree` : ""}`
+                    : agreement.percent
+                      ? "Percent agreement"
+                      : p.overlap_k === 1
+                        ? "One answer per item"
+                        : "Not measured yet"
+                }
+              />
+              <Stat
+                label="Review rate"
+                value={percent(q.review_rate)}
+                caption={`${n(q.routed_to_review)} of ${n(q.completed)} completed`}
+              />
+            </>
+          )}
         </StatGroup>
 
         <ProgressBar
@@ -215,9 +224,12 @@ export function WorkforcePanel() {
   return (
     <section aria-labelledby="workforce-h" className="grid gap-3">
       <div className="grid gap-1">
-        <h2 id="workforce-h" className="font-display font-semibold">
-          Workforce
-        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="workforce-h" className="font-display font-semibold">
+            Workforce
+          </h2>
+          {hiddenFromClient(p, "workforce") && <Tag>Hidden from the client</Tag>}
+        </div>
         <p className="text-sm text-fg-muted">
           {p.staff
             ? "The codes the client sees: the same for one contributor across this client's projects, different for every other client."

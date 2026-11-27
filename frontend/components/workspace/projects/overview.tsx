@@ -11,6 +11,8 @@ import { useLoad } from "@/lib/use-load";
 import { shortDate } from "../contributors";
 import { useCan } from "../workspace";
 import { ProjectFigures, WorkforcePanel } from "./figures";
+import { ClientVisibilityCard } from "./visibility";
+import { sees } from "@/lib/visibility";
 import { useProject } from "./frame";
 import { ImportHistory } from "./imports";
 import { RetentionCard } from "./retention";
@@ -158,12 +160,13 @@ export function ProjectOverview() {
           )}
         </section>
         <Files />
-        <WorkforcePanel />
+        {sees(p, "workforce") && <WorkforcePanel />}
       </div>
       <div className="grid content-start gap-6">
         <Readiness />
         <Facts />
         <RetentionCard />
+        {can("project.manage") && <ClientVisibilityCard />}
         {can("project.manage") && <Reviewers />}
       </div>
     </div>
