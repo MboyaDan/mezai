@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { ApiError, api, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
 import { retentionSentence } from "@/lib/privacy";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { useCan } from "../workspace";
 import { useProject } from "./frame";
@@ -25,7 +26,11 @@ export function RetentionCard() {
   const { project: p } = useProject();
   const can = useCan();
   const toast = useToast();
-  const r = useLoad(() => api<Retention>("GET", `/v1/projects/${p.id}/retention`), `${p.id}:${p.status}`);
+  const r = useLoad(
+    () => api<Retention>("GET", `/v1/projects/${p.id}/retention`),
+    `${p.id}:${p.status}`,
+    usePreloaded<Retention>(`/v1/projects/${p.id}/retention`),
+  );
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [reason, setReason] = useState("");

@@ -11,6 +11,7 @@ import { api, type Project, type ProjectStatus } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
 import { statusLabel } from "@/lib/projects";
 import { useUser } from "@/lib/session";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { shortDate } from "../contributors";
 import { PageTitle, useCan } from "../workspace";
@@ -29,6 +30,7 @@ export function Projects() {
         (r) => r.projects,
       ),
     status,
+    usePreloaded<{ projects: Project[] }>("/v1/projects")?.projects,
   );
 
   return (

@@ -8,17 +8,22 @@ import { Alert, EmptyState, Skeleton, StatusPill } from "@/components/ui/display
 import { api, type Project, type ProjectProgress } from "@/lib/api/client";
 import { formatDay } from "@/lib/earnings";
 import { errorMessage } from "@/lib/onboarding";
-import { daysUntil, paceLabel, paceTone } from "@/lib/portal";
+import {
+  clientProjects,
+  clientRows,
+  daysUntil,
+  paceLabel,
+  paceTone,
+  progressPath,
+  type ClientRow,
+} from "@/lib/portal";
+import { usePreloaded, usePreloadedMap } from "@/lib/preload";
 import { statusLabel, statusTone, taskTypeLabel } from "@/lib/projects";
 import { useLoad } from "@/lib/use-load";
 import { ActivityLog } from "./activity";
 import { useCan } from "./workspace";
 
-type Row = { project: Project; progress: ProjectProgress | null };
-
-// Live and paused projects first, then closed, then those not started.
-const order: Record<string, number> = { live: 0, paused: 1, closed: 2, ready: 3, draft: 4 };
-const MAX = 8;
+type Row = ClientRow;
 
 function deadlineText(day: string): string {
   const d = daysUntil(day);
@@ -68,22 +73,30 @@ function ProjectRow({ row }: { row: Row }) {
 /** The client's /w: their projects with progress, and recent activity (brief 6.3). */
 export function ClientHome() {
   const can = useCan();
-  const rows = useLoad(async (): Promise<{ rows: Row[]; total: number }> => {
-    const { projects } = await api<{ projects: Project[] }>("GET", "/v1/projects");
-    const sorted = [...projects]
-      .sort(
-        (a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || b.created_at.localeCompare(a.created_at),
-      )
-      .slice(0, MAX);
-    const progress = await Promise.all(
-      sorted.map((p) =>
-        p.status === "draft"
-          ? Promise.resolve(null)
-          : api<ProjectProgress>("GET", `/v1/projects/${p.id}/progress`).catch(() => null),
-      ),
-    );
-    return { rows: sorted.map((project, i) => ({ project, progress: progress[i] })), total: projects.length };
-  });
+  // Server copies (Stage 26) when the page read them; otherwise fetched here.
+  const pre = usePreloaded<{ projects: Project[] }>("/v1/projects")?.projects;
+  const preProgress = usePreloadedMap();
+  const initial =
+    pre && clientRows(pre, (p) => preProgress[progressPath(p.id)] as ProjectProgress | undefined);
+  const rows = useLoad(
+    async (): Promise<{ rows: Row[]; total: number }> => {
+      const { projects } = await api<{ projects: Project[] }>("GET", "/v1/projects");
+      const picked = clientProjects(projects);
+      const progress = await Promise.all(
+        picked.map((p) =>
+          p.status === "draft"
+            ? Promise.resolve(null)
+            : api<ProjectProgress>("GET", progressPath(p.id)).catch(() => null),
+        ),
+      );
+      return {
+        rows: picked.map((project, i) => ({ project, progress: progress[i] })),
+        total: projects.length,
+      };
+    },
+    "",
+    initial ?? undefined,
+  );
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

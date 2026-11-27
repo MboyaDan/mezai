@@ -13,6 +13,7 @@ import { errorMessage } from "@/lib/onboarding";
 import { atRiskSummary, dueText, queueCards, waitingText } from "@/lib/ops";
 import { paceLabel, paceTone } from "@/lib/portal";
 import { statusLabel, statusTone, taskTypeLabel } from "@/lib/projects";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { useCan } from "./workspace";
 
@@ -176,7 +177,11 @@ function watchColumns(floor: number): Column<Watch>[] {
 /** The Ops home page (Stage 13b, brief 6.3): queues, projects, contributor health. */
 export function OpsHome() {
   const can = useCan();
-  const o = useLoad(() => api<OpsOverview>("GET", "/v1/ops/overview"));
+  const o = useLoad(
+    () => api<OpsOverview>("GET", "/v1/ops/overview"),
+    "",
+    usePreloaded<OpsOverview>("/v1/ops/overview"),
+  );
   const [all, setAll] = useState(false);
 
   if (o.status === "loading") return <Skeleton className="h-96 w-full" />;

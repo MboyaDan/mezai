@@ -7,6 +7,7 @@ import { labelFor } from "@/content/profile";
 import { api, type ImportJob, type ProjectSkill } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
 import { formatKes, rateToPercent, readiness, taskTypeLabel } from "@/lib/projects";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { shortDate } from "../contributors";
 import { useCan } from "../workspace";
@@ -119,12 +120,12 @@ function Readiness() {
 
 function Files() {
   const { project: p } = useProject();
+  const items = (r: { imports: ImportJob[] }) => r.imports.filter((j) => j.kind === "items");
+  const pre = usePreloaded<{ imports: ImportJob[] }>(`/v1/projects/${p.id}/imports`);
   const list = useLoad(
-    () =>
-      api<{ imports: ImportJob[] }>("GET", `/v1/projects/${p.id}/imports`).then((r) =>
-        r.imports.filter((j) => j.kind === "items"),
-      ),
+    () => api<{ imports: ImportJob[] }>("GET", `/v1/projects/${p.id}/imports`).then(items),
     `${p.id}/${p.item_count}`,
+    pre && items(pre),
   );
   return (
     <section aria-labelledby="files-h" className="grid gap-3">

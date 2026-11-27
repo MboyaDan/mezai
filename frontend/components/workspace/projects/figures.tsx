@@ -21,6 +21,7 @@ import {
   projectAgreement,
   statisticName,
 } from "@/lib/portal";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { hiddenFromClient, sees } from "@/lib/visibility";
 import { shortDate } from "../contributors";
@@ -37,12 +38,18 @@ const n = (v: number) => v.toLocaleString("en-KE");
 export function ProjectFigures() {
   const { project: p } = useProject();
   const can = useCan();
-  const progress = useLoad(() => api<ProjectProgress>("GET", `/v1/projects/${p.id}/progress`), p.id);
+  const progress = useLoad(
+    () => api<ProjectProgress>("GET", `/v1/projects/${p.id}/progress`),
+    p.id,
+    usePreloaded<ProjectProgress>(`/v1/projects/${p.id}/progress`),
+  );
+  const preQuality = usePreloaded<ProjectQuality>(`/v1/projects/${p.id}/quality`);
   const [refresh, setRefresh] = useState(0);
   const showQuality = sees(p, "quality");
   const quality = useLoad(
     () => (showQuality ? api<ProjectQuality>("GET", `/v1/projects/${p.id}/quality`) : Promise.resolve(null)),
     `${p.id}/${refresh}/${showQuality}`,
+    showQuality ? preQuality : null,
   );
   const [busy, setBusy] = useState(false);
 
@@ -215,7 +222,11 @@ const workerColumns: Column<Workforce["workers"][number]>[] = [
 /** Who works on the project: counts, skills and per-client codes only (brief 6.3, D-123). */
 export function WorkforcePanel() {
   const { project: p } = useProject();
-  const wf = useLoad(() => api<Workforce>("GET", `/v1/projects/${p.id}/workforce`), p.id);
+  const wf = useLoad(
+    () => api<Workforce>("GET", `/v1/projects/${p.id}/workforce`),
+    p.id,
+    usePreloaded<Workforce>(`/v1/projects/${p.id}/workforce`),
+  );
   if (wf.status === "loading") return <Skeleton className="h-40 w-full" />;
   if (wf.status === "error") return <Alert tone="danger" title={errorMessage(wf.error)} />;
   const w = wf.data;
