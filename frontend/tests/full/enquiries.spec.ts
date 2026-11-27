@@ -14,6 +14,16 @@ const run = Date.now().toString(36);
 const buyerOrg = `Inbox Buyer ${run} (Sample)`;
 
 async function axe(page: Page, label: string) {
+  // A dialog or toast still fading in reads as low contrast: let entrance
+  // animations finish first (as identity.spec.ts does).
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const r = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
@@ -96,8 +106,13 @@ test("Enquiries inbox: assign, note, close and reopen", async ({ page, request }
   await page.getByRole("button", { name: "Mark lost" }).click();
   await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
   await expect(page.getByText("Handled by")).toBeVisible();
+  // Lost enquiries say when the retention sweep deletes them (Stage 28, D-170).
+  const deletion = page.getByText(/This enquiry and its notes will be deleted on \d{1,2} \w{3} \d{4}/);
+  await expect(deletion).toBeVisible();
+  await axe(page, "enquiry lost");
   await page.getByRole("button", { name: "Reopen" }).click();
   await expect(page.getByRole("button", { name: "Mark won" })).toBeVisible();
+  await expect(deletion).toHaveCount(0);
 
   // The won dialog offers active organisations; cancel leaves it open.
   await page.getByRole("button", { name: "Mark won" }).click();
