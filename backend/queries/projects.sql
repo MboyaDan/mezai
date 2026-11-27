@@ -88,3 +88,11 @@ DELETE FROM project_skills WHERE project_id = $1;
 
 -- name: ListTaskTemplates :many
 SELECT DISTINCT ON (task_type) * FROM task_templates ORDER BY task_type, version DESC;
+
+-- name: SetClientVisibility :one
+UPDATE projects SET client_visibility = @client_visibility
+WHERE id = @id
+RETURNING *;
+
+-- name: GetClientVisibility :one
+SELECT client_visibility FROM projects WHERE id = $1;
