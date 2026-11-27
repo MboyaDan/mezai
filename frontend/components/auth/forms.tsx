@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AuthHeading } from "@/components/auth/auth-frame";
+import { GoogleSignIn, GoogleSignUp } from "@/components/auth/google";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/choice";
 import { Alert } from "@/components/ui/display";
@@ -11,6 +12,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TextLink } from "@/components/ui/text-link";
 import { ApiError, api, type Me } from "@/lib/api/client";
+import { googleError, googleStartUrl } from "@/lib/google";
 import { consentPayload, errorMessage, legalFor, requiredConsents, safeNext } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 
@@ -38,9 +40,12 @@ function FormError({ error }: { error: ApiError | null }) {
   return <Alert tone="danger" title={errorMessage(error)} />;
 }
 
-export function LoginForm() {
+const noGoogle = Promise.resolve(false);
+
+export function LoginForm({ google = noGoogle }: { google?: Promise<boolean> }) {
   const router = useRouter();
   const params = useSearchParams();
+  const googleProblem = googleError(params.get("error"));
   const { state, signedIn } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -154,6 +159,7 @@ export function LoginForm() {
         New contributor? <TextLink href="/join">Create an account</TextLink>.
       </AuthHeading>
       <form onSubmit={submit} noValidate className="grid gap-5">
+        {googleProblem && !error && <Alert tone="warning" title={googleProblem} />}
         {error?.code === "email_not_verified" ? (
           <Alert
             tone="warning"
@@ -197,12 +203,14 @@ export function LoginForm() {
         <p className="text-sm">
           <TextLink href="/forgot-password">Forgot your password?</TextLink>
         </p>
+        <GoogleSignIn enabled={google} />
       </form>
     </>
   );
 }
 
-export function JoinForm() {
+export function JoinForm({ google = noGoogle }: { google?: Promise<boolean> }) {
+  const googleProblem = googleError(useSearchParams().get("error"));
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -216,6 +224,24 @@ export function JoinForm() {
     if (done) doneRef.current?.focus();
   }, [done]);
 
+  // Google sign-up needs only the two documents: Google gives the name and
+  // a verified email, and there is no password (D-171).
+  function consentErrors(): Record<string, string> {
+    const errs: Record<string, string> = {};
+    for (const c of requiredConsents) {
+      if (!agreed[c.key])
+        errs[c.key] = `Read and accept the ${legalFor(c.key).short.toLowerCase()} to continue.`;
+    }
+    return errs;
+  }
+
+  function continueWithGoogle() {
+    const errs = consentErrors();
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    window.location.assign(googleStartUrl("signup", consentPayload(requiredConsents.map((c) => c.key))));
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault();
     const errs: Record<string, string> = {};
@@ -223,10 +249,7 @@ export function JoinForm() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
       errs.email = "Enter an email address like name@example.com.";
     if (password.length < MIN_PASSWORD) errs.password = `Use at least ${MIN_PASSWORD} characters.`;
-    for (const c of requiredConsents) {
-      if (!agreed[c.key])
-        errs[c.key] = `Read and accept the ${legalFor(c.key).short.toLowerCase()} to continue.`;
-    }
+    Object.assign(errs, consentErrors());
     setErrors(errs);
     if (Object.keys(errs).length) return;
     void run(async () => {
@@ -275,6 +298,7 @@ export function JoinForm() {
         Already have an account? <TextLink href="/login">Sign in</TextLink>.
       </AuthHeading>
       <form onSubmit={submit} noValidate className="grid gap-5">
+        {googleProblem && !error && <Alert tone="warning" title={googleProblem} />}
         <FormError error={error} />
         <Field
           label="Display name"
@@ -351,6 +375,7 @@ export function JoinForm() {
         <Button type="submit" loading={busy} fullWidth arrow>
           Create account
         </Button>
+        <GoogleSignUp enabled={google} onContinue={continueWithGoogle} />
       </form>
     </>
   );

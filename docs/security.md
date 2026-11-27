@@ -106,6 +106,17 @@ Read every log call. Request lines carry the route template, method, status, dur
 | Lost phone? | A recovery code, or a reset by a `user.manage` holder with a reason in the audit log (a Super Admin's only by a Super Admin). |
 | Tested | `TestTOTPRFCVectors` (RFC 6238 appendix B), `TestVerifyTOTP`, `TestSealer`, `TestRecoveryCodes`, `TestTwoStepSignIn`, `TestTwoStepLimitsAndReset`, `tests/full/two-step.spec.ts`. |
 
+## Google sign-in (Stage 29, D-171)
+
+| Question | Answer |
+|---|---|
+| Who can use it? | Contributors without two-step sign-in. Staff and client accounts are refused and keep the password (and code) sign-in. |
+| How is the answer from Google trusted? | Authorization code flow with PKCE (S256) and a nonce, run by the API, not the browser. The ID token is checked by `go-oidc` against Google's published keys: signature, issuer, audience (our client ID), expiry and nonce. `email_verified` must be true. |
+| Can someone else's sign-in be pushed into my browser (login CSRF)? | No: the callback needs the state in the address and the same value in an HttpOnly cookie set when this browser left; the database keeps only the state's hash, for 10 minutes, and uses it once. |
+| Pre-registered account in my name? | Linking by email clears the password of an account whose email was never verified, so whoever set it cannot use it after the real owner arrives through Google. |
+| What is kept? | Google's account ID and the email it reported, in `user_identities`. No access or refresh token, no photo. Export includes it; erasure deletes it. |
+| Tested | `TestGoogleSignIn` with a test OpenID provider that signs real RS256 tokens (sign-up, sign-in, linking, staff refused, unverified email, wrong nonce, missing or reused state, cancel), `TestGoogleOff`, `TestContributorExportAndErasure`, `tests/full/google-sign-in.spec.ts`. Locally the start route was checked against Google's real discovery document. |
+
 ## Still to do
 
 Stage 19: shared rate-limit store if more than one API instance runs, backup period, edge protection.

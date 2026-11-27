@@ -15,6 +15,7 @@ import (
 	"github.com/MboyaDan/mezai/backend/internal/delivery"
 	"github.com/MboyaDan/mezai/backend/internal/earnings"
 	"github.com/MboyaDan/mezai/backend/internal/enquiries"
+	"github.com/MboyaDan/mezai/backend/internal/googleauth"
 	"github.com/MboyaDan/mezai/backend/internal/payouts"
 	"github.com/MboyaDan/mezai/backend/internal/portal"
 	"github.com/MboyaDan/mezai/backend/internal/privacy"
@@ -55,6 +56,8 @@ type AuthDeps struct {
 	IdentityKey []byte
 	// Mpesa switches on B2C payouts; nil keeps them off.
 	Mpesa *MpesaDeps
+	// Google switches on contributor sign-in with Google (D-171); nil keeps it off.
+	Google *googleauth.Provider
 }
 
 // RouteRule is one /v1 route and the access rule it declared.
@@ -111,6 +114,11 @@ func NewRouterWithRules(d Deps) (*gin.Engine, []RouteRule) {
 		a.handle(http.MethodGet, "/auth/me", SignedIn(), h.me)
 		// Two-step sign-in (Stage 17d): the code step shares the sign-in limit.
 		a.handle(http.MethodPost, "/auth/login/code", Public(), perIP, h.loginCode)
+		// Google sign-in for contributors (Stage 29, D-171): browser redirects.
+		gh := &googleHandlers{authHandlers: h, google: d.Auth.Google, appOrigin: d.Auth.AppOrigin}
+		a.handle(http.MethodGet, "/auth/providers", Public(), gh.providers)
+		a.handle(http.MethodGet, "/auth/google/start", Public(), perIP, gh.start)
+		a.handle(http.MethodGet, "/auth/google/callback", Public(), perIP, gh.callback)
 		perUser15 := rateLimitUser(newLimiter(10, 15*time.Minute))
 		a.handle(http.MethodGet, "/me/two-step", SignedIn(), h.totpStatus)
 		a.handle(http.MethodPost, "/me/two-step/setup", SignedIn(), perUser15, h.totpSetup)

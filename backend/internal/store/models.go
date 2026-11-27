@@ -514,6 +514,17 @@ type NotificationPreference struct {
 	UpdatedAt        time.Time
 }
 
+type OauthState struct {
+	ID           uuid.UUID
+	StateHash    []byte
+	CodeVerifier string
+	Nonce        string
+	Intent       string
+	Consents     []byte
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+}
+
 type OrgMember struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
@@ -903,6 +914,16 @@ type User struct {
 	TotpLastStep     *int64
 	TotpPendingEnc   []byte
 	TotpPendingAt    *time.Time
+}
+
+type UserIdentity struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Provider   string
+	Subject    string
+	Email      string
+	CreatedAt  time.Time
+	LastUsedAt time.Time
 }
 
 type UserRole struct {

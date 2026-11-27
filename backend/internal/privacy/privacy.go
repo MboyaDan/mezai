@@ -155,17 +155,18 @@ type SweepResult struct {
 	RequestSamples int64
 	Emails         int64
 	IdemKeys       int64
+	Enquiries      int
 	Files          int
 }
 
 // Sweep applies every retention rule that has come due: closed projects'
-// content, declined request samples, sent emails' merge data and expired
-// idempotency records, then deletes the queued files. Each project is
+// content, declined request samples, sent emails' merge data, lost and spam
+// enquiries and expired idempotency records, then deletes the queued files. Each project is
 // purged in its own transaction so one failure does not hold up the rest.
 func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	var res SweepResult
 	var due []uuid.UUID
-	var days, emailDays int
+	var days, emailDays, lostDays, spamDays int
 	err := s.pool.InScope(ctx, db.System(), func(tx pgx.Tx) error {
 		q := store.New(tx)
 		var err error
@@ -173,6 +174,9 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 			return err
 		}
 		if emailDays, err = intSetting(ctx, q, "retention.email_days", 30); err != nil {
+			return err
+		}
+		if lostDays, spamDays, err = EnquiryRetentionDays(ctx, q); err != nil {
 			return err
 		}
 		due, err = q.ProjectsDueForPurge(ctx)
@@ -207,10 +211,16 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 		if res.Emails, err = q.RedactSentEmails(ctx, int32(emailDays)); err != nil {
 			return err
 		}
+		if res.Enquiries, err = deleteEnquiries(ctx, q, lostDays, spamDays); err != nil {
+			return err
+		}
 		if res.IdemKeys, err = q.DeleteExpiredIdempotencyKeys(ctx); err != nil {
 			return err
 		}
-		_, err = q.DeleteExpiredLoginChallenges(ctx) // unfinished two-step sign-ins (Stage 17d)
+		if _, err = q.DeleteExpiredLoginChallenges(ctx); err != nil { // unfinished two-step sign-ins (Stage 17d)
+			return err
+		}
+		_, err = q.DeleteExpiredOAuthStates(ctx) // Google sign-ins never finished (D-171)
 		return err
 	})
 	if err != nil {
@@ -218,6 +228,38 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 	}
 	res.Files = s.DeleteQueuedFiles(ctx)
 	return res, errors.Join(errs...)
+}
+
+// EnquiryRetentionDays returns how many days after their last change lost
+// and spam enquiries are kept (A-096, D-170). The privacy notice promises 24
+// months for enquiries that do not become a project.
+func EnquiryRetentionDays(ctx context.Context, q *store.Queries) (lost, spam int, err error) {
+	if lost, err = intSetting(ctx, q, "retention.enquiry_lost_days", 730); err != nil {
+		return 0, 0, err
+	}
+	spam, err = intSetting(ctx, q, "retention.enquiry_spam_days", 30)
+	return lost, spam, err
+}
+
+// deleteEnquiries deletes lost and spam enquiries past their period (A-096,
+// D-170) and records each deletion. The audit entry names the enquiry and
+// its status only: never the enquirer's name, email or message.
+func deleteEnquiries(ctx context.Context, q *store.Queries, lostDays, spamDays int) (int, error) {
+	rows, err := q.DeleteExpiredEnquiries(ctx, store.DeleteExpiredEnquiriesParams{LostDays: int32(lostDays), SpamDays: int32(spamDays)})
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range rows {
+		days := lostDays
+		if r.Status == "spam" {
+			days = spamDays
+		}
+		if err := auth.Audit(ctx, q, auth.Meta{}, auth.Entry{Action: "enquiry.deleted", EntityType: "enquiry", EntityID: &r.ID,
+			Reason: "Retention period ended", Before: map[string]any{"status": r.Status}, After: map[string]any{"retention_days": days}}); err != nil {
+			return 0, err
+		}
+	}
+	return len(rows), nil
 }
 
 func intSetting(ctx context.Context, q *store.Queries, key string, def int) (int, error) {
@@ -292,9 +334,9 @@ func (s *Service) RunSweep(ctx context.Context, every time.Duration) {
 		if err != nil && ctx.Err() == nil {
 			s.log.Error("retention sweep failed", slog.Any("error", err))
 		}
-		if res.Projects > 0 || res.RequestSamples > 0 || res.Files > 0 {
+		if res.Projects > 0 || res.RequestSamples > 0 || res.Enquiries > 0 || res.Files > 0 {
 			s.log.Info("retention sweep", slog.Int("projects", res.Projects), slog.Int64("request_samples", res.RequestSamples),
-				slog.Int64("emails", res.Emails), slog.Int("files", res.Files))
+				slog.Int64("emails", res.Emails), slog.Int("enquiries", res.Enquiries), slog.Int("files", res.Files))
 		}
 		select {
 		case <-ctx.Done():
@@ -341,8 +383,18 @@ func (s *Service) ExportContributor(ctx context.Context, actor uuid.UUID, contri
 		if err != nil {
 			return err
 		}
+		ids, err := q.ListIdentitiesByContributor(ctx, contributorID)
+		if err != nil {
+			return err
+		}
+		signIns := []map[string]any{}
+		for _, i := range ids {
+			signIns = append(signIns, map[string]any{"provider": i.Provider, "email": i.Email,
+				"linked_at": i.CreatedAt, "last_used_at": i.LastUsedAt})
+		}
 		now := time.Now().UTC()
 		doc := map[string]any{
+			"linked_sign_ins": signIns,
 			"about": "Personal data MezAI (a division of ELS Software Solutions) holds about you, " +
 				"under the Kenya Data Protection Act 2019. Ask us to correct anything that is wrong.",
 			"generated_at": now.Format(time.RFC3339),
@@ -510,6 +562,10 @@ func (s *Service) Erase(ctx context.Context, actor, contributorID uuid.UUID, con
 			return ErrConfirm
 		}
 		if err := q.EraseContributor(ctx, store.EraseContributorParams{ContributorID: contributorID, Actor: actor}); err != nil {
+			return err
+		}
+		// A linked Google account (D-171) is personal data too.
+		if _, err := q.DeleteIdentitiesByContributor(ctx, contributorID); err != nil {
 			return err
 		}
 		if err := auth.Audit(ctx, q, m, auth.Entry{Actor: &actor, Action: "contributor.erased", EntityType: "contributor",

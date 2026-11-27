@@ -86,3 +86,22 @@ export function meCan(me: Me | null, ...keys: string[]): boolean {
   const perms = me?.user.permissions ?? [];
   return perms.includes("system.admin") || keys.some((k) => perms.includes(k));
 }
+
+/**
+ * Whether Google sign-in is switched on in the API (Stage 29, D-171). A
+ * public read without the visitor's cookie; false when the API is slow or
+ * asleep, so the sign-in page never waits long for it.
+ */
+export const serverGoogleEnabled = cache(async (): Promise<boolean> => {
+  try {
+    const res = await fetch(`${apiOrigin()}/v1/auth/providers`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return false;
+    return Boolean(((await res.json()) as { google?: unknown }).google === true);
+  } catch {
+    return false;
+  }
+});

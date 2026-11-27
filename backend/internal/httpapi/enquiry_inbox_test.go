@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -187,21 +188,35 @@ func TestEnquiryUnassignAndReopen(t *testing.T) {
 	})
 	path := "/v1/enquiries/" + id
 	me := e.userID("superadmin@sample.invalid")
+	// delete_after (D-170): lost 730 days and spam 30 days after the change,
+	// null for every other status.
 	for _, step := range []struct {
 		from, to string
 		who      any
 		want     string
+		keepDays int
 	}{
-		{"new", "spam", nil, "spam"},
-		{"spam", "new", nil, "new"},
-		{"new", "assigned", me, "assigned"},
-		{"assigned", "new", nil, "new"},
-		{"new", "lost", nil, "lost"},
-		{"lost", "in_conversation", me, "in_conversation"},
+		{"new", "spam", nil, "spam", 30},
+		{"spam", "new", nil, "new", 0},
+		{"new", "assigned", me, "assigned", 0},
+		{"assigned", "new", nil, "new", 0},
+		{"new", "lost", nil, "lost", 730},
+		{"lost", "in_conversation", me, "in_conversation", 0},
 	} {
 		w := e.do(http.MethodPatch, path, map[string]any{"expected_status": step.from, "status": step.to, "assigned_to": step.who}, ops, nil)
 		if w.Code != http.StatusOK || jsonField(t, w, "status") != step.want {
 			t.Fatalf("%s -> %s: %d %s", step.from, step.to, w.Code, w.Body)
+		}
+		at := jsonField(t, w, "delete_after")
+		if step.keepDays == 0 {
+			if at != "" {
+				t.Errorf("%s: delete_after %q, want null", step.to, at)
+			}
+			continue
+		}
+		got, err := time.Parse(time.RFC3339Nano, at)
+		if want := time.Now().AddDate(0, 0, step.keepDays); err != nil || got.Sub(want).Abs() > time.Hour {
+			t.Errorf("%s: delete_after %q, want about %s", step.to, at, want.Format(time.RFC3339))
 		}
 	}
 }

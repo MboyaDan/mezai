@@ -17,8 +17,9 @@ const (
 // the contributor terms add one account per person (D-078).
 // 0.3 (2026-11-09): screening (experience form, optional CV, interview), D-100.
 // 0.4 (2026-11-16): M-Pesa's registered name compared on each direct payment, D-139.
+// Privacy notice 0.5 (2026-11-28): optional sign-in with Google, D-171.
 var Current = map[string]string{
-	PrivacyNotice:    "0.4",
+	PrivacyNotice:    "0.5",
 	TermsOfUse:       "0.1",
 	ContributorTerms: "0.4",
 	AcceptableUse:    "0.1",

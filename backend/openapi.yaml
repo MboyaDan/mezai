@@ -129,6 +129,58 @@ paths:
         "200": { description: Signed in; sets the session cookie, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
         "401": { description: "`invalid_code` or `challenge_expired` (start again with the password)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "429": { $ref: "#/components/responses/Error" }
+  /v1/auth/providers:
+    get:
+      operationId: authProviders
+      summary: Which other sign-in methods are switched on (Stage 29, D-171).
+      tags: [auth]
+      security: []
+      responses:
+        "200":
+          description: Switches
+          content:
+            application/json:
+              schema: { type: object, required: [google], properties: { google: { type: boolean } } }
+  /v1/auth/google/start:
+    get:
+      operationId: googleStart
+      summary: Leave for Google to sign in or sign up as a contributor (Stage 29, D-171).
+      description: >-
+        A browser navigation, not a fetch. Sets the `mezai_google_state` cookie (10 minutes, path
+        `/api/v1/auth/google`) and redirects to Google with PKCE (S256), a nonce and the state. For
+        sign-up the accepted versions of `privacy_notice` and `contributor_terms` must be the current
+        ones. Errors redirect to `/login` or `/join` with `?error=` `google_off`, `consent_required` or
+        `google_failed`. Shares the per-IP sign-in limit.
+      tags: [auth]
+      security: []
+      parameters:
+        - { name: intent, in: query, required: true, schema: { type: string, enum: [signin, signup] } }
+        - { name: privacy_notice, in: query, schema: { type: string } }
+        - { name: contributor_terms, in: query, schema: { type: string } }
+      responses:
+        "303": { description: To Google, or back to the site with an error code }
+        "429": { $ref: "#/components/responses/Error" }
+  /v1/auth/google/callback:
+    get:
+      operationId: googleCallback
+      summary: Where Google sends the browser back (Stage 29, D-171).
+      description: >-
+        Needs the state in the query and the same value in the `mezai_google_state` cookie; each state
+        works once. Contributors only: a linked Google account signs in; otherwise an account with the
+        same verified email is linked (an unverified account's password is cleared); otherwise, from
+        sign-up, a contributor is created with the consents given at the start. Success sets the
+        session cookie and redirects to `/c`. Errors redirect to `/login` or `/join` with `?error=`
+        `google_expired`, `google_cancelled`, `google_no_account`, `google_use_password` (staff, client
+        and two-step accounts), `google_unverified`, `consent_required` or `google_failed`.
+      tags: [auth]
+      security: []
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "303": { description: Signed in and to /c, or back to the site with an error code }
+        "429": { $ref: "#/components/responses/Error" }
   /v1/me/two-step:
     get:
       operationId: getTwoStep
@@ -3205,8 +3257,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/EnquirySummary"
         - type: object
-          required: [languages, message, org_id, org_name, moves, notes, assignees]
+          required: [languages, message, org_id, org_name, moves, notes, assignees, delete_after]
           properties:
+            delete_after:
+              type: [string, "null"]
+              format: date-time
+              description: When the retention sweep deletes this lost or spam enquiry unless it moves first (D-170). Null for other statuses.
             languages: { type: string }
             message: { type: string }
             org_id: { type: [string, "null"], format: uuid }

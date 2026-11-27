@@ -27,6 +27,8 @@ services:
       MAIL_FROM: ${MAIL_FROM:-MezAI <no-reply@mezai.invalid>}
       ENQUIRY_NOTIFY_TO: ${ENQUIRY_NOTIFY_TO:-ops@mezai.invalid}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Shared with the site so the API believes its visitor address (D-156).
       PROXY_SHARED_SECRET: ${PROXY_SHARED_SECRET:-}
       IDENTITY_HMAC_KEY: ${IDENTITY_HMAC_KEY:-}

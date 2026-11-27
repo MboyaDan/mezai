@@ -98,6 +98,63 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/auth/providers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Which other sign-in methods are switched on (Stage 29, D-171). */
+    get: operations["authProviders"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/auth/google/start": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Leave for Google to sign in or sign up as a contributor (Stage 29, D-171).
+     * @description A browser navigation, not a fetch. Sets the `mezai_google_state` cookie (10 minutes, path `/api/v1/auth/google`) and redirects to Google with PKCE (S256), a nonce and the state. For sign-up the accepted versions of `privacy_notice` and `contributor_terms` must be the current ones. Errors redirect to `/login` or `/join` with `?error=` `google_off`, `consent_required` or `google_failed`. Shares the per-IP sign-in limit.
+     */
+    get: operations["googleStart"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/auth/google/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where Google sends the browser back (Stage 29, D-171).
+     * @description Needs the state in the query and the same value in the `mezai_google_state` cookie; each state works once. Contributors only: a linked Google account signs in; otherwise an account with the same verified email is linked (an unverified account's password is cleared); otherwise, from sign-up, a contributor is created with the consents given at the start. Success sets the session cookie and redirects to `/c`. Errors redirect to `/login` or `/join` with `?error=` `google_expired`, `google_cancelled`, `google_no_account`, `google_use_password` (staff, client and two-step accounts), `google_unverified`, `consent_required` or `google_failed`.
+     */
+    get: operations["googleCallback"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/me/two-step": {
     parameters: {
       query?: never;
@@ -2650,6 +2707,11 @@ export interface components {
       created_at: string;
     };
     EnquiryDetail: components["schemas"]["EnquirySummary"] & {
+      /**
+       * Format: date-time
+       * @description When the retention sweep deletes this lost or spam enquiry unless it moves first (D-170). Null for other statuses.
+       */
+      delete_after: string | null;
       languages: string;
       message: string;
       /** Format: uuid */
@@ -4386,6 +4448,74 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["Error"];
         };
+      };
+      429: components["responses"]["Error"];
+    };
+  };
+  authProviders: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Switches */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            google: boolean;
+          };
+        };
+      };
+    };
+  };
+  googleStart: {
+    parameters: {
+      query: {
+        intent: "signin" | "signup";
+        privacy_notice?: string;
+        contributor_terms?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description To Google */
+      303: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      429: components["responses"]["Error"];
+    };
+  };
+  googleCallback: {
+    parameters: {
+      query?: {
+        state?: string;
+        code?: string;
+        error?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Signed in and to /c */
+      303: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       429: components["responses"]["Error"];
     };

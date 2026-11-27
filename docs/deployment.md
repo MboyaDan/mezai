@@ -227,6 +227,7 @@ Send me: which of 1 to 6 passed, the two IPs from 5, and any error text from Ren
 | `ENQUIRY_NOTIFY_TO` | ops inbox | no | |
 | `MAIL_SKIP_TEST_DOMAINS` | `true` | no | `render.yaml`; mail to `.invalid`, `.test`, `.example` and `example.com` is marked failed, not sent (D-159). `false` in production once sample data is gone |
 | `TURNSTILE_SECRET_KEY` | unset | yes | DG-07 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | unset (Google sign-in off) | **secret: yes** | D-171; both or neither. See "Google sign-in" below |
 | `MPESA_ENV` | `off` | no | DG-02 not cleared; never `fake` outside development |
 
 ### Website (Vercel)
@@ -256,3 +257,15 @@ Staging uses Render's **Logs** (JSON, searchable, 7 days on the free plan) and V
 5. **Separate production.** A new Supabase project, Render service and Vercel project; new secrets (never reuse staging's `IDENTITY_HMAC_KEY` or keys); no seed; migrations run by hand with the command in the PR notes.
 6. Error monitoring in, two-step sign-in required for Super Admins and payout approvers (A-091).
 7. **Sample data removed** (Stage 20).
+
+## Google sign-in (Stage 29, D-171)
+
+Off until both variables are set on the API. To switch it on for staging:
+
+1. In Google Cloud console, open (or create) a project for MezAI, then **APIs & Services → OAuth consent screen**: user type External, app name "MezAI", support email, the site's domain as an authorised domain, scopes `openid`, `email`, `profile` only. While the app is in "Testing", only the test users you add can sign in; publish it for everyone. Basic scopes need no Google verification review.
+2. **Credentials → Create credentials → OAuth client ID**, type **Web application**. Authorised redirect URI: `https://<APP_ORIGIN host>/api/v1/auth/google/callback` (staging: `https://mezai.vercel.app/api/v1/auth/google/callback`). No JavaScript origins are needed: the browser never talks to Google from our pages.
+3. On Render, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` and redeploy. `GET /api/v1/auth/providers` then answers `{"google":true}` and the button appears on `/login` and `/join`.
+4. Try it with a test Google account: join, sign out, sign in again. The audit log shows `contributor.signed_up` with `"method":"google"`.
+
+To switch it off, remove both variables. Contributors who joined with Google then sign in by setting a password through "Forgot your password?" (their email is verified, so reset works for them).
+

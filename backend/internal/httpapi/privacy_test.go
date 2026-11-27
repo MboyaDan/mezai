@@ -209,8 +209,21 @@ func TestRetentionPurge(t *testing.T) {
 			FROM organisations o, users u WHERE o.slug = 'sample-client-ltd' AND u.email = 'client.admin@sample.invalid'`); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO email_outbox (to_address, template, data, status, sent_at, updated_at)
-			VALUES ('person@sample.invalid', 'password_reset', '{"Name":"Sample Person"}', 'sent', now() - interval '31 days', now() - interval '31 days')`)
+		if _, err := tx.Exec(ctx, `INSERT INTO email_outbox (to_address, template, data, status, sent_at, updated_at)
+			VALUES ('person@sample.invalid', 'password_reset', '{"Name":"Sample Person"}', 'sent', now() - interval '31 days', now() - interval '31 days')`); err != nil {
+			return err
+		}
+		// Enquiries either side of their period (D-170): lost 730 days, spam 30;
+		// won and open ones are never deleted, however old.
+		if _, err := tx.Exec(ctx, `INSERT INTO enquiries (name, organisation_name, email, project_type, status, created_at, updated_at)
+			SELECT 'Retention ' || s || ' ' || d, 'Sample Buyer Ltd (Sample)', 'buyer@sample.invalid', 'classification', s,
+			  now() - make_interval(days => d + 1), now() - make_interval(days => d)
+			FROM (VALUES ('lost', 731), ('lost', 729), ('spam', 31), ('spam', 29), ('won', 2000), ('new', 2000), ('in_conversation', 2000)) v(s, d)`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO enquiry_notes (enquiry_id, author_user_id, body)
+			SELECT e.id, u.id, 'Sample note.' FROM enquiries e, users u
+			WHERE e.name = 'Retention lost 731' AND u.email = 'superadmin@sample.invalid'`)
 		return err
 	})
 	if err := e.files.Put(ctx, "requests/old-sample.csv", "text/csv", []byte("x")); err != nil {
@@ -220,13 +233,34 @@ func TestRetentionPurge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Projects < 1 || got.RequestSamples != 1 || got.Emails < 1 || e.files.Has("requests/old-sample.csv") {
+	if got.Projects < 1 || got.RequestSamples != 1 || got.Emails < 1 || got.Enquiries != 2 || e.files.Has("requests/old-sample.csv") {
 		t.Fatalf("sweep: %+v", got)
 	}
 	if e.count(`SELECT count(*) FROM projects WHERE id = $1 AND content_purged_at IS NOT NULL`, old) != 1 ||
 		e.count(`SELECT count(*) FROM audit_log WHERE action = 'project.content_deleted' AND entity_id = $1 AND actor_kind = 'system'`, old) != 1 ||
 		e.count(`SELECT count(*) FROM email_outbox WHERE to_address = 'person@sample.invalid' AND data = '{}'`) != 1 {
 		t.Fatal("sweep effects")
+	}
+	var left []string
+	e.staff(func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT name FROM enquiries WHERE name LIKE 'Retention %' ORDER BY name`)
+		if err != nil {
+			return err
+		}
+		left, err = pgx.CollectRows(rows, pgx.RowTo[string])
+		return err
+	})
+	want := []string{"Retention in_conversation 2000", "Retention lost 729", "Retention new 2000", "Retention spam 29", "Retention won 2000"}
+	if strings.Join(left, ",") != strings.Join(want, ",") {
+		t.Fatalf("enquiries kept: %v, want %v", left, want)
+	}
+	if n := e.count(`SELECT count(*) FROM enquiry_notes WHERE body = 'Sample note.'`); n != 0 {
+		t.Errorf("notes of deleted enquiries: %d", n)
+	}
+	// One audit entry per deletion, naming the status, never the enquirer.
+	if n := e.count(`SELECT count(*) FROM audit_log WHERE action = 'enquiry.deleted' AND actor_kind = 'system'
+		AND before->>'status' IN ('lost', 'spam') AND NOT (coalesce(before, '{}')::text || coalesce(after, '{}')::text ~ 'buyer@|Retention')`); n != 2 {
+		t.Errorf("enquiry deletion audit entries: %d, want 2", n)
 	}
 }
 
@@ -260,7 +294,12 @@ func TestContributorExportAndErasure(t *testing.T) {
 	e.workAll(c1, project, map[string]any{"labels": []string{"Yes"}})
 	e.workAll(c2, project, map[string]any{"labels": []string{"Yes"}})
 	e.staff(func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE contributor_profiles SET cv_file_key = 'cv/erase-check.pdf', cv_file_name = 'cv.pdf', cv_uploaded_at = now() WHERE id = $1`, id)
+		if _, err := tx.Exec(ctx, `UPDATE contributor_profiles SET cv_file_key = 'cv/erase-check.pdf', cv_file_name = 'cv.pdf', cv_uploaded_at = now() WHERE id = $1`, id); err != nil {
+			return err
+		}
+		// A linked Google account (D-171): in the export, gone after erasure.
+		_, err := tx.Exec(ctx, `INSERT INTO user_identities (user_id, provider, subject, email)
+			SELECT user_id, 'google', 'g-erase-check', 'linked.google@gmail.invalid' FROM contributor_profiles WHERE id = $1`, id)
 		return err
 	})
 	if err := e.files.Put(ctx, "cv/erase-check.pdf", "application/pdf", []byte("%PDF-1.4")); err != nil {
@@ -289,6 +328,9 @@ func TestContributorExportAndErasure(t *testing.T) {
 	if doc.Data.Account.Email != email || doc.Data.Profile.MpesaPhone == nil || len(doc.Data.Answers) != 2 ||
 		len(doc.Data.Earnings) != 2 || doc.Data.Consents == nil || len(doc.NotIncluded) == 0 {
 		t.Fatalf("export content: %s", w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"linked_sign_ins"`) || !strings.Contains(w.Body.String(), "linked.google@gmail.invalid") {
+		t.Fatalf("export lacks the linked Google account: %s", w.Body)
 	}
 	if strings.Contains(w.Body.String(), "Sample sentence.") || strings.Contains(w.Body.String(), "password_hash") {
 		t.Fatal("export holds task content or secrets")
@@ -353,6 +395,7 @@ func TestContributorExportAndErasure(t *testing.T) {
 		"account":        `SELECT count(*) FROM users u JOIN contributor_profiles cp ON cp.user_id = u.id WHERE cp.id = $1 AND (u.email NOT LIKE 'erased-%@erased.invalid' OR u.password_hash IS NOT NULL OR u.status <> 'disabled' OR u.display_name <> 'Erased contributor')`,
 		"profile":        `SELECT count(*) FROM contributor_profiles WHERE id = $1 AND (mpesa_phone IS NOT NULL OR national_id_fp IS NOT NULL OR city IS NOT NULL OR cv_file_key IS NOT NULL OR experience <> '{}' OR status <> 'removed' OR erased_at IS NULL)`,
 		"languages":      `SELECT count(*) FROM contributor_languages WHERE contributor_id = $1`,
+		"google link":    `SELECT count(*) FROM user_identities i JOIN contributor_profiles cp ON cp.user_id = i.user_id WHERE cp.id = $1`,
 		"interviews":     `SELECT count(*) FROM interviews WHERE contributor_id = $1`,
 		"sessions":       `SELECT count(*) FROM sessions s JOIN contributor_profiles cp ON cp.user_id = s.user_id WHERE cp.id = $1`,
 		"roles":          `SELECT count(*) FROM user_roles r JOIN contributor_profiles cp ON cp.user_id = r.user_id WHERE cp.id = $1`,

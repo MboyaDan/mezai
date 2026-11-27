@@ -12,7 +12,9 @@ import { Tabs } from "@/components/ui/tabs";
 import { labelFor } from "@/content/profile";
 import { api, type AttemptSummary, type ContributorStatus, type ContributorSummary } from "@/lib/api/client";
 import { errorMessage } from "@/lib/onboarding";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
+import { ATTEMPTS_PATH, CONTRIBUTORS_PATH, contributorsTab } from "@/lib/workspace-reads";
 import { identityLabel, identityPill } from "./identity-panel";
 import { PageTitle, useCan } from "./workspace";
 
@@ -21,8 +23,11 @@ export const shortDate = (iso: string | null | undefined) =>
 export const pct = (n: number | null | undefined) => (n == null ? "–" : `${Math.round(n * 100)}%`);
 
 function Queue() {
-  const q = useLoad(() =>
-    api<{ attempts: AttemptSummary[] }>("GET", "/v1/qualification/attempts").then((r) => r.attempts),
+  const pre = usePreloaded<{ attempts: AttemptSummary[] }>(ATTEMPTS_PATH);
+  const q = useLoad(
+    () => api<{ attempts: AttemptSummary[] }>("GET", ATTEMPTS_PATH).then((r) => r.attempts),
+    "",
+    pre?.attempts,
   );
   if (q.status === "loading") return <Skeleton className="h-40 w-full" />;
   if (q.status === "error") return <Alert tone="danger" title={errorMessage(q.error)} />;
@@ -222,13 +227,15 @@ const statuses: Array<ContributorStatus | ""> = ["", "applied", "qualifying", "a
 
 function All() {
   const [status, setStatus] = useState<ContributorStatus | "">("");
+  const pre = usePreloaded<{ contributors: ContributorSummary[] }>(CONTRIBUTORS_PATH);
   const list = useLoad(
     () =>
       api<{ contributors: ContributorSummary[] }>(
         "GET",
-        `/v1/contributors${status ? `?status=${status}` : ""}`,
+        `${CONTRIBUTORS_PATH}${status ? `?status=${status}` : ""}`,
       ).then((r) => r.contributors),
     status,
+    pre?.contributors,
   );
   return (
     <div className="grid gap-4">
@@ -383,17 +390,7 @@ export function Contributors() {
   return (
     <>
       <PageTitle title="Contributors">Applicants, qualification approvals and status changes.</PageTitle>
-      <Tabs
-        label="Contributors"
-        tabs={tabs}
-        defaultTab={
-          !approve
-            ? "all"
-            : ["all", "identity", "applications", "interviews", "erasure"].includes(params.get("tab") ?? "")
-              ? params.get("tab")!
-              : "queue"
-        }
-      />
+      <Tabs label="Contributors" tabs={tabs} defaultTab={contributorsTab(approve, params.get("tab"))} />
     </>
   );
 }

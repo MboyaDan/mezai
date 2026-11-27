@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/MboyaDan/mezai/backend/internal/legal"
 )
 
 func decode(t *testing.T, w *httptest.ResponseRecorder, v any) {
@@ -57,7 +59,9 @@ type testResp struct {
 	RetakeAfter  *string `json:"retake_after"`
 }
 
-var currentConsents = map[string]string{"privacy_notice": "0.4", "contributor_terms": "0.4"}
+var currentConsents = map[string]string{
+	legal.PrivacyNotice: legal.Current[legal.PrivacyNotice], legal.ContributorTerms: legal.Current[legal.ContributorTerms],
+}
 
 const newEmail = "new.contributor@sample.invalid"
 
@@ -165,8 +169,9 @@ func TestContributorOnboarding(t *testing.T) {
 		t.Fatalf("login before verification: %d %s", w.Code, w.Body)
 	}
 	if n := e.count(`SELECT count(*) FROM consents c JOIN users u ON u.id = c.user_id
-		WHERE u.email = $1 AND c.version = '0.4' AND c.accepted_at IS NOT NULL
-		  AND c.document IN ('privacy_notice', 'contributor_terms')`, newEmail); n != 2 {
+		WHERE u.email = $1 AND c.version = CASE c.document WHEN 'privacy_notice' THEN $2 ELSE $3 END AND c.accepted_at IS NOT NULL
+		  AND c.document IN ('privacy_notice', 'contributor_terms')`, newEmail,
+		legal.Current[legal.PrivacyNotice], legal.Current[legal.ContributorTerms]); n != 2 {
 		t.Fatalf("consent rows with version and time: %d", n)
 	}
 	if w := e.do(http.MethodPost, "/v1/auth/verify-email", map[string]string{"token": e.lastLink(newEmail)}, nil, nil); w.Code != http.StatusNoContent {
