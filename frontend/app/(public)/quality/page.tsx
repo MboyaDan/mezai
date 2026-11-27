@@ -181,6 +181,9 @@ export default function QualityPage() {
                       </div>
                       {visual.deliver}
                       <TextLink href={manifest.link.href}>{manifest.link.label}</TextLink>
+                      <TextLink href={qualityPage.onePager.pdf.href} download>
+                        {qualityPage.onePager.pdf.label}
+                      </TextLink>
                     </div>
                   ) : (
                     (visual[s.id] ?? <QualifyVisual />)

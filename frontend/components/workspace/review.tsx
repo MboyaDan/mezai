@@ -36,20 +36,14 @@ import {
   type Draft,
   type DraftErrors,
 } from "@/lib/review";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
+import { queuePath } from "@/lib/workspace-reads";
 import { shortDate } from "./contributors";
 import { PageTitle, useCan } from "./workspace";
 
 const reasons = Object.keys(reasonLabel) as RouteReason[];
 const pct = (v: number | null | undefined) => (v == null ? "–" : `${Math.round(v * 100)}%`);
-
-function queuePath(project: string, reason: string) {
-  const q = new URLSearchParams();
-  if (project) q.set("project_id", project);
-  if (reason) q.set("reason", reason);
-  const s = q.toString();
-  return `/v1/review/items${s ? `?${s}` : ""}` as const;
-}
 
 /** /w/review: items the quality engine sent to a person (brief 8.3), oldest first. */
 export function ReviewQueue() {
@@ -57,7 +51,8 @@ export function ReviewQueue() {
   const router = useRouter();
   const project = params.get("project") ?? "";
   const reason = params.get("reason") ?? "";
-  const list = useLoad(() => api<Queue>("GET", queuePath(project, reason)), `${project}|${reason}`);
+  const path = queuePath(project, reason);
+  const list = useLoad(() => api<Queue>("GET", path), `${project}|${reason}`, usePreloaded<Queue>(path));
   const can = useCan();
 
   function setFilter(key: "project" | "reason", value: string) {
@@ -167,7 +162,8 @@ export function ReviewQueue() {
 /** /w/review/[id]: one item, every answer side by side, and the decision. */
 export function ReviewItemView() {
   const { id } = useParams<{ id: string }>();
-  const item = useLoad(() => api<ReviewItem>("GET", `/v1/review/items/${id}`), id);
+  const path = `/v1/review/items/${id}` as const;
+  const item = useLoad(() => api<ReviewItem>("GET", path), id, usePreloaded<ReviewItem>(path));
   if (item.status === "loading") return <Skeleton className="h-96 w-full" />;
   if (item.status === "error") return <Alert tone="danger" title={errorMessage(item.error)} />;
   const it = item.data;

@@ -38,6 +38,7 @@ import {
   type PayoutPreview,
 } from "@/lib/payouts";
 import { formatKes } from "@/lib/projects";
+import { usePreloaded } from "@/lib/preload";
 import { useLoad } from "@/lib/use-load";
 import { PageTitle, useCan } from "./workspace";
 
@@ -49,7 +50,11 @@ type BatchList = { batches: PayoutBatchSummary[]; next_date: string | null; b2c:
 export function PayoutsPage() {
   const can = useCan();
   const create = can("payout.create");
-  const list = useLoad(() => api<BatchList>("GET", "/v1/payouts/batches"));
+  const list = useLoad(
+    () => api<BatchList>("GET", "/v1/payouts/batches"),
+    "",
+    usePreloaded<BatchList>("/v1/payouts/batches"),
+  );
 
   if (list.status === "loading") return <Skeleton className="h-80 w-full" />;
   if (list.status === "error") return <Alert tone="danger" title={payoutError(list.error)} />;
